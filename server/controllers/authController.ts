@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import { authConfig } from '../config/index.js';
 import { authService } from '../services/AuthService.js';
 import { tokenService } from '../services/TokenService.js';
+import { emailProviderService } from '../services/EmailProviderService.js';
 import { 
   AppError, 
   NotFoundError, 
@@ -154,8 +155,26 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
     authConfig.passwordResetExpiry
   );
 
-  // TODO: Send password reset email here
-  // For now, we'll just return success
+  // Send password reset email when provider is configured and enabled.
+  const resetLink = `${process.env.CLIENT_URL || 'http://localhost:8080'}/reset-password?token=${token}`;
+  await emailProviderService.sendEmail({
+    to: user.email,
+    subject: 'Reset your Slimbooks password',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2>Password reset request</h2>
+        <p>Hello ${user.name || 'there'},</p>
+        <p>Use the button below to reset your password.</p>
+        <p style="margin: 24px 0;">
+          <a href="${resetLink}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">
+            Reset password
+          </a>
+        </p>
+        <p>If you did not request this, you can ignore this email.</p>
+      </div>
+    `,
+    text: `Password reset request\n\nHello ${user.name || 'there'},\n\nReset your password using this link:\n${resetLink}\n\nIf you did not request this, you can ignore this email.`
+  });
 
   res.json({
     success: true,

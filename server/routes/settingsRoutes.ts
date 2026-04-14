@@ -14,6 +14,7 @@ import {
   saveMultipleSettings
 } from '../controllers/settingsController.js';
 import { requireAuth, requireAdmin } from '../middleware/index.js';
+import { emailProviderService } from '../services/EmailProviderService.js';
 
 const router: Router = Router();
 
@@ -280,7 +281,13 @@ router.put('/appearance', requireAuth, async (req: Request, res: Response): Prom
     }
     
     // Only allow appearance-related settings to be saved through this endpoint
-    const allowedSettings = ['theme', 'invoice_template_preference', 'pdf_format_preference'];
+    const allowedSettings = [
+      'theme',
+      'invoice_template_preference',
+      'pdf_format_preference',
+      'accent_mode',
+      'accent_color'
+    ];
     const filteredSettings: Record<string, any> = {};
     
     for (const [key, value] of Object.entries(settings)) {
@@ -300,11 +307,12 @@ router.put('/appearance', requireAuth, async (req: Request, res: Response): Prom
   }
 });
 
-// Get general settings (category-based)  
-router.get('/general', requireAuth, async (req: Request, res: Response): Promise<void> => {
+// Get general settings (category-based)
+router.get('/general', requireAuth, async (_req: Request, res: Response): Promise<void> => {
   try {
-    req.query.category = 'general';
-    await getAllSettings(req, res, () => {});
+    const { settingsService } = await import('../services/SettingsService.js');
+    const settings = await settingsService.getAllSettings('general');
+    res.json({ success: true, settings });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
@@ -337,6 +345,87 @@ router.get('/notification', requireAuth, async (req: Request, res: Response): Pr
     }
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// Test email provider connection and optionally send a test email
+router.post('/email/test', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { settings, testEmail } = req.body as {
+      settings?: Record<string, unknown>;
+      testEmail?: string;
+    };
+
+    const connectionResult = await emailProviderService.testConnection(settings);
+    if (!connectionResult.success) {
+      res.status(400).json(connectionResult);
+      return;
+    }
+
+    if (testEmail) {
+      const sendResult = await emailProviderService.sendTestEmail(testEmail, settings);
+      if (!sendResult.success) {
+        res.status(400).json(sendResult);
+        return;
+      }
+      res.json(sendResult);
+      return;
+    }
+
+    res.json(connectionResult);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: (error as Error).message || 'Failed to test email provider'
+    });
+  }
+});
+
+// Send an email using the configured provider
+router.post('/email/send', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { to, subject, html, text, settings } = req.body as {
+      to?: string;
+      subject?: string;
+      html?: string;
+      text?: string;
+      settings?: Record<string, unknown>;
+    };
+
+    if (!to || !subject) {
+      res.status(400).json({
+        success: false,
+        message: 'Recipient and subject are required'
+      });
+      return;
+    }
+
+    const payload: {
+      to: string;
+      subject: string;
+      html?: string;
+      text?: string;
+    } = { to, subject };
+    if (html !== undefined) {
+      payload.html = html;
+    }
+    if (text !== undefined) {
+      payload.text = text;
+    }
+
+    const sendResult = await emailProviderService.sendEmail(payload, settings);
+
+    if (!sendResult.success) {
+      res.status(400).json(sendResult);
+      return;
+    }
+
+    res.json(sendResult);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: (error as Error).message || 'Failed to send email'
+    });
   }
 });
 

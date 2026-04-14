@@ -69,6 +69,9 @@ export interface AuthConfig {
  * Email configuration interface
  */
 export interface EmailConfig {
+  provider: 'smtp' | 'sendgrid';
+  sendgridApiKey: string | undefined;
+  sendgridFrom: string;
   smtp: {
     host: string | undefined;
     port: number;
@@ -256,6 +259,9 @@ export const authConfig: AuthConfig = {
  * Email configuration
  */
 export const emailConfig: EmailConfig = {
+  provider: process.env.EMAIL_PROVIDER === 'sendgrid' ? 'sendgrid' : 'smtp',
+  sendgridApiKey: process.env.SENDGRID_API_KEY,
+  sendgridFrom: process.env.SENDGRID_FROM || process.env.EMAIL_FROM || 'noreply@slimbooks.app',
   smtp: {
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || '587'),
@@ -282,7 +288,11 @@ export const emailConfig: EmailConfig = {
   },
 
   // Check if email is configured
-  isConfigured: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+  isConfigured: (
+    process.env.EMAIL_PROVIDER === 'sendgrid'
+      ? !!(process.env.SENDGRID_API_KEY && (process.env.SENDGRID_FROM || process.env.EMAIL_FROM))
+      : !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+  )
 };
 
 /**

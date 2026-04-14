@@ -1,8 +1,9 @@
 import { useState, forwardRef, useImperativeHandle } from 'react';
 import { Mail, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
-import { EmailService } from '@/services/email.svc';
+import { toast } from 'sonner';
 import { themeClasses } from '@/utils/themeUtils.util';
 import { useEmailSettings } from '@/hooks/useSettings.hook';
+import { authenticatedFetch } from '@/utils/api';
 import type { SettingsTabRef } from '../Settings';
 
 export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
@@ -44,9 +45,45 @@ export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
     }
   };
 
+  const getProviderTestPayload = () => ({
+    provider: settings.email_provider,
+    isEnabled: settings.isEnabled,
+    smtp_host: settings.smtp_host,
+    smtp_port: settings.smtp_port,
+    smtp_user: settings.smtp_user,
+    smtp_password: settings.smtp_password,
+    smtp_secure: settings.smtp_secure,
+    sendgrid_api_key: settings.sendgrid_api_key,
+    sendgrid_from: settings.sendgrid_from || settings.from_email,
+    from_email: settings.from_email,
+    from_name: settings.from_name
+  });
+
+  const validateProviderFields = () => {
+    if (!settings.from_email) {
+      return 'Please set a from email address';
+    }
+
+    if (settings.email_provider === 'sendgrid') {
+      if (!settings.sendgrid_api_key) {
+        return 'SendGrid API key is required';
+      }
+      if (!settings.sendgrid_from && !settings.from_email) {
+        return 'SendGrid sender email is required';
+      }
+      return null;
+    }
+
+    if (!settings.smtp_host || !settings.smtp_user || !settings.smtp_password) {
+      return 'Please fill in required SMTP fields before testing';
+    }
+    return null;
+  };
+
   const testConnection = async () => {
-    if (!settings.smtp_host || !settings.smtp_user || !settings.from_email) {
-      toast.error('Please fill in required fields before testing');
+    const validationError = validateProviderFields();
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
@@ -56,15 +93,20 @@ export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
     try {
       // Save settings first
       await saveSettings();
-
-      // Test the connection using the email service
-      const emailService = EmailService.getInstance();
-      
-      const testResult = await emailService.testConnection();
+      const response = await authenticatedFetch('/api/settings/email/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          settings: getProviderTestPayload()
+        })
+      });
+      const testResult = await response.json();
       
       if (testResult.success) {
         setConnectionStatus('success');
-        toast.success('SMTP connection test successful!');
+        toast.success('Email provider connection test successful!');
       } else {
         setConnectionStatus('error');
         toast.error(`Connection test failed: ${testResult.message}`);
@@ -78,20 +120,25 @@ export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
   };
 
   const sendTestEmail = async () => {
-    if (!settings.from_email) {
-      toast.error('Please set a from email address');
+    const validationError = validateProviderFields();
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
     try {
-      const emailService = EmailService.getInstance();
-      
-      const result = await emailService.sendEmail(
-        settings.from_email,
-        'Test Email from Slimbooks',
-        '<h2>Test Email</h2><p>This is a test email from your Slimbooks application. If you received this, your email configuration is working correctly!</p>',
-        'Test Email\n\nThis is a test email from your Slimbooks application. If you received this, your email configuration is working correctly!'
-      );
+      await saveSettings();
+      const response = await authenticatedFetch('/api/settings/email/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          settings: getProviderTestPayload(),
+          testEmail: settings.from_email
+        })
+      });
+      const result = await response.json();
 
       if (result.success) {
         toast.success('Test email sent successfully!');
@@ -210,88 +257,146 @@ export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
           </div>
 
           {/* SMTP Server Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">
-                SMTP Host *
-              </label>
-              <input
-                type="text"
-                value={settings.smtp_host}
-                onChange={(e) => handleInputChange('smtp_host', e.target.value)}
-                placeholder="smtp.gmail.com"
-                className={themeClasses.input}
-                disabled={!settings.isEnabled}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">
-                SMTP Port *
-              </label>
-              <input
-                type="number"
-                value={settings.smtp_port}
-                onChange={(e) => handleInputChange('smtp_port', parseInt(e.target.value) || 587)}
-                placeholder="587"
-                className={themeClasses.input}
-                disabled={!settings.isEnabled}
-              />
-            </div>
-          </div>
-
-          {/* Security Settings */}
           <div>
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={settings.smtp_secure}
-                onChange={(e) => handleInputChange('smtp_secure', e.target.checked)}
-                disabled={!settings.isEnabled}
-                className="rounded border-border text-primary focus:ring-primary"
-              />
-              <span className="text-sm font-medium text-muted-foreground">Use SSL/TLS Security</span>
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
+              Email Provider
             </label>
+            <select
+              value={settings.email_provider}
+              onChange={(e) => handleInputChange('email_provider', e.target.value)}
+              className={themeClasses.select}
+              disabled={!settings.isEnabled}
+            >
+              <option value="smtp">SMTP</option>
+              <option value="sendgrid">SendGrid</option>
+            </select>
           </div>
 
-          {/* Authentication */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">
-                Username *
-              </label>
-              <input
-                type="text"
-                value={settings.smtp_user}
-                onChange={(e) => handleInputChange('smtp_user', e.target.value)}
-                placeholder="your-email@gmail.com"
-                className={themeClasses.input}
-                disabled={!settings.isEnabled}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">
-                Password *
-              </label>
-              <div className="relative">
+          {settings.email_provider === 'smtp' ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                    SMTP Host *
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.smtp_host}
+                    onChange={(e) => handleInputChange('smtp_host', e.target.value)}
+                    placeholder="smtp.gmail.com"
+                    className={themeClasses.input}
+                    disabled={!settings.isEnabled}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                    SMTP Port *
+                  </label>
+                  <input
+                    type="number"
+                    value={settings.smtp_port}
+                    onChange={(e) => handleInputChange('smtp_port', parseInt(e.target.value) || 587)}
+                    placeholder="587"
+                    className={themeClasses.input}
+                    disabled={!settings.isEnabled}
+                  />
+                </div>
+              </div>
+
+              {/* Security Settings */}
+              <div>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={settings.smtp_secure}
+                    onChange={(e) => handleInputChange('smtp_secure', e.target.checked)}
+                    disabled={!settings.isEnabled}
+                    className="rounded border-border text-primary focus:ring-primary"
+                  />
+                  <span className="text-sm font-medium text-muted-foreground">Use SSL/TLS Security</span>
+                </label>
+              </div>
+
+              {/* Authentication */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                    Username *
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.smtp_user}
+                    onChange={(e) => handleInputChange('smtp_user', e.target.value)}
+                    placeholder="your-email@gmail.com"
+                    className={themeClasses.input}
+                    disabled={!settings.isEnabled}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">
+                    Password *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={settings.smtp_password}
+                      onChange={(e) => handleInputChange('smtp_password', e.target.value)}
+                      placeholder="App password or account password"
+                      className={themeClasses.input}
+                      disabled={!settings.isEnabled}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground"
+                      disabled={!settings.isEnabled}
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                  SendGrid API Key *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={settings.sendgrid_api_key}
+                    onChange={(e) => handleInputChange('sendgrid_api_key', e.target.value)}
+                    placeholder="SG.xxxxx"
+                    className={themeClasses.input}
+                    disabled={!settings.isEnabled}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground"
+                    disabled={!settings.isEnabled}
+                  >
+                    {showPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                  SendGrid Sender Email *
+                </label>
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={settings.smtp_password}
-                  onChange={(e) => handleInputChange('smtp_password', e.target.value)}
-                  placeholder="App password or account password"
+                  type="email"
+                  value={settings.sendgrid_from}
+                  onChange={(e) => handleInputChange('sendgrid_from', e.target.value)}
+                  placeholder="verified-sender@yourdomain.com"
                   className={themeClasses.input}
                   disabled={!settings.isEnabled}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground"
-                  disabled={!settings.isEnabled}
-                >
-                  {showPassword ? 'Hide' : 'Show'}
-                </button>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Email Identity */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -344,7 +449,9 @@ export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
             <strong>Yahoo:</strong> smtp.mail.yahoo.com, Port 587 (TLS) or 465 (SSL)
           </div>
           <div>
-            <strong>SendGrid:</strong> smtp.sendgrid.net, Port 587 (TLS)
+            <strong>SendGrid SMTP:</strong> smtp.sendgrid.net, Port 587 (TLS)
+            <br />
+            <strong>SendGrid API:</strong> Select provider "SendGrid" and use your API key + verified sender.
           </div>
         </div>
       </div>

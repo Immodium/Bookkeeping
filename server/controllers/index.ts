@@ -91,6 +91,7 @@ export {
 export {
   login,
   register,
+  requestPasswordReset,
   resetPassword,
   verifyEmail,
   refreshToken,

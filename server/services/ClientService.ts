@@ -9,18 +9,29 @@ import { Client, ServiceOptions } from '../types/index.js';
  * Manages client-related operations with proper validation and security
  */
 export class ClientService {
+  private normalizeClientRecord(client: Client & { zip?: string }): Client {
+    const normalized: Client = { ...client };
+    const resolvedZip = client.zipCode || client.zip;
+    if (resolvedZip !== undefined) {
+      normalized.zipCode = resolvedZip;
+    }
+    return normalized;
+  }
+
   /**
    * Get all clients
    */
   async getAllClients(options: ServiceOptions = {}): Promise<Client[]> {
     const { limit = 100, offset = 0 } = options;
 
-    return databaseService.getMany<Client>(`
+    const clients = databaseService.getMany<Client>(`
       SELECT * FROM clients
       WHERE deleted_at IS NULL
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
+
+    return clients.map(client => this.normalizeClientRecord(client));
   }
 
   /**
@@ -31,7 +42,11 @@ export class ClientService {
       throw new Error('Valid client ID is required');
     }
 
-    return databaseService.getOne<Client>('SELECT * FROM clients WHERE id = ? AND deleted_at IS NULL', [id]);
+    const client = databaseService.getOne<Client>(
+      'SELECT * FROM clients WHERE id = ? AND deleted_at IS NULL',
+      [id]
+    );
+    return client ? this.normalizeClientRecord(client) : null;
   }
 
   /**
@@ -39,13 +54,12 @@ export class ClientService {
    */
   async createClient(clientData: {
     name: string;
-    first_name?: string;
-    last_name?: string;
     email?: string;
     phone?: string;
     address?: string;
     city?: string;
     state?: string;
+    zip?: string;
     zipCode?: string;
     country?: string;
     company?: string;
@@ -82,21 +96,21 @@ export class ClientService {
     
     // Prepare client data
     const now = new Date().toISOString();
+    const zipValue = clientData.zipCode || clientData.zip || null;
     const clientRecord = {
       id: nextId,
       name: clientData.name,
-      first_name: clientData.first_name || null,
-      last_name: clientData.last_name || null,
       email: clientData.email || null,
       phone: clientData.phone || null,
       address: clientData.address || null,
       city: clientData.city || null,
       state: clientData.state || null,
-      zipCode: clientData.zipCode || null,
+      zip: zipValue,
       country: clientData.country || null,
       company: clientData.company || null,
       tax_id: clientData.tax_id || null,
       notes: clientData.notes || null,
+      is_active: 1,
       created_at: now,
       updated_at: now
     };
@@ -104,13 +118,14 @@ export class ClientService {
     // Create client
     databaseService.executeQuery(`
       INSERT INTO clients (
-        id, name, first_name, last_name, email, phone, company, address, city, state,
-        zip, country, stripe_customer_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, name, email, phone, company, address, city, state,
+        zip, country, tax_id, notes, is_active, stripe_customer_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      clientRecord.id, clientRecord.name, clientRecord.first_name, clientRecord.last_name,
+      clientRecord.id, clientRecord.name,
       clientRecord.email, clientRecord.phone, clientRecord.company, clientRecord.address,
-      clientRecord.city, clientRecord.state, clientRecord.zipCode, clientRecord.country,
+      clientRecord.city, clientRecord.state, clientRecord.zip, clientRecord.country,
+      clientRecord.tax_id, clientRecord.notes, clientRecord.is_active,
       null, clientRecord.created_at, clientRecord.updated_at
     ]);
 
@@ -122,16 +137,18 @@ export class ClientService {
    */
   async updateClient(id: number, clientData: Partial<{
     name: string;
-    first_name: string;
-    last_name: string;
     email: string;
     phone: string;
     address: string;
     city: string;
     state: string;
+    zip: string;
     zipCode: string;
     country: string;
     company: string;
+    tax_id: string;
+    notes: string;
+    is_active: number;
   }>): Promise<number> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid client ID is required');
@@ -167,16 +184,22 @@ export class ClientService {
 
     // Filter allowed fields
     const allowedFields = [
-      'name', 'first_name', 'last_name', 'email', 'phone', 'company', 'address', 'city', 'state',
-      'zip', 'country', 'stripe_customer_id'
+      'name', 'email', 'phone', 'company', 'address', 'city', 'state',
+      'zip', 'country', 'tax_id', 'notes', 'is_active', 'stripe_customer_id'
     ];
     
     const updateData: Record<string, any> = {};
     allowedFields.forEach(field => {
+      if (field === 'zip') {
+        const zipValue = clientData.zip ?? clientData.zipCode;
+        if (zipValue !== undefined) {
+          updateData.zip = zipValue;
+        }
+        return;
+      }
+
       if (clientData[field as keyof typeof clientData] !== undefined) {
-        const value = clientData[field as keyof typeof clientData];
-        
-        updateData[field] = value;
+        updateData[field] = clientData[field as keyof typeof clientData];
       }
     });
 
@@ -229,7 +252,7 @@ export class ClientService {
     const { limit = 50, offset = 0 } = options;
     const searchPattern = `%${searchTerm}%`;
 
-    return databaseService.getMany<Client>(`
+    const clients = databaseService.getMany<Client>(`
       SELECT * FROM clients
       WHERE (name LIKE ? OR email LIKE ? OR company LIKE ? OR phone LIKE ?)
         AND deleted_at IS NULL
@@ -247,6 +270,7 @@ export class ClientService {
       searchTerm, searchTerm, searchTerm,
       limit, offset
     ]);
+    return clients.map(client => this.normalizeClientRecord(client));
   }
 
   /**
@@ -255,11 +279,12 @@ export class ClientService {
   async getActiveClients(options: ServiceOptions = {}): Promise<Client[]> {
     const { limit = 100, offset = 0 } = options;
 
-    return databaseService.getMany<Client>(`
+    const clients = databaseService.getMany<Client>(`
       SELECT * FROM clients 
       ORDER BY name ASC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
+    return clients.map(client => this.normalizeClientRecord(client));
   }
 
   /**
@@ -281,12 +306,13 @@ export class ClientService {
 
     const { limit = 100, offset = 0 } = options;
 
-    return databaseService.getMany<Client>(`
+    const clients = databaseService.getMany<Client>(`
       SELECT * FROM clients 
       WHERE country = ?
       ORDER BY name ASC
       LIMIT ? OFFSET ?
     `, [country, limit, offset]);
+    return clients.map(client => this.normalizeClientRecord(client));
   }
 
   /**
@@ -343,13 +369,14 @@ export class ClientService {
   async getClientsWithRecentActivity(days: number = 30, options: ServiceOptions = {}): Promise<Client[]> {
     const { limit = 50, offset = 0 } = options;
 
-    return databaseService.getMany<Client>(`
+    const clients = databaseService.getMany<Client>(`
       SELECT DISTINCT c.* FROM clients c
       INNER JOIN invoices i ON c.id = i.client_id
       WHERE i.created_at > datetime('now', '-${days} days')
       ORDER BY c.name ASC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
+    return clients.map(client => this.normalizeClientRecord(client));
   }
 
   /**

@@ -38,6 +38,8 @@ const clientsSchema: TableSchema = {
   columns: [
     { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'first_name', type: 'TEXT' },
+    { name: 'last_name', type: 'TEXT' },
     { name: 'email', type: 'TEXT' },
     { name: 'phone', type: 'TEXT' },
     { name: 'company', type: 'TEXT' },

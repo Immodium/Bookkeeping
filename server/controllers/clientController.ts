@@ -20,11 +20,12 @@ interface ClientRequest {
   city?: string;
   state?: string;
   zip?: string;
+  zipCode?: string;
   country?: string;
   company?: string;
   tax_id?: string;
   notes?: string;
-  is_active?: boolean;
+  is_active?: number;
 }
 
 /**

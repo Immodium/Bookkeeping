@@ -6,6 +6,7 @@ import { up as migration001 } from './001_add_deleted_at_to_clients.js';
 import { up as migration002 } from './002_add_category_to_settings.js';
 import { up as migration003 } from './003_separate_template_tables.js';
 import { up as migration004 } from './004_fix_expenses_table_schema.js';
+import { up as migration005 } from './005_add_name_columns_to_clients.js';
 
 interface Migration {
   id: string;
@@ -36,6 +37,11 @@ const migrations: Migration[] = [
     id: '004',
     name: 'fix_expenses_table_schema',
     up: migration004
+  },
+  {
+    id: '005',
+    name: 'add_name_columns_to_clients',
+    up: migration005
   }
 ];
 

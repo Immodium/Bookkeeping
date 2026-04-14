@@ -448,11 +448,14 @@ export function useGeneralSettings() {
 
 // Default email settings
 const defaultEmailSettings = {
+  email_provider: 'smtp',
   smtp_host: '',
   smtp_port: 587,
   smtp_user: '',
   smtp_password: '',
   smtp_secure: true,
+  sendgrid_api_key: '',
+  sendgrid_from: '',
   from_email: '',
   from_name: '',
   isEnabled: false
@@ -462,9 +465,35 @@ const defaultEmailSettings = {
 export function useEmailSettings() {
   return useSettings({
     settingsKey: 'email_settings',
-    apiEndpoint: '/api/settings/', // Generic endpoint for both read and write
+    apiEndpoint: '/api/settings/email.email_settings',
+    saveEndpoint: '/api/settings/',
     category: 'email',
     defaultSettings: defaultEmailSettings,
+    transformLoad: (data: unknown) => {
+      if (!data || typeof data !== 'object') {
+        return defaultEmailSettings;
+      }
+
+      const saved = data as Record<string, unknown>;
+      const smtpSecureValue = saved.smtp_secure;
+      const isSmtpSecure = typeof smtpSecureValue === 'string'
+        ? smtpSecureValue.toLowerCase() === 'true'
+        : Boolean(smtpSecureValue);
+
+      return {
+        email_provider: typeof saved.email_provider === 'string' ? saved.email_provider : defaultEmailSettings.email_provider,
+        smtp_host: typeof saved.smtp_host === 'string' ? saved.smtp_host : defaultEmailSettings.smtp_host,
+        smtp_port: typeof saved.smtp_port === 'number' ? saved.smtp_port : defaultEmailSettings.smtp_port,
+        smtp_user: typeof saved.smtp_user === 'string' ? saved.smtp_user : defaultEmailSettings.smtp_user,
+        smtp_password: typeof saved.smtp_password === 'string' ? saved.smtp_password : defaultEmailSettings.smtp_password,
+        smtp_secure: isSmtpSecure,
+        sendgrid_api_key: typeof saved.sendgrid_api_key === 'string' ? saved.sendgrid_api_key : defaultEmailSettings.sendgrid_api_key,
+        sendgrid_from: typeof saved.sendgrid_from === 'string' ? saved.sendgrid_from : defaultEmailSettings.sendgrid_from,
+        from_email: typeof saved.from_email === 'string' ? saved.from_email : defaultEmailSettings.from_email,
+        from_name: typeof saved.from_name === 'string' ? saved.from_name : defaultEmailSettings.from_name,
+        isEnabled: typeof saved.isEnabled === 'boolean' ? saved.isEnabled : Boolean(saved.is_enabled ?? defaultEmailSettings.isEnabled)
+      };
+    },
     transformSave: (data) => ({
       key: 'email_settings',
       value: data,
@@ -532,7 +561,9 @@ export function useNotificationSettings() {
 const defaultAppearanceSettings = {
   theme: 'system',
   invoice_template_preference: 'modern-blue',
-  pdf_format_preference: 'A4'
+  pdf_format_preference: 'A4',
+  accent_mode: 'preset',
+  accent_color: '#1d4ed8'
 } as const;
 
 // Specialized hook for appearance settings
@@ -542,11 +573,31 @@ export function useAppearanceSettings() {
     apiEndpoint: '/api/settings/appearance',
     category: 'appearance',
     defaultSettings: defaultAppearanceSettings,
+    transformLoad: (data: unknown) => {
+      if (!data || typeof data !== 'object') {
+        return defaultAppearanceSettings;
+      }
+
+      const saved = data as Record<string, unknown>;
+      return {
+        theme: typeof saved.theme === 'string' ? saved.theme : defaultAppearanceSettings.theme,
+        invoice_template_preference: typeof saved.invoice_template_preference === 'string'
+          ? saved.invoice_template_preference
+          : defaultAppearanceSettings.invoice_template_preference,
+        pdf_format_preference: typeof saved.pdf_format_preference === 'string'
+          ? saved.pdf_format_preference
+          : defaultAppearanceSettings.pdf_format_preference,
+        accent_mode: typeof saved.accent_mode === 'string' ? saved.accent_mode : defaultAppearanceSettings.accent_mode,
+        accent_color: typeof saved.accent_color === 'string' ? saved.accent_color : defaultAppearanceSettings.accent_color
+      };
+    },
     transformSave: (data) => ({
       settings: {
         theme: { value: data.theme, category: 'appearance' },
         invoice_template_preference: { value: data.invoice_template_preference, category: 'appearance' },
-        pdf_format_preference: { value: data.pdf_format_preference, category: 'appearance' }
+        pdf_format_preference: { value: data.pdf_format_preference, category: 'appearance' },
+        accent_mode: { value: data.accent_mode, category: 'appearance' },
+        accent_color: { value: data.accent_color, category: 'appearance' }
       }
     }),
     onSaveSuccess: () => {

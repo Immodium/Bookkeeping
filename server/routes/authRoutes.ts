@@ -5,6 +5,7 @@ import { Router } from 'express';
 import {
   login,
   register,
+  requestPasswordReset,
   resetPassword,
   verifyEmail,
   refreshToken,
@@ -37,6 +38,13 @@ router.post('/register',
   validationSets.register,
   validateRequest,
   register
+);
+
+// Request password reset email
+router.post('/forgot-password',
+  validationSets.forgotPassword,
+  validateRequest,
+  requestPasswordReset
 );
 
 // Reset password with token

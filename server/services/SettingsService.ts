@@ -29,10 +29,14 @@ export class SettingsService {
     const settings: Record<string, unknown> = {};
 
     results.forEach(row => {
+      const normalizedKey = category && row.key.startsWith(`${category}.`)
+        ? row.key.slice(category.length + 1)
+        : row.key;
+
       try {
-        settings[row.key] = JSON.parse(row.value);
+        settings[normalizedKey] = JSON.parse(row.value);
       } catch {
-        settings[row.key] = row.value;
+        settings[normalizedKey] = row.value;
       }
     });
 

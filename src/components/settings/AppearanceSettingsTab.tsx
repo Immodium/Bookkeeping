@@ -7,13 +7,92 @@ import { useTheme } from '@/hooks/useTheme.hook';
 import { getToken } from '@/utils/api';
 import type { SettingsTabRef } from '../Settings';
 
+const hueToHex = (hue: number): string => {
+  const normalizedHue = ((hue % 360) + 360) % 360;
+  const saturation = 78;
+  const lightness = 46;
+  const s = saturation / 100;
+  const l = lightness / 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((normalizedHue / 60) % 2) - 1));
+  const m = l - c / 2;
+
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (normalizedHue < 60) {
+    r = c;
+    g = x;
+  } else if (normalizedHue < 120) {
+    r = x;
+    g = c;
+  } else if (normalizedHue < 180) {
+    g = c;
+    b = x;
+  } else if (normalizedHue < 240) {
+    g = x;
+    b = c;
+  } else if (normalizedHue < 300) {
+    r = x;
+    b = c;
+  } else {
+    r = c;
+    b = x;
+  }
+
+  const toHex = (value: number) => Math.round((value + m) * 255).toString(16).padStart(2, '0');
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
+const hexToHue = (hex: string): number => {
+  const normalized = hex.replace('#', '');
+  if (!/^([a-fA-F0-9]{6})$/.test(normalized)) {
+    return 0;
+  }
+
+  const r = parseInt(normalized.slice(0, 2), 16) / 255;
+  const g = parseInt(normalized.slice(2, 4), 16) / 255;
+  const b = parseInt(normalized.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  if (delta === 0) {
+    return 0;
+  }
+
+  let hue = 0;
+  if (max === r) {
+    hue = ((g - b) / delta) % 6;
+  } else if (max === g) {
+    hue = (b - r) / delta + 2;
+  } else {
+    hue = (r - g) / delta + 4;
+  }
+
+  return Math.round((hue * 60 + 360) % 360);
+};
+
 export const AppearanceSettingsTab = forwardRef<SettingsTabRef>((props, ref) => {
   const { isAdmin, user } = useAuth();
-  const { theme, setTheme: setGlobalTheme } = useTheme();
+  const { theme, setTheme: setGlobalTheme, setAccentColor: setGlobalAccentColor } = useTheme();
   const [invoiceTemplate, setInvoiceTemplate] = useState('modern-blue');
   const [pdfFormat, setPdfFormat] = useState('A4');
+  const [accentMode, setAccentMode] = useState<'preset' | 'custom'>('preset');
+  const [accentColor, setAccentColor] = useState('#1d4ed8');
   const [isLoaded, setIsLoaded] = useState(false);
   const [saveError, setSaveError] = useState<string>('');
+  const presetAccentColors = [
+    '#1d4ed8',
+    '#2563eb',
+    '#0f766e',
+    '#7c3aed',
+    '#be123c',
+    '#c2410c',
+    '#0891b2',
+    '#ca8a04'
+  ];
 
   // Manual save function for Save button
   const saveSettings = async () => {
@@ -33,7 +112,9 @@ export const AppearanceSettingsTab = forwardRef<SettingsTabRef>((props, ref) => 
     try {
       const settingsToSave = {
         'invoice_template': { value: invoiceTemplate, category: 'appearance' },
-        'pdf_format': { value: { format: pdfFormat }, category: 'appearance' }
+        'pdf_format': { value: { format: pdfFormat }, category: 'appearance' },
+        'accent_mode': { value: accentMode, category: 'appearance' },
+        'accent_color': { value: accentColor, category: 'appearance' }
       };
 
       const response = await fetch('/api/settings/appearance', {
@@ -91,11 +172,15 @@ export const AppearanceSettingsTab = forwardRef<SettingsTabRef>((props, ref) => 
           const localTemplate = localStorage.getItem('invoiceTemplate') || 'modern-blue';
           setInvoiceTemplate(localTemplate);
           setPdfFormat('A4'); // Default PDF format
+          setAccentMode('preset');
+          setAccentColor('#1d4ed8');
 
           // Save to database and clear localStorage
           await sqliteService.setMultipleSettings({
             'invoice_template': { value: localTemplate, category: 'appearance' },
-            'pdf_format': { value: { format: 'A4' }, category: 'appearance' }
+            'pdf_format': { value: { format: 'A4' }, category: 'appearance' },
+            'accent_mode': { value: 'preset', category: 'appearance' },
+            'accent_color': { value: '#1d4ed8', category: 'appearance' }
           });
           
           // Let useTheme hook handle theme migration
@@ -113,6 +198,13 @@ export const AppearanceSettingsTab = forwardRef<SettingsTabRef>((props, ref) => 
               ? settings.pdf_format
               : 'A4';
             setPdfFormat(pdfFormatValue || 'A4');
+          }
+          if (typeof settings?.accent_mode === 'string') {
+            setAccentMode(settings.accent_mode === 'custom' ? 'custom' : 'preset');
+          }
+          if (typeof settings?.accent_color === 'string') {
+            setAccentColor(settings.accent_color);
+            setGlobalAccentColor(settings.accent_color, false);
           }
         }
 
@@ -146,6 +238,18 @@ export const AppearanceSettingsTab = forwardRef<SettingsTabRef>((props, ref) => 
 
   const handleInvoiceTemplateChange = (newTemplate: string) => {
     setInvoiceTemplate(newTemplate);
+  };
+
+  const handlePresetAccentSelect = (color: string) => {
+    setAccentMode('preset');
+    setAccentColor(color);
+    setGlobalAccentColor(color, false);
+  };
+
+  const handleCustomAccentColorChange = (color: string) => {
+    setAccentMode('custom');
+    setAccentColor(color);
+    setGlobalAccentColor(color, false);
   };
 
   return (
@@ -191,6 +295,59 @@ export const AppearanceSettingsTab = forwardRef<SettingsTabRef>((props, ref) => 
             <option value="classic-white">Classic White</option>
             <option value="professional-gray">Professional Gray</option>
           </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-muted-foreground mb-2">Accent Color</label>
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-3">
+              {presetAccentColors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => handlePresetAccentSelect(color)}
+                  disabled={!isAdmin}
+                  className={`h-8 w-8 rounded-full border-2 transition ${
+                    accentColor.toLowerCase() === color.toLowerCase()
+                      ? 'border-foreground scale-110'
+                      : 'border-border'
+                  } ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  style={{ backgroundColor: color }}
+                  title={`Select accent ${color}`}
+                />
+              ))}
+            </div>
+
+            <div>
+              <label className="block text-xs text-muted-foreground mb-2">
+                Custom accent
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={accentColor}
+                  onChange={(e) => handleCustomAccentColorChange(e.target.value)}
+                  disabled={!isAdmin}
+                  className={`h-10 w-16 rounded border border-input bg-background p-1 ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
+                />
+                <input
+                  type="range"
+                  min={0}
+                  max={360}
+                  value={hexToHue(accentColor)}
+                  onChange={(e) => {
+                    handleCustomAccentColorChange(hueToHex(Number(e.target.value)));
+                  }}
+                  disabled={!isAdmin}
+                  className={`flex-1 ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
+                />
+                <div className="text-xs font-mono text-muted-foreground">{accentColor}</div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Pick a swatch or create your own accent color.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div>

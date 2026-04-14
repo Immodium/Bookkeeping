@@ -9,6 +9,7 @@ def build_client(tmp_path):
             "SECRET_KEY": "test",
             "DATABASE": str(database_path),
             "APP_BASE_URL": "http://testserver.local",
+            "STRIPE_WEBHOOK_SECRET": "whsec_test",
         }
     )
     return app.test_client()

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Time Tracking · Freshbooks Clone{% endblock %}
 {% block content %}
-<section class="card">
+<section class="panel">
   <h2>Log Time</h2>
   {% if clients %}
   <form method="post" class="form-grid">
@@ -36,7 +36,7 @@
   {% endif %}
 </section>
 
-<section class="card">
+<section class="panel">
   <h2>Recent Time Entries</h2>
   {% if entries %}
   <div class="table-wrap">

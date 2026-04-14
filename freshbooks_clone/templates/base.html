@@ -3,19 +3,55 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>FreshBooks Clone</title>
+    <title>{% block title %}FreshBooks Clone{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
     <header class="topbar">
-      <div class="brand">FreshBooks Clone</div>
+      <div class="topbar-main">
+        <div class="brand">FreshBooks Clone</div>
+        {% if g.user %}
+          <div class="topbar-meta">
+            <span>{{ g.user.full_name }}</span>
+            <span class="muted-light">{{ g.account.name }} · {{ g.account_role|title }}</span>
+          </div>
+        {% endif %}
+      </div>
       <nav class="nav">
-        <a href="{{ url_for('dashboard') }}">Dashboard</a>
-        <a href="{{ url_for('clients') }}">Clients</a>
-        <a href="{{ url_for('invoices') }}">Invoices</a>
-        <a href="{{ url_for('time_entries') }}">Time Tracking</a>
-        <a href="{{ url_for('expenses') }}">Expenses</a>
+        {% if g.user %}
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('clients') }}">Clients</a>
+          <a href="{{ url_for('invoices') }}">Invoices</a>
+          <a href="{{ url_for('time_entries') }}">Time Tracking</a>
+          <a href="{{ url_for('expenses') }}">Expenses</a>
+          <a href="{{ url_for('team') }}">Team</a>
+        {% else %}
+          <a href="{{ url_for('login') }}">Login</a>
+          <a href="{{ url_for('register') }}">Create account</a>
+        {% endif %}
       </nav>
+      {% if g.user %}
+        <div class="account-controls">
+          <div class="account-switch">
+            <span>Switch account:</span>
+            {% for membership in g.user_accounts %}
+              <form method="post" action="{{ url_for('switch_account', account_id=membership.account_id) }}">
+                <button
+                  type="submit"
+                  class="{% if g.account.id == membership.account_id %}secondary{% endif %}"
+                >
+                  {{ membership.account_name }}
+                </button>
+              </form>
+            {% endfor %}
+          </div>
+          <form method="post" action="{{ url_for('logout') }}">
+            <button type="submit" class="secondary">Sign out</button>
+          </form>
+        </div>
+      {% elif request.endpoint in ("login", "register") %}
+        <div class="auth-shell"></div>
+      {% endif %}
     </header>
 
     <main class="container">

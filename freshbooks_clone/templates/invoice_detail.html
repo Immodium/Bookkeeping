@@ -14,7 +14,7 @@
             <p><strong>Issue:</strong> {{ invoice.issue_date }}</p>
             <p><strong>Due:</strong> {{ invoice.due_date }}</p>
         </div>
-        <div>
+        <div class="stack">
             <form method="post" action="{{ url_for('update_invoice_status', invoice_id=invoice.id) }}" class="stack">
                 <label for="status">Status</label>
                 <select id="status" name="status">
@@ -24,6 +24,20 @@
                 </select>
                 <button type="submit">Update status</button>
             </form>
+            <div class="actions-inline">
+                <a class="btn-link" href="{{ url_for('export_invoice_pdf', invoice_id=invoice.id) }}">Download PDF</a>
+                <form method="post" action="{{ url_for('create_invoice_payment_link', invoice_id=invoice.id) }}">
+                    <button type="submit">Generate Stripe payment link</button>
+                </form>
+            </div>
+            {% if invoice.stripe_payment_url %}
+            <p class="muted">
+                Payment link:
+                <a href="{{ invoice.stripe_payment_url }}" target="_blank" rel="noopener noreferrer">
+                    Open checkout
+                </a>
+            </p>
+            {% endif %}
             {% if invoice.notes %}
             <p class="muted"><strong>Notes:</strong> {{ invoice.notes }}</p>
             {% endif %}

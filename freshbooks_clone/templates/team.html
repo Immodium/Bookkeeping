@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Team · FreshBooks Clone{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Team Members</h2>
+  {% if members %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Joined</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for member in members %}
+      <tr>
+        <td>{{ member.full_name }}</td>
+        <td>{{ member.email }}</td>
+        <td>{{ member.role|title }}</td>
+        <td>{{ member.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No team members found.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Add Team Member</h2>
+  <p class="muted">Owners/admins can add existing users by email or create new users with a password.</p>
+  <form method="post" class="form-grid">
+    <label>
+      Full name
+      <input type="text" name="full_name" required>
+    </label>
+    <label>
+      Email
+      <input type="email" name="email" required>
+    </label>
+    <label>
+      Role
+      <select name="role">
+        <option value="member">Member</option>
+        <option value="admin">Admin</option>
+        {% if g.account_role == "owner" %}
+        <option value="owner">Owner</option>
+        {% endif %}
+      </select>
+    </label>
+    <label>
+      Password (new users only)
+      <input type="password" name="password" minlength="8">
+    </label>
+    <button type="submit">Add Member</button>
+  </form>
+</section>
+{% endblock %}

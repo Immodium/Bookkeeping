@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Create Account · FreshBooks Clone{% endblock %}
+{% block content %}
+<section class="panel auth-panel">
+  <h2>Create your account</h2>
+  <form method="post" class="stack">
+    <label>
+      Business / Account name
+      <input type="text" name="account_name" required>
+    </label>
+    <label>
+      Your full name
+      <input type="text" name="full_name" required>
+    </label>
+    <label>
+      Email
+      <input type="email" name="email" required>
+    </label>
+    <label>
+      Password
+      <input type="password" name="password" minlength="8" required>
+    </label>
+    <button type="submit">Create account</button>
+  </form>
+  <p class="muted">Already have an account? <a href="{{ url_for('login') }}">Sign in</a>.</p>
+</section>
+{% endblock %}

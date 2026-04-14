@@ -965,12 +965,18 @@ def render_invoice_pdf(invoice, items, subtotal, total_tax, grand_total, account
     pdf.add_page()
 
     pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "Invoice", ln=True)
+    pdf.cell(0, 10, "Invoice", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 12)
-    pdf.cell(0, 8, f"Business: {account_name}", ln=True)
-    pdf.cell(0, 8, f"Invoice #: {invoice['number']}", ln=True)
-    pdf.cell(0, 8, f"Client: {invoice['client_name']}", ln=True)
-    pdf.cell(0, 8, f"Issue Date: {invoice['issue_date']}    Due Date: {invoice['due_date']}", ln=True)
+    pdf.cell(0, 8, f"Business: {account_name}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"Invoice #: {invoice['number']}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"Client: {invoice['client_name']}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(
+        0,
+        8,
+        f"Issue Date: {invoice['issue_date']}    Due Date: {invoice['due_date']}",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
     pdf.ln(5)
 
     pdf.set_font("Helvetica", "B", 11)
@@ -978,7 +984,7 @@ def render_invoice_pdf(invoice, items, subtotal, total_tax, grand_total, account
     pdf.cell(25, 8, "Qty", border=1)
     pdf.cell(30, 8, "Rate", border=1)
     pdf.cell(20, 8, "Tax %", border=1)
-    pdf.cell(40, 8, "Line Total", border=1, ln=True)
+    pdf.cell(40, 8, "Line Total", border=1, new_x="LMARGIN", new_y="NEXT")
 
     pdf.set_font("Helvetica", "", 10)
     for item in items:
@@ -986,21 +992,21 @@ def render_invoice_pdf(invoice, items, subtotal, total_tax, grand_total, account
         pdf.cell(25, 8, f"{item['quantity']:.2f}", border=1)
         pdf.cell(30, 8, f"${item['rate']:.2f}", border=1)
         pdf.cell(20, 8, f"{item['tax_percent']:.2f}", border=1)
-        pdf.cell(40, 8, f"${item['line_total']:.2f}", border=1, ln=True)
+        pdf.cell(40, 8, f"${item['line_total']:.2f}", border=1, new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 8, f"Subtotal: ${subtotal:.2f}", ln=True)
-    pdf.cell(0, 8, f"Tax: ${total_tax:.2f}", ln=True)
-    pdf.cell(0, 8, f"Total: ${grand_total:.2f}", ln=True)
+    pdf.cell(0, 8, f"Subtotal: ${subtotal:.2f}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"Tax: ${total_tax:.2f}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"Total: ${grand_total:.2f}", new_x="LMARGIN", new_y="NEXT")
     if invoice["notes"]:
         pdf.ln(4)
         pdf.set_font("Helvetica", "B", 11)
-        pdf.cell(0, 8, "Notes", ln=True)
+        pdf.cell(0, 8, "Notes", new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
         pdf.multi_cell(0, 6, invoice["notes"])
 
-    payload = pdf.output(dest="S")
+    payload = pdf.output()
     if isinstance(payload, str):
         return payload.encode("latin1")
     return bytes(payload)

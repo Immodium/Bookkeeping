@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Accept Invitation · FreshBooks Clone{% endblock %}
+{% block content %}
+<section class="panel auth-card">
+  <h1>Join {{ account.name }}</h1>
+  <p class="muted">
+    You were invited as <strong>{{ (invite.role or "member")|title }}</strong>
+    using <strong>{{ invite.email }}</strong>.
+  </p>
+  <form method="post" class="stack">
+    <label>
+      Full name
+      <input type="text" name="full_name" value="{{ invite.full_name or '' }}" required>
+    </label>
+    <label>
+      Password
+      <input type="password" name="password" minlength="8" required>
+    </label>
+    <p class="muted">Existing users can enter a new password to rotate credentials while accepting.</p>
+    <button type="submit">Accept invitation</button>
+  </form>
+</section>
+{% endblock %}

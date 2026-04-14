@@ -49,7 +49,7 @@
             <button type="submit" class="secondary">Sign out</button>
           </form>
         </div>
-      {% elif request.endpoint in ("login", "register") %}
+      {% elif request.endpoint in ("login", "register", "forgot_password", "reset_password", "accept_team_invite") %}
         <div class="auth-shell"></div>
       {% endif %}
     </header>

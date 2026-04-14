@@ -38,6 +38,12 @@
                 </a>
             </p>
             {% endif %}
+            {% if invoice.stripe_checkout_session_id %}
+            <p class="muted">
+                Stripe checkout session:
+                <span class="mono">{{ invoice.stripe_checkout_session_id }}</span>
+            </p>
+            {% endif %}
             {% if invoice.notes %}
             <p class="muted"><strong>Notes:</strong> {{ invoice.notes }}</p>
             {% endif %}

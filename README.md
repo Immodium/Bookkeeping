@@ -1,17 +1,18 @@
 # FreshBooks Clone
 
-A FreshBooks-style billing app for freelancers and small teams, now with authentication, multi-user accounts, PDF invoice export, and Stripe checkout links.
+A FreshBooks-style billing app for freelancers and small teams with authentication, multi-user accounts, invitation onboarding, password reset, PDF invoice export, and Stripe payment automation.
 
 ## Features
 
 ### Authentication + multi-user accounts
 - Email/password sign-up and login
+- Password reset via one-time email-style tokens
 - Account-level workspaces (tenants)
 - Team management with roles:
   - `owner`
   - `admin`
   - `member`
-- Add users to an account from the Team page
+- Invitation-based onboarding from the Team page for new users
 - Account switcher for users who belong to multiple accounts
 - All business data is account-scoped (clients/invoices/time/expenses are isolated per account)
 
@@ -35,6 +36,11 @@ A FreshBooks-style billing app for freelancers and small teams, now with authent
 - Stripe payment link generation from each invoice detail page
   - Saves checkout URL on the invoice
   - Automatically promotes `draft` invoices to `sent` when link is generated
+- Stripe webhook endpoint (`/stripe/webhook`) that auto-marks invoices as `paid` on successful checkout completion
+
+### Built-in local email outbox (for development/testing)
+- Token links (password reset and team invites) are stored in `outbound_emails` table as queued messages.
+- This replaces a real SMTP integration in this MVP while keeping realistic token/email flows.
 
 ## Tech stack
 
@@ -58,6 +64,7 @@ A FreshBooks-style billing app for freelancers and small teams, now with authent
 3. Optional environment variables:
    ```bash
    export STRIPE_SECRET_KEY=sk_test_...
+   export STRIPE_WEBHOOK_SECRET=whsec_...
    export APP_BASE_URL=http://127.0.0.1:5000
    ```
 4. Start the app:

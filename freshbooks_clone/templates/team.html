@@ -31,7 +31,7 @@
 
 <section class="panel">
   <h2>Add Team Member</h2>
-  <p class="muted">Owners/admins can add existing users by email or create new users with a password.</p>
+  <p class="muted">Owners/admins can add existing users directly or send invitation links for new users.</p>
   <form method="post" class="form-grid">
     <label>
       Full name
@@ -51,11 +51,35 @@
         {% endif %}
       </select>
     </label>
-    <label>
-      Password (new users only)
-      <input type="password" name="password" minlength="8">
-    </label>
-    <button type="submit">Add Member</button>
+    <button type="submit">Send Invite / Add Member</button>
   </form>
+</section>
+
+<section class="panel">
+  <h2>Pending Invitations</h2>
+  {% if pending_invites %}
+  <table>
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Name</th>
+        <th>Role</th>
+        <th>Expires</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for invite in pending_invites %}
+      <tr>
+        <td>{{ invite.email }}</td>
+        <td>{{ invite.full_name }}</td>
+        <td>{{ invite.role|title }}</td>
+        <td class="nowrap">{{ invite.expires_at_display }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No pending invites.</p>
+  {% endif %}
 </section>
 {% endblock %}

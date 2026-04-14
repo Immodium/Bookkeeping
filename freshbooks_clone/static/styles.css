@@ -381,6 +381,16 @@ button.danger {
     font-size: 0.8rem;
 }
 
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+        monospace;
+    font-size: 0.85rem;
+}
+
+.nowrap {
+    white-space: nowrap;
+}
+
 @media (max-width: 720px) {
     .topbar-main {
         flex-direction: column;

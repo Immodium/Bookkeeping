@@ -91,13 +91,38 @@ def test_registration_and_team_management(tmp_path):
             "full_name": "Bob Admin",
             "email": "bob@example.com",
             "role": "admin",
-            "password": "anothersecure123",
         },
         follow_redirects=True,
     )
     assert add_member.status_code == 200
-    assert b"Team member added." in add_member.data
+    assert b"Invitation sent to team member." in add_member.data
     assert b"bob@example.com" in add_member.data
+
+    with client.session_transaction() as sess:
+        sess.clear()
+
+    bad_invite = client.get("/team/invite/not-a-real-token", follow_redirects=True)
+    assert b"Invitation link is invalid or expired." in bad_invite.data
+
+    # Pull invite token from "outbox", then accept invite.
+    app = client.application
+    with app.app_context():
+        db = app.get_db()
+        email_row = db.execute(
+            "SELECT body FROM outbound_emails WHERE to_email = ? ORDER BY id DESC LIMIT 1",
+            ("bob@example.com",),
+        ).fetchone()
+    assert email_row is not None
+    invite_url = email_row["body"].split("Accept your invite here:\n", 1)[1].splitlines()[0].strip()
+    invite_path = invite_url.replace("http://testserver.local", "", 1)
+
+    accepted = client.post(
+        invite_path,
+        data={"full_name": "Bob Admin", "password": "anothersecure123"},
+        follow_redirects=True,
+    )
+    assert accepted.status_code == 200
+    assert b"Welcome to Northwind LLC!" in accepted.data
 
 
 def test_account_scoped_invoice_access(tmp_path):
@@ -153,9 +178,73 @@ def test_invoice_pdf_export_and_payment_link(tmp_path, monkeypatch):
 
     monkeypatch.setattr(
         "freshbooks_clone.app.create_stripe_checkout_link",
-        lambda **kwargs: ("https://checkout.stripe.test/session_123", None),
+        lambda **kwargs: ("https://checkout.stripe.test/session_123", "cs_test_123", None),
     )
     link_response = client.post("/invoices/1/payment-link", follow_redirects=True)
     assert link_response.status_code == 200
     assert b"Stripe payment link generated." in link_response.data
     assert b"https://checkout.stripe.test/session_123" in link_response.data
+
+    def fake_construct_event(payload, signature, secret):
+        return {
+            "type": "checkout.session.completed",
+            "data": {"object": {"id": "cs_test_123"}},
+        }
+
+    monkeypatch.setattr("freshbooks_clone.app.stripe.Webhook.construct_event", fake_construct_event)
+    webhook_response = client.post(
+        "/stripe/webhook",
+        data=b'{"id":"evt_test"}',
+        headers={"Stripe-Signature": "sig_test"},
+    )
+    assert webhook_response.status_code == 200
+
+    refreshed = client.get("/invoices/1", follow_redirects=True)
+    assert b"<option value=\"paid\" selected>" in refreshed.data
+
+
+def test_password_reset_token_flow(tmp_path):
+    client = build_client(tmp_path)
+    register_account(
+        client,
+        account_name="Reset Corp",
+        full_name="Reset Owner",
+        email="reset@example.com",
+        password="initialpass123",
+    )
+    client.post("/logout", follow_redirects=True)
+
+    requested = client.post(
+        "/forgot-password",
+        data={"email": "reset@example.com"},
+        follow_redirects=True,
+    )
+    assert requested.status_code == 200
+    assert b"If an account exists for that email" in requested.data
+
+    app = client.application
+    with app.app_context():
+        db = app.get_db()
+        email_row = db.execute(
+            "SELECT body FROM outbound_emails WHERE to_email = ? ORDER BY id DESC LIMIT 1",
+            ("reset@example.com",),
+        ).fetchone()
+    assert email_row is not None
+    reset_url = email_row["body"].split("Use this link within one hour:\n", 1)[1].splitlines()[0].strip()
+    reset_path = reset_url.replace("http://testserver.local", "", 1)
+
+    reset_done = client.post(
+        reset_path,
+        data={"password": "newpass123", "confirm_password": "newpass123"},
+        follow_redirects=True,
+    )
+    assert reset_done.status_code == 200
+    assert b"Password updated. Please sign in." in reset_done.data
+
+    relogin = client.post(
+        "/login",
+        data={"email": "reset@example.com", "password": "newpass123"},
+        follow_redirects=True,
+    )
+    assert relogin.status_code == 200
+    assert b"Signed in successfully." in relogin.data

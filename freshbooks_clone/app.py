@@ -1,7 +1,10 @@
 import functools
+import hashlib
 import io
 import os
+import secrets
 import sqlite3
+import time
 from datetime import date
 
 import click
@@ -12,6 +15,7 @@ from flask import (
     current_app,
     flash,
     g,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -23,6 +27,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 VALID_INVOICE_STATUSES = ("draft", "sent", "paid", "overdue")
 VALID_ACCOUNT_ROLES = ("owner", "admin", "member")
+PASSWORD_RESET_TOKEN_TTL_SECONDS = 60 * 60
+TEAM_INVITE_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7
 
 
 def create_app(test_config=None):
@@ -31,6 +37,7 @@ def create_app(test_config=None):
         SECRET_KEY="dev",
         DATABASE=os.path.join(app.instance_path, "freshbooks_clone.db"),
         STRIPE_SECRET_KEY=os.getenv("STRIPE_SECRET_KEY", ""),
+        STRIPE_WEBHOOK_SECRET=os.getenv("STRIPE_WEBHOOK_SECRET", ""),
         APP_BASE_URL=os.getenv("APP_BASE_URL", "http://127.0.0.1:5000"),
     )
 
@@ -247,6 +254,77 @@ def register_routes(app):
             return redirect(url_for("dashboard"))
         return render_template("auth_login.html")
 
+    @app.route("/forgot-password", methods=["GET", "POST"])
+    def forgot_password():
+        if g.user is not None:
+            return redirect(url_for("dashboard"))
+        if request.method == "POST":
+            email = request.form.get("email", "").strip().lower()
+            db = app.get_db()
+            user = db.execute(
+                "SELECT id, email FROM users WHERE lower(email) = ?",
+                (email,),
+            ).fetchone()
+            if user is not None:
+                reset_token = create_auth_token(
+                    db,
+                    purpose="password_reset",
+                    ttl_seconds=PASSWORD_RESET_TOKEN_TTL_SECONDS,
+                    user_id=user["id"],
+                    email=user["email"],
+                )
+                reset_link = build_absolute_url(url_for("reset_password", token=reset_token))
+                queue_outbound_email(
+                    db,
+                    to_email=user["email"],
+                    subject="Reset your FreshBooks Clone password",
+                    body=(
+                        "We received a request to reset your password.\n\n"
+                        f"Use this link within one hour:\n{reset_link}\n"
+                    ),
+                )
+                db.commit()
+            flash(
+                "If an account exists for that email, a password reset link has been sent.",
+                "success",
+            )
+            return redirect(url_for("login"))
+        return render_template("forgot_password.html")
+
+    @app.route("/reset-password/<token>", methods=["GET", "POST"])
+    def reset_password(token):
+        if g.user is not None:
+            return redirect(url_for("dashboard"))
+        db = app.get_db()
+        token_row = fetch_auth_token(db, purpose="password_reset", token=token)
+        if token_row is None:
+            flash("Password reset link is invalid or expired.", "error")
+            return redirect(url_for("forgot_password"))
+
+        if request.method == "POST":
+            password = request.form.get("password", "")
+            confirm_password = request.form.get("confirm_password", "")
+            if len(password) < 8:
+                flash("Password must be at least 8 characters.", "error")
+                return redirect(url_for("reset_password", token=token))
+            if password != confirm_password:
+                flash("Passwords do not match.", "error")
+                return redirect(url_for("reset_password", token=token))
+
+            db.execute(
+                "UPDATE users SET password_hash = ? WHERE id = ?",
+                (generate_password_hash(password), token_row["user_id"]),
+            )
+            db.execute(
+                "UPDATE auth_tokens SET used_at = ? WHERE id = ?",
+                (int(time.time()), token_row["id"]),
+            )
+            db.commit()
+            flash("Password updated. Please sign in.", "success")
+            return redirect(url_for("login"))
+
+        return render_template("reset_password.html", token=token)
+
     @app.post("/logout")
     @login_required
     def logout():
@@ -337,7 +415,6 @@ def register_routes(app):
 
             full_name = request.form.get("full_name", "").strip()
             email = request.form.get("email", "").strip().lower()
-            password = request.form.get("password", "")
             role = request.form.get("role", "member").strip().lower()
 
             if not full_name or not email or not role:
@@ -350,45 +427,68 @@ def register_routes(app):
                 flash("Only owners can add additional owners.", "error")
                 return redirect(url_for("team"))
 
-            existing_user = db.execute(
-                "SELECT id FROM users WHERE lower(email) = ?",
-                (email,),
-            ).fetchone()
-            if existing_user is None:
-                if len(password) < 8:
-                    flash("New users require a password with 8+ characters.", "error")
-                    return redirect(url_for("team"))
-                cursor = db.execute(
-                    """
-                    INSERT INTO users (email, full_name, password_hash)
-                    VALUES (?, ?, ?)
-                    """,
-                    (email, full_name, generate_password_hash(password)),
-                )
-                user_id = cursor.lastrowid
-            else:
-                user_id = existing_user["id"]
-
             existing_membership = db.execute(
                 """
-                SELECT 1 FROM account_users
-                WHERE account_id = ? AND user_id = ?
+                SELECT 1
+                FROM account_users au
+                JOIN users u ON u.id = au.user_id
+                WHERE au.account_id = ? AND lower(u.email) = ?
                 """,
-                (account_id, user_id),
+                (account_id, email),
             ).fetchone()
             if existing_membership is not None:
                 flash("That user is already on this account.", "error")
                 return redirect(url_for("team"))
 
-            db.execute(
-                """
-                INSERT INTO account_users (account_id, user_id, role)
-                VALUES (?, ?, ?)
-                """,
-                (account_id, user_id, role),
+            existing_user = db.execute(
+                "SELECT id, full_name FROM users WHERE lower(email) = ?",
+                (email,),
+            ).fetchone()
+            if existing_user is not None:
+                db.execute(
+                    """
+                    INSERT INTO account_users (account_id, user_id, role)
+                    VALUES (?, ?, ?)
+                    """,
+                    (account_id, existing_user["id"], role),
+                )
+                queue_outbound_email(
+                    db,
+                    to_email=email,
+                    subject=f"You were added to {g.account['name']}",
+                    body=(
+                        f"Hi {existing_user['full_name']},\n\n"
+                        f"You were added to {g.account['name']} as {role}.\n"
+                        "Sign in to access the account."
+                    ),
+                )
+                db.commit()
+                flash("Existing user added to account.", "success")
+                return redirect(url_for("team"))
+
+            invite_token = create_auth_token(
+                db,
+                purpose="team_invite",
+                ttl_seconds=TEAM_INVITE_TOKEN_TTL_SECONDS,
+                account_id=account_id,
+                email=email,
+                full_name=full_name,
+                role=role,
+            )
+            invite_link = build_absolute_url(url_for("accept_team_invite", token=invite_token))
+            queue_outbound_email(
+                db,
+                to_email=email,
+                subject=f"Invitation to join {g.account['name']}",
+                body=(
+                    f"Hi {full_name},\n\n"
+                    f"You were invited to join {g.account['name']} as {role}.\n"
+                    f"Accept your invite here:\n{invite_link}\n\n"
+                    "This link expires in 7 days."
+                ),
             )
             db.commit()
-            flash("Team member added.", "success")
+            flash("Invitation sent to team member.", "success")
             return redirect(url_for("team"))
 
         members = db.execute(
@@ -401,7 +501,142 @@ def register_routes(app):
             """,
             (account_id,),
         ).fetchall()
-        return render_template("team.html", members=members)
+        pending_invites = db.execute(
+            """
+            SELECT id, email, full_name, role, expires_at, created_at
+            FROM auth_tokens
+            WHERE purpose = 'team_invite'
+              AND account_id = ?
+              AND used_at IS NULL
+              AND expires_at > ?
+            ORDER BY created_at DESC
+            """,
+            (account_id, int(time.time())),
+        ).fetchall()
+        formatted_invites = []
+        for invite in pending_invites:
+            formatted_invites.append(
+                {
+                    "id": invite["id"],
+                    "email": invite["email"],
+                    "full_name": invite["full_name"],
+                    "role": invite["role"],
+                    "created_at": invite["created_at"],
+                    "expires_at_display": time.strftime(
+                        "%Y-%m-%d %H:%M UTC",
+                        time.gmtime(invite["expires_at"]),
+                    ),
+                }
+            )
+        return render_template(
+            "team.html",
+            members=members,
+            pending_invites=formatted_invites,
+        )
+
+    @app.route("/team/invite/<token>", methods=["GET", "POST"])
+    def accept_team_invite(token):
+        invite = fetch_auth_token(app.get_db(), purpose="team_invite", token=token)
+        if invite is None:
+            flash("Invitation link is invalid or expired.", "error")
+            return redirect(url_for("login"))
+
+        db = app.get_db()
+        account = db.execute(
+            "SELECT id, name FROM accounts WHERE id = ?",
+            (invite["account_id"],),
+        ).fetchone()
+        if account is None:
+            flash("Account for this invitation no longer exists.", "error")
+            return redirect(url_for("login"))
+
+        if request.method == "POST":
+            full_name = request.form.get("full_name", "").strip() or (invite["full_name"] or "")
+            password = request.form.get("password", "")
+            existing_user = db.execute(
+                "SELECT id, password_hash FROM users WHERE lower(email) = ?",
+                ((invite["email"] or "").lower(),),
+            ).fetchone()
+
+            if existing_user is None and len(password) < 8:
+                flash("Create a password with at least 8 characters.", "error")
+                return redirect(url_for("accept_team_invite", token=token))
+
+            if existing_user is None:
+                cursor = db.execute(
+                    """
+                    INSERT INTO users (email, full_name, password_hash)
+                    VALUES (?, ?, ?)
+                    """,
+                    (invite["email"], full_name, generate_password_hash(password)),
+                )
+                user_id = cursor.lastrowid
+            else:
+                user_id = existing_user["id"]
+                if len(password) < 8:
+                    flash("Password must be at least 8 characters.", "error")
+                    return redirect(url_for("accept_team_invite", token=token))
+                db.execute(
+                    "UPDATE users SET password_hash = ? WHERE id = ?",
+                    (generate_password_hash(password), user_id),
+                )
+                if full_name:
+                    db.execute("UPDATE users SET full_name = ? WHERE id = ?", (full_name, user_id))
+
+            membership = db.execute(
+                """
+                SELECT 1
+                FROM account_users
+                WHERE account_id = ? AND user_id = ?
+                """,
+                (invite["account_id"], user_id),
+            ).fetchone()
+            if membership is None:
+                db.execute(
+                    """
+                    INSERT INTO account_users (account_id, user_id, role)
+                    VALUES (?, ?, ?)
+                    """,
+                    (invite["account_id"], user_id, invite["role"] or "member"),
+                )
+            db.execute(
+                "UPDATE auth_tokens SET used_at = ? WHERE id = ?",
+                (int(time.time()), invite["id"]),
+            )
+            db.commit()
+
+            session.clear()
+            session["user_id"] = user_id
+            session["account_id"] = invite["account_id"]
+            flash(f"Welcome to {account['name']}!", "success")
+            return redirect(url_for("dashboard"))
+
+        return render_template("accept_invite.html", invite=invite, account=account, token=token)
+
+    @app.post("/stripe/webhook")
+    def stripe_webhook():
+        payload = request.data
+        signature = request.headers.get("Stripe-Signature", "")
+        webhook_secret = current_app.config.get("STRIPE_WEBHOOK_SECRET", "")
+
+        if not webhook_secret:
+            return jsonify({"error": "Webhook secret is not configured"}), 500
+
+        try:
+            event = stripe.Webhook.construct_event(payload, signature, webhook_secret)
+        except ValueError:
+            return jsonify({"error": "Invalid payload"}), 400
+        except stripe.error.SignatureVerificationError:
+            return jsonify({"error": "Invalid signature"}), 400
+
+        if event.get("type") == "checkout.session.completed":
+            session_object = event["data"]["object"]
+            checkout_session_id = session_object.get("id")
+            if checkout_session_id:
+                mark_invoice_paid_from_checkout_session(app.get_db(), checkout_session_id)
+                app.get_db().commit()
+
+        return jsonify({"received": True})
 
     @app.route("/clients", methods=["GET", "POST"])
     @login_required
@@ -675,7 +910,7 @@ def register_routes(app):
             flash("Invoice total must be greater than zero.", "error")
             return redirect(url_for("invoice_detail", invoice_id=invoice_id))
 
-        payment_url, error = create_stripe_checkout_link(
+        payment_url, checkout_session_id, error = create_stripe_checkout_link(
             invoice=invoice,
             grand_total=grand_total,
             app_base_url=current_app.config["APP_BASE_URL"],
@@ -688,10 +923,12 @@ def register_routes(app):
         db.execute(
             """
             UPDATE invoices
-            SET stripe_payment_url = ?, status = CASE WHEN status = 'draft' THEN 'sent' ELSE status END
+            SET stripe_payment_url = ?,
+                stripe_checkout_session_id = ?,
+                status = CASE WHEN status = 'draft' THEN 'sent' ELSE status END
             WHERE id = ? AND account_id = ?
             """,
-            (payment_url, invoice_id, account_id),
+            (payment_url, checkout_session_id, invoice_id, account_id),
         )
         db.commit()
         flash("Stripe payment link generated.", "success")
@@ -891,6 +1128,8 @@ def migrate_schema(db):
 
     if not column_exists(db, "invoices", "stripe_payment_url"):
         db.execute("ALTER TABLE invoices ADD COLUMN stripe_payment_url TEXT")
+    if not column_exists(db, "invoices", "stripe_checkout_session_id"):
+        db.execute("ALTER TABLE invoices ADD COLUMN stripe_checkout_session_id TEXT")
 
 
 def login_required(view):
@@ -901,6 +1140,72 @@ def login_required(view):
         return view(**kwargs)
 
     return wrapped_view
+
+
+def hash_token(token):
+    return hashlib.sha256(token.encode("utf8")).hexdigest()
+
+
+def create_auth_token(
+    db,
+    *,
+    purpose,
+    ttl_seconds,
+    user_id=None,
+    account_id=None,
+    email=None,
+    full_name=None,
+    role=None,
+):
+    token = secrets.token_urlsafe(32)
+    db.execute(
+        """
+        INSERT INTO auth_tokens (
+            purpose, token_hash, user_id, account_id, email, full_name, role, expires_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            purpose,
+            hash_token(token),
+            user_id,
+            account_id,
+            (email or "").lower() or None,
+            full_name,
+            role,
+            int(time.time()) + ttl_seconds,
+        ),
+    )
+    return token
+
+
+def fetch_auth_token(db, *, purpose, token):
+    return db.execute(
+        """
+        SELECT *
+        FROM auth_tokens
+        WHERE purpose = ?
+          AND token_hash = ?
+          AND used_at IS NULL
+          AND expires_at > ?
+        """,
+        (purpose, hash_token(token), int(time.time())),
+    ).fetchone()
+
+
+def build_absolute_url(path):
+    base_url = current_app.config.get("APP_BASE_URL", "http://127.0.0.1:5000").rstrip("/")
+    return f"{base_url}{path}"
+
+
+def queue_outbound_email(db, *, to_email, subject, body):
+    db.execute(
+        """
+        INSERT INTO outbound_emails (to_email, subject, body)
+        VALUES (?, ?, ?)
+        """,
+        (to_email, subject, body),
+    )
 
 
 def next_invoice_number(db, account_id):
@@ -1044,4 +1349,15 @@ def create_stripe_checkout_link(invoice, grand_total, app_base_url, stripe_secre
     except Exception as exc:  # noqa: BLE001
         return None, f"Stripe error: {exc}"
 
-    return checkout_session.url, None
+    return checkout_session.url, checkout_session.id, None
+
+
+def mark_invoice_paid_from_checkout_session(db, checkout_session_id):
+    db.execute(
+        """
+        UPDATE invoices
+        SET status = 'paid'
+        WHERE stripe_checkout_session_id = ?
+        """,
+        (checkout_session_id,),
+    )

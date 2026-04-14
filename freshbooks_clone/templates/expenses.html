@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Record Expense</h2>
+  <form method="post" class="grid-form">
+    <label>Category<input type="text" name="category" placeholder="Software / Travel / Meals" required /></label>
+    <label>Date<input type="date" name="expense_date" /></label>
+    <label>Amount<input type="number" name="amount" step="0.01" min="0" required /></label>
+    <label>Bill to client (optional)
+      <select name="client_id">
+        <option value="">Internal expense</option>
+        {% for client in clients %}
+        <option value="{{ client.id }}">{{ client.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="full">Description<textarea name="description" rows="3" required></textarea></label>
+    <button type="submit">Save Expense</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Expense History</h2>
+  {% if expenses %}
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Category</th>
+        <th>Description</th>
+        <th>Client</th>
+        <th>Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for expense in expenses %}
+      <tr>
+        <td>{{ expense.expense_date }}</td>
+        <td>{{ expense.category }}</td>
+        <td>{{ expense.description }}</td>
+        <td>{{ expense.client_name or "—" }}</td>
+        <td>${{ "%.2f"|format(expense.amount) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No expenses yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

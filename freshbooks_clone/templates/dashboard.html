@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="stats-grid grid-cards">
+  <article class="stat-card card">
+    <p>Paid Revenue</p>
+    <h3>${{ "%.2f"|format(paid_total) }}</h3>
+  </article>
+  <article class="stat-card card">
+    <p>Outstanding Invoices</p>
+    <h3>${{ "%.2f"|format(outstanding_total) }}</h3>
+  </article>
+  <article class="stat-card card">
+    <p>This Month Hours</p>
+    <h3>{{ "%.2f"|format(month_hours) }}h</h3>
+  </article>
+  <article class="stat-card card">
+    <p>This Month Expenses</p>
+    <h3>${{ "%.2f"|format(month_expenses) }}</h3>
+  </article>
+</section>
+
+<section class="panel card">
+  <div class="panel-header section-title">
+    <h2>Recent Invoices</h2>
+    <a href="{{ url_for('invoices') }}">View all</a>
+  </div>
+  {% if recent_invoices %}
+  <table>
+    <thead>
+      <tr>
+        <th>Invoice</th>
+        <th>Client</th>
+        <th>Status</th>
+        <th>Issue Date</th>
+        <th class="right">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for invoice in recent_invoices %}
+      <tr>
+        <td><a href="{{ url_for('invoice_detail', invoice_id=invoice.id) }}">{{ invoice.number }}</a></td>
+        <td>{{ invoice.client_name }}</td>
+        <td><span class="status {{ invoice.status }}">{{ invoice.status }}</span></td>
+        <td>{{ invoice.issue_date }}</td>
+        <td class="right">${{ "%.2f"|format(invoice.total) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">No invoices yet. Create one to start billing.</p>
+  {% endif %}
+</section>
+{% endblock %}

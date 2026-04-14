@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Invoice {{ invoice.number }}{% endblock %}
+{% block content %}
+<section class="panel stack">
+    <div class="between">
+        <h2>{{ invoice.number }}</h2>
+        <a class="link" href="{{ url_for('invoices') }}">Back to invoices</a>
+    </div>
+    <div class="grid two">
+        <div>
+            <p><strong>Client:</strong> {{ invoice.client_name }}</p>
+            <p><strong>Company:</strong> {{ invoice.client_company or "—" }}</p>
+            <p><strong>Email:</strong> {{ invoice.client_email or "—" }}</p>
+            <p><strong>Issue:</strong> {{ invoice.issue_date }}</p>
+            <p><strong>Due:</strong> {{ invoice.due_date }}</p>
+        </div>
+        <div>
+            <form method="post" action="{{ url_for('update_invoice_status', invoice_id=invoice.id) }}" class="stack">
+                <label for="status">Status</label>
+                <select id="status" name="status">
+                    {% for status in statuses %}
+                    <option value="{{ status }}" {% if invoice.status == status %}selected{% endif %}>{{ status|title }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit">Update status</button>
+            </form>
+            {% if invoice.notes %}
+            <p class="muted"><strong>Notes:</strong> {{ invoice.notes }}</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<section class="panel stack">
+    <h3>Add line item</h3>
+    <form method="post" class="grid four">
+        <label>Description
+            <input type="text" name="description" required>
+        </label>
+        <label>Quantity
+            <input type="number" step="0.01" min="0.01" name="quantity" required>
+        </label>
+        <label>Rate
+            <input type="number" step="0.01" min="0" name="rate" required>
+        </label>
+        <label>Tax %
+            <input type="number" step="0.01" min="0" name="tax_percent" value="0">
+        </label>
+        <div>
+            <button type="submit">Add item</button>
+        </div>
+    </form>
+</section>
+
+<section class="panel stack">
+    <h3>Items</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Description</th>
+                <th>Qty</th>
+                <th>Rate</th>
+                <th>Tax %</th>
+                <th>Total</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.description }}</td>
+                <td>{{ "%.2f"|format(item.quantity) }}</td>
+                <td>${{ "%.2f"|format(item.rate) }}</td>
+                <td>{{ "%.2f"|format(item.tax_percent) }}</td>
+                <td>${{ "%.2f"|format(item.line_total) }}</td>
+                <td>
+                    <form method="post" action="{{ url_for('delete_invoice_item', invoice_id=invoice.id, item_id=item.id) }}">
+                        <button class="danger" type="submit">Remove</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="muted">No items yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="totals">
+        <p>Subtotal: <strong>${{ "%.2f"|format(subtotal) }}</strong></p>
+        <p>Tax: <strong>${{ "%.2f"|format(total_tax) }}</strong></p>
+        <p>Grand total: <strong>${{ "%.2f"|format(grand_total) }}</strong></p>
+    </div>
+</section>
+{% endblock %}

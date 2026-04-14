@@ -88,7 +88,7 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
 
   const getCurrentRangeLabel = (): string => {
     if (value === 'custom' && customRange) {
-      return getDateRangeLabel(customRange);
+      return formatDateRangeLabel(customRange);
     }
     
     const option = dateRangeFilterOptions.find(opt => opt.value === value);
@@ -170,7 +170,7 @@ export const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
       {/* Custom Range Display */}
       {isCustomMode && customRange && (
         <div className="text-sm text-muted-foreground">
-          Selected: {getDateRangeLabel(customRange)}
+          Selected: {formatDateRangeLabel(customRange)}
         </div>
       )}
     </div>

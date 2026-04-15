@@ -272,7 +272,7 @@ export const NotificationSettingsTab = forwardRef<SettingsTabRef>((props, ref) =
             <strong>Toast Notifications:</strong> Small popup messages that appear when you perform actions like saving invoices, sending emails, or when errors occur.
           </p>
           <p>
-            <strong>Email Communications:</strong> Configure email settings in the Email Settings section to control invoice and reminder emails sent to clients.
+            <strong>Email Communications:</strong> Configure email provider settings in Integration Settings to control invoice and reminder emails sent to clients.
           </p>
           <p>
             <strong>Note:</strong> These settings only control the popup notifications you see in the application interface, not email communications with clients.

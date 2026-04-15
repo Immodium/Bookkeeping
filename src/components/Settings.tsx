@@ -6,7 +6,6 @@ import { TaxSettings } from './settings/TaxSettings';
 import { ShippingSettings } from './settings/ShippingSettings';
 import { CompanySettings } from './settings/CompanySettings';
 import { GeneralSettingsTab } from './settings/GeneralSettingsTab';
-import { EmailSettings } from './settings/EmailSettings';
 import { StripeSettingsTab } from './settings/StripeSettingsTab';
 import { NotificationSettingsTab } from './settings/NotificationSettingsTab';
 import { AppearanceSettingsTab } from './settings/AppearanceSettingsTab';
@@ -27,7 +26,6 @@ export const Settings = () => {
   const generalSettingsRef = useRef<SettingsTabRef>(null);
   const taxSettingsRef = useRef<SettingsTabRef>(null);
   const shippingSettingsRef = useRef<SettingsTabRef>(null);
-  const emailSettingsRef = useRef<SettingsTabRef>(null);
   const stripeSettingsRef = useRef<SettingsTabRef>(null);
   const notificationSettingsRef = useRef<SettingsTabRef>(null);
   const appearanceSettingsRef = useRef<SettingsTabRef>(null);
@@ -37,7 +35,7 @@ export const Settings = () => {
 
   useEffect(() => {
     const hash = location.hash.replace('#', '');
-    const availableTabs = ['company', 'general', 'tax', 'shipping', 'email', 'notifications', 'appearance', 'project', 'backup'];
+    const availableTabs = ['company', 'general', 'tax', 'shipping', 'notifications', 'appearance', 'project', 'backup'];
     
     // Add stripe tab only if the integration is enabled
     if (projectSettings?.stripe?.enabled) {
@@ -72,9 +70,6 @@ export const Settings = () => {
           break;
         case 'shipping':
           settingsRef = shippingSettingsRef.current;
-          break;
-        case 'email':
-          settingsRef = emailSettingsRef.current;
           break;
         case 'stripe':
           settingsRef = stripeSettingsRef.current;
@@ -136,11 +131,10 @@ export const Settings = () => {
               { key: 'general', label: 'General' },
               { key: 'tax', label: 'Tax' },
               { key: 'shipping', label: 'Shipping' },
-              { key: 'email', label: 'Email' },
               ...(projectSettings?.stripe?.enabled ? [{ key: 'stripe', label: 'Stripe' }] : []),
               { key: 'notifications', label: 'Notifications' },
               { key: 'appearance', label: 'Appearance' },
-              { key: 'project', label: 'Project' },
+              { key: 'project', label: 'Integration Settings' },
               { key: 'backup', label: 'Backup' }
             ].map(tab => (
               <button
@@ -169,7 +163,6 @@ export const Settings = () => {
           {activeTab === 'general' && <GeneralSettingsTab ref={generalSettingsRef} />}
           {activeTab === 'tax' && <TaxSettings ref={taxSettingsRef} />}
           {activeTab === 'shipping' && <ShippingSettings ref={shippingSettingsRef} />}
-          {activeTab === 'email' && <EmailSettings ref={emailSettingsRef} />}
           {activeTab === 'stripe' && projectSettings?.stripe?.enabled && <StripeSettingsTab ref={stripeSettingsRef} />}
           {activeTab === 'notifications' && <NotificationSettingsTab ref={notificationSettingsRef} />}
           {activeTab === 'appearance' && <AppearanceSettingsTab ref={appearanceSettingsRef} />}

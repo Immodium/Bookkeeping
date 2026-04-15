@@ -5,7 +5,6 @@ import { TaxSettings } from './settings/TaxSettings';
 import { ShippingSettings } from './settings/ShippingSettings';
 import { CompanySettings } from './settings/CompanySettings';
 import { GeneralSettingsTab } from './settings/GeneralSettingsTab';
-import { EmailSettings } from './settings/EmailSettings';
 import { StripeSettingsTab } from './settings/StripeSettingsTab';
 import { NotificationSettingsTab } from './settings/NotificationSettingsTab';
 import { AppearanceSettingsTab } from './settings/AppearanceSettingsTab';
@@ -38,7 +37,6 @@ export const ResponsiveSettings = () => {
   const generalSettingsRef = useRef<SettingsTabRef>(null);
   const taxSettingsRef = useRef<SettingsTabRef>(null);
   const shippingSettingsRef = useRef<SettingsTabRef>(null);
-  const emailSettingsRef = useRef<SettingsTabRef>(null);
   const stripeSettingsRef = useRef<SettingsTabRef>(null);
   const notificationSettingsRef = useRef<SettingsTabRef>(null);
   const appearanceSettingsRef = useRef<SettingsTabRef>(null);
@@ -48,10 +46,9 @@ export const ResponsiveSettings = () => {
     { id: 'general', name: 'General' },
     { id: 'tax', name: 'Tax Rates' },
     { id: 'shipping', name: 'Shipping' },
-    { id: 'email', name: 'Email Settings' },
     { id: 'notifications', name: 'Notifications' },
     { id: 'appearance', name: 'Appearance' },
-    { id: 'project', name: 'Project Settings' },
+    { id: 'project', name: 'Integration Settings' },
     { id: 'backup', name: 'Backup & Restore' }
   ];
 
@@ -99,9 +96,6 @@ export const ResponsiveSettings = () => {
         case 'shipping':
           settingsRef = shippingSettingsRef.current;
           break;
-        case 'email':
-          settingsRef = emailSettingsRef.current;
-          break;
         case 'stripe':
           settingsRef = stripeSettingsRef.current;
           break;
@@ -144,7 +138,6 @@ export const ResponsiveSettings = () => {
       case 'general': return <GeneralSettingsTab ref={generalSettingsRef} />;
       case 'tax': return <TaxSettings ref={taxSettingsRef} />;
       case 'shipping': return <ShippingSettings ref={shippingSettingsRef} />;
-      case 'email': return <EmailSettings ref={emailSettingsRef} />;
       case 'stripe': return projectSettings?.stripe?.enabled ? <StripeSettingsTab ref={stripeSettingsRef} /> : null;
       case 'notifications': return <NotificationSettingsTab ref={notificationSettingsRef} />;
       case 'appearance': return <AppearanceSettingsTab ref={appearanceSettingsRef} />;

@@ -1,15 +1,17 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Globe, CreditCard, Shield, AlertTriangle, CheckCircle, Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { themeClasses } from '@/utils/themeUtils.util';
 import { toast } from 'sonner';
-import { ProjectSettings } from '@/types';
+import { ProjectSettings, SettingsTabRef } from '@/types';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
+import { EmailSettings } from './EmailSettings';
 
 export interface ProjectSettingsRef {
   saveSettings: () => Promise<void>;
 }
 
 export const ProjectSettingsTab = forwardRef<ProjectSettingsRef>((props, ref) => {
+  const emailSettingsRef = useRef<SettingsTabRef>(null);
   const [settings, setSettings] = useState<ProjectSettings>({
     google_oauth: {
       enabled: false,
@@ -123,8 +125,11 @@ export const ProjectSettingsTab = forwardRef<ProjectSettingsRef>((props, ref) =>
       }
 
       await sqliteService.updateProjectSettings(settings);
+      if (emailSettingsRef.current?.saveSettings) {
+        await emailSettingsRef.current.saveSettings();
+      }
       setOriginalSettings(settings); // Update original settings after successful save
-      toast.success('Project settings saved successfully');
+      toast.success('Integration settings saved successfully');
     } catch (error) {
       console.error('Error saving project settings:', error);
       toast.error('Failed to save project settings');
@@ -331,6 +336,9 @@ export const ProjectSettingsTab = forwardRef<ProjectSettingsRef>((props, ref) =>
         )}
       </div>
 
+
+      {/* Email Setup */}
+      <EmailSettings ref={emailSettingsRef} />
 
       {/* Security Settings */}
       <div className="bg-card rounded-lg shadow-sm border border-border p-6">

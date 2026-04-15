@@ -265,7 +265,6 @@ export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
               value={settings.email_provider}
               onChange={(e) => handleInputChange('email_provider', e.target.value)}
               className={themeClasses.select}
-              disabled={!settings.isEnabled}
             >
               <option value="smtp">SMTP</option>
               <option value="sendgrid">SendGrid</option>

@@ -5,7 +5,12 @@
 
 const VALID_TABLES = new Set([
   'users',
+  'user_roles',
   'clients',
+  'projects',
+  'project_tasks',
+  'project_task_assignees',
+  'project_documents',
   'invoices',
   'invoice_items',
   'invoice_design_templates',

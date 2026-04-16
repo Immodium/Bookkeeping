@@ -255,9 +255,6 @@ export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigati
                 <p className="text-sm font-medium text-card-foreground truncate">
                   Welcome, {user?.name || 'User'}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {Array.from(effectiveRoles).join(', ') || 'User'}
-                </p>
               </div>
             </div>
             <button 

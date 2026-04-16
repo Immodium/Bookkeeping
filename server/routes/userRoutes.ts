@@ -128,7 +128,7 @@ router.post('/create',
 router.post('/invite',
   requireAuth,
   requireAdmin,
-  validationSets.createUser,
+  validationSets.inviteUser,
   validateRequest,
   inviteUser
 );

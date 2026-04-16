@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Briefcase, Calendar, Check, ChevronDown, FileText, Plus, Save, Search, Trash2, Upload } from 'lucide-react';
+import { Briefcase, Calendar, ChevronDown, FileText, Plus, Save, Search, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { sqliteService } from '@/services/sqlite.svc';
 import { useAuth } from '@/contexts/AuthContext';
@@ -40,6 +40,8 @@ const emptyTaskForm: ProjectTaskFormData = {
   assignee_ids: []
 };
 
+const formatTaskStatusLabel = (status: ProjectTask['status']): string => status.replace('_', ' ');
+
 export const ProjectManagement: React.FC = () => {
   const { hasAnyRole } = useAuth();
   const canManageProjects = hasAnyRole(['admin', 'project_manager']);
@@ -50,6 +52,7 @@ export const ProjectManagement: React.FC = () => {
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectForm, setProjectForm] = useState<ProjectFormData>(emptyProjectForm);
   const [taskForm, setTaskForm] = useState<ProjectTaskFormData>(emptyTaskForm);
+  const [showTaskEditor, setShowTaskEditor] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState(false);
@@ -202,6 +205,7 @@ export const ProjectManagement: React.FC = () => {
 
   const handleEditTask = (task: ProjectTask) => {
     setEditingTaskId(task.id);
+    setShowTaskEditor(true);
     setTaskForm({
       title: task.title,
       description: task.description || '',
@@ -210,6 +214,18 @@ export const ProjectManagement: React.FC = () => {
       due_date: task.due_date || '',
       assignee_ids: (task.assignees || []).map(assignee => assignee.id)
     });
+  };
+
+  const openNewTaskEditor = () => {
+    setEditingTaskId(null);
+    setTaskForm(emptyTaskForm);
+    setShowTaskEditor(true);
+  };
+
+  const closeTaskEditor = () => {
+    setEditingTaskId(null);
+    setTaskForm(emptyTaskForm);
+    setShowTaskEditor(false);
   };
 
   const toggleTaskAssignee = (userId: number) => {
@@ -229,6 +245,14 @@ export const ProjectManagement: React.FC = () => {
     if (names.length <= 2) return names.join(', ');
     return `${names.slice(0, 2).join(', ')} +${names.length - 2} more`;
   }, [taskForm.assignee_ids, users]);
+
+  const projectProgress = useMemo(() => {
+    const tasks = selectedProject?.tasks || [];
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(task => task.status === 'completed').length;
+    const percentComplete = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+    return { totalTasks, completedTasks, percentComplete };
+  }, [selectedProject]);
 
   const handleUploadDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -397,13 +421,14 @@ export const ProjectManagement: React.FC = () => {
               <div className="space-y-6">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className={themeClasses.cardTitle}>{selectedProject.name}</h3>
-                    <p className={themeClasses.smallText}>{selectedProject.description || 'No description'}</p>
+                    <h3 className={themeClasses.cardTitle}>Project Overview</h3>
+                    <p className={themeClasses.smallText}>{selectedProject.name}</p>
                     <p className={themeClasses.smallText}>Client: {selectedProject.client_name || 'Unassigned'}</p>
+                    <p className={themeClasses.smallText}>{selectedProject.description || 'No description'}</p>
                   </div>
                   <div className="flex gap-2">
                     <button className={getButtonClasses('outline')} onClick={handleEditProject}>
-                      Edit
+                      Edit Project
                     </button>
                     <button className={getButtonClasses('destructive')} onClick={() => handleDeleteProject(selectedProject.id)}>
                       <Trash2 className={themeClasses.iconButton} />
@@ -412,129 +437,163 @@ export const ProjectManagement: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <h4 className="font-medium text-card-foreground">Tasks</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <input
-                      className={themeClasses.input}
-                      placeholder="Task title"
-                      value={taskForm.title}
-                      onChange={(event) => setTaskForm(prev => ({ ...prev, title: event.target.value }))}
-                    />
-                    <select
-                      className={themeClasses.select}
-                      value={taskForm.status}
-                      onChange={(event) =>
-                        setTaskForm(prev => ({ ...prev, status: event.target.value as ProjectTask['status'] }))
-                      }
-                    >
-                      {taskStatuses.map(status => (
-                        <option key={status} value={status}>
-                          {status.replace('_', ' ')}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className={themeClasses.input}
-                      placeholder="Start date"
-                      type="date"
-                      value={taskForm.start_date || ''}
-                      onChange={(event) => setTaskForm(prev => ({ ...prev, start_date: event.target.value }))}
-                    />
-                    <input
-                      className={themeClasses.input}
-                      placeholder="Due date"
-                      type="date"
-                      value={taskForm.due_date || ''}
-                      onChange={(event) => setTaskForm(prev => ({ ...prev, due_date: event.target.value }))}
+                <div className="border border-border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-card-foreground">Project Progress</h4>
+                    <span className="text-sm font-medium text-card-foreground">{projectProgress.percentComplete}%</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-2 bg-primary transition-all duration-300"
+                      style={{ width: `${projectProgress.percentComplete}%` }}
                     />
                   </div>
-                  <textarea
-                    className={themeClasses.textarea}
-                    placeholder="Task description"
-                    value={taskForm.description || ''}
-                    onChange={(event) => setTaskForm(prev => ({ ...prev, description: event.target.value }))}
-                  />
-                  <label className={themeClasses.label}>Assign Users</label>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className={`${themeClasses.select} flex items-center justify-between`}
-                      >
-                        <span className="truncate">{selectedAssigneeLabel}</span>
-                        <ChevronDown className="h-4 w-4 opacity-70" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-[320px] max-h-72 overflow-y-auto">
-                      {users.length === 0 ? (
-                        <div className="px-2 py-1.5 text-sm text-muted-foreground">No assignable users</div>
-                      ) : (
-                        users.map(user => (
-                          <DropdownMenuCheckboxItem
-                            key={user.id}
-                            checked={taskForm.assignee_ids.includes(user.id)}
-                            onCheckedChange={() => toggleTaskAssignee(user.id)}
-                            onSelect={(event) => event.preventDefault()}
-                          >
-                            <span className="truncate">{user.name} ({user.email})</span>
-                          </DropdownMenuCheckboxItem>
-                        ))
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <button className={getButtonClasses('primary')} onClick={handleTaskSubmit} disabled={isSavingTask}>
-                    <Save className={themeClasses.iconButton} />
-                    {isSavingTask ? 'Saving task...' : editingTaskId ? 'Update Task' : 'Add Task'}
-                  </button>
-                  {editingTaskId ? (
-                    <button
-                      className={getButtonClasses('outline')}
-                      onClick={() => {
-                        setEditingTaskId(null);
-                        setTaskForm(emptyTaskForm);
-                      }}
-                    >
-                      Cancel Task Edit
+                  <p className={themeClasses.smallText}>
+                    Completed tasks: {projectProgress.completedTasks} / {projectProgress.totalTasks}
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-card-foreground">Tasks</h4>
+                    <button className={getButtonClasses('primary')} onClick={openNewTaskEditor}>
+                      <Plus className={themeClasses.iconButton} />
+                      New Task
                     </button>
-                  ) : null}
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Check className="h-3 w-3" />
-                    Use the dropdown to select multiple assignees per task.
                   </div>
 
-                  <div className="space-y-2">
-                    {(selectedProject.tasks || []).map(task => (
-                      <div key={task.id} className="border border-border rounded-lg p-3">
-                        <div className="flex justify-between items-center">
-                          <p className="font-medium text-card-foreground">{task.title}</p>
-                          <div className="flex gap-2 items-center">
-                            <span className={getStatusColor(task.status)}>{task.status.replace('_', ' ')}</span>
-                            <button
-                              className="text-primary hover:opacity-80 text-xs border border-border rounded px-2 py-1"
-                              onClick={() => handleEditTask(task)}
-                              aria-label="Edit task"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="text-destructive hover:opacity-80"
-                              onClick={() => handleDeleteTask(task.id)}
-                              aria-label="Delete task"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                  {(selectedProject.tasks || []).length === 0 ? (
+                    <p className={themeClasses.mutedText}>No tasks yet. Create a task to get started.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(selectedProject.tasks || []).map(task => (
+                        <div key={task.id} className="border border-border rounded-lg p-3">
+                          <div className="flex justify-between items-center gap-2">
+                            <div>
+                              <p className="font-medium text-card-foreground">{task.title}</p>
+                              <p className={themeClasses.smallText}>
+                                {task.start_date || 'No start date'} - {task.due_date || 'No due date'}
+                              </p>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                              <span className={getStatusColor(task.status)}>{task.status.replace('_', ' ')}</span>
+                              <button
+                                className="text-primary hover:opacity-80 text-xs border border-border rounded px-2 py-1"
+                                onClick={() => handleEditTask(task)}
+                                aria-label="Edit task"
+                              >
+                                Edit Task
+                              </button>
+                              <button
+                                className="text-destructive hover:opacity-80"
+                                onClick={() => handleDeleteTask(task.id)}
+                                aria-label="Delete task"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
+                          <p className={themeClasses.smallText}>{task.description || 'No description'}</p>
+                          <p className={themeClasses.smallText}>
+                            Assignees: {(task.assignees || []).map(assignee => assignee.name).join(', ') || 'Unassigned'}
+                          </p>
                         </div>
-                        <p className={themeClasses.smallText}>{task.description || 'No description'}</p>
-                        <p className={themeClasses.smallText}>
-                          Assignees:{' '}
-                          {(task.assignees || []).map(assignee => assignee.name).join(', ') || 'Unassigned'}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                {showTaskEditor ? (
+                  <div className="border border-border rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-card-foreground">
+                        {editingTaskId ? 'Edit Task' : 'Create Task'}
+                      </h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <input
+                        className={themeClasses.input}
+                        placeholder="Task title"
+                        value={taskForm.title}
+                        onChange={(event) => setTaskForm(prev => ({ ...prev, title: event.target.value }))}
+                      />
+                      <select
+                        className={themeClasses.select}
+                        value={taskForm.status}
+                        onChange={(event) =>
+                          setTaskForm(prev => ({ ...prev, status: event.target.value as ProjectTask['status'] }))
+                        }
+                      >
+                        {taskStatuses.map(status => (
+                          <option key={status} value={status}>
+                            {status.replace('_', ' ')}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        className={themeClasses.input}
+                        placeholder="Start date"
+                        type="date"
+                        value={taskForm.start_date || ''}
+                        onChange={(event) => setTaskForm(prev => ({ ...prev, start_date: event.target.value }))}
+                      />
+                      <input
+                        className={themeClasses.input}
+                        placeholder="Due date"
+                        type="date"
+                        value={taskForm.due_date || ''}
+                        onChange={(event) => setTaskForm(prev => ({ ...prev, due_date: event.target.value }))}
+                      />
+                    </div>
+                    <textarea
+                      className={themeClasses.textarea}
+                      placeholder="Task description"
+                      value={taskForm.description || ''}
+                      onChange={(event) => setTaskForm(prev => ({ ...prev, description: event.target.value }))}
+                    />
+                    <label className={themeClasses.label}>Assign Users</label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className={`${themeClasses.select} flex items-center justify-between`}>
+                          <span className="truncate">{selectedAssigneeLabel}</span>
+                          <ChevronDown className="h-4 w-4 opacity-70" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-[320px] max-h-72 overflow-y-auto">
+                        {users.length === 0 ? (
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">No assignable users</div>
+                        ) : (
+                          users.map(user => (
+                            <DropdownMenuCheckboxItem
+                              key={user.id}
+                              checked={taskForm.assignee_ids.includes(user.id)}
+                              onCheckedChange={() => toggleTaskAssignee(user.id)}
+                              onSelect={(event) => event.preventDefault()}
+                            >
+                              <span className="truncate">{user.name} ({user.email})</span>
+                            </DropdownMenuCheckboxItem>
+                          ))
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <div className="flex gap-2">
+                      <button className={getButtonClasses('primary')} onClick={handleTaskSubmit} disabled={isSavingTask}>
+                        <Save className={themeClasses.iconButton} />
+                        {isSavingTask ? 'Saving task...' : editingTaskId ? 'Update Task' : 'Add Task'}
+                      </button>
+                      <button
+                        className={getButtonClasses('outline')}
+                        onClick={() => {
+                          setEditingTaskId(null);
+                          setTaskForm(emptyTaskForm);
+                          setShowTaskEditor(false);
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="space-y-3">
                   <h4 className="font-medium text-card-foreground">Documents</h4>

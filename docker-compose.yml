@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  slimbooks:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: slimbooks-app
+    restart: unless-stopped
+    
+    # Security settings
+    user: "1001:1001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    
+    # Port mapping - expose on all interfaces for network access
+    ports:
+      - "8080:3002"
+
+    # Environment variables
+    environment:
+      - NODE_ENV=production
+      - ENABLE_HTTPS=true
+      - SSL_KEY_PATH=certs/server.key
+      - SSL_CERT_PATH=certs/server.crt
+    
+    # Volume mounts for persistent data
+    volumes:
+      - slimbooks_data:/app/data
+      - slimbooks_uploads:/app/uploads
+      - slimbooks_logs:/app/logs
+      - ./certs:/app/certs:ro
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f -k https://localhost:3002/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Named volumes for data persistence
+volumes:
+  slimbooks_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
+  slimbooks_uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./uploads
+  slimbooks_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs
+
+# Network configuration
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

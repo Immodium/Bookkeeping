@@ -1,0 +1,173 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. */
+
+@layer base {
+  :root {
+    --background: 220 14.3% 95.9%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220.9 39.3% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220.9 39.3% 11%;
+
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 220 8.9% 46.1%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 222.2 84% 4.9%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Status colors for light mode */
+    --status-success: 142.1 76.2% 36.3%;
+    --status-success-foreground: 355.7 100% 97.3%;
+    --status-success-background: 138.5 76.5% 96.7%;
+
+    --status-warning: 32.1 94.6% 43.7%;
+    --status-warning-foreground: 26 83.3% 14.1%;
+    --status-warning-background: 54.5 91.7% 95.3%;
+
+    --status-error: 0 84.2% 60.2%;
+    --status-error-foreground: 210 40% 98%;
+    --status-error-background: 0 93.3% 94.1%;
+
+    --status-info: 221.2 83.2% 53.3%;
+    --status-info-foreground: 210 40% 98%;
+    --status-info-background: 214.3 31.8% 91.4%;
+
+    --status-neutral: 215.4 16.3% 46.9%;
+    --status-neutral-foreground: 210 40% 98%;
+    --status-neutral-background: 210 40% 96.1%;
+
+    /* Dashboard-inspired semantic colors for light mode */
+    --dashboard-stat-blue: 37 99% 93%;
+    --dashboard-stat-blue-foreground: 213 94% 68%;
+    --dashboard-stat-green: 138 76% 97%;
+    --dashboard-stat-green-foreground: 142 71% 45%;
+    --dashboard-stat-purple: 250 100% 97%;
+    --dashboard-stat-purple-foreground: 258 90% 66%;
+    --dashboard-stat-red: 0 86% 97%;
+    --dashboard-stat-red-foreground: 0 84% 60%;
+    --dashboard-stat-yellow: 55 92% 95%;
+    --dashboard-stat-yellow-foreground: 45 93% 47%;
+    --dashboard-stat-orange: 33 100% 96%;
+    --dashboard-stat-orange-foreground: 25 95% 53%;
+  }
+
+  .dark {
+    --background: 220.9 39.3% 11%;
+    --foreground: 210 40% 98%;
+
+    --card: 220 13% 18%;
+    --card-foreground: 220 14.3% 95.9%;
+
+    --popover: 220 13% 18%;
+    --popover-foreground: 220 14.3% 95.9%;
+
+    --primary: var(--dark-primary, 210 40% 98%);
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 220 8.9% 46.1%;
+
+    --accent: var(--dark-accent, 217.2 32.6% 17.5%);
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 13% 25%;
+    --input: 220 13% 25%;
+    --ring: var(--dark-ring, 212.7 26.8% 83.9%);
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: var(--dark-sidebar-primary, 224.3 76.3% 48%);
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Status colors for dark mode */
+    --status-success: 142.1 70.6% 45.3%;
+    --status-success-foreground: 138.5 76.5% 96.7%;
+    --status-success-background: 142.1 76.2% 6.3%;
+
+    --status-warning: 32.1 81% 60.8%;
+    --status-warning-foreground: 54.5 91.7% 95.3%;
+    --status-warning-background: 32.1 94.6% 8.7%;
+
+    --status-error: 0 72.2% 50.6%;
+    --status-error-foreground: 0 93.3% 94.1%;
+    --status-error-background: 0 84.2% 10.2%;
+
+    --status-info: 221.2 83.2% 53.3%;
+    --status-info-foreground: 214.3 31.8% 91.4%;
+    --status-info-background: 221.2 83.2% 13.3%;
+
+    --status-neutral: 215 20.2% 65.1%;
+    --status-neutral-foreground: 210 40% 96.1%;
+    --status-neutral-background: 217.2 32.6% 17.5%;
+
+    /* Dashboard-inspired semantic colors for dark mode */
+    --dashboard-stat-blue: 213 94% 68%;
+    --dashboard-stat-blue-foreground: 37 99% 93%;
+    --dashboard-stat-green: 142 71% 45%;
+    --dashboard-stat-green-foreground: 138 76% 97%;
+    --dashboard-stat-purple: 258 90% 66%;
+    --dashboard-stat-purple-foreground: 250 100% 97%;
+    --dashboard-stat-red: 0 84% 60%;
+    --dashboard-stat-red-foreground: 0 86% 97%;
+    --dashboard-stat-yellow: 45 93% 47%;
+    --dashboard-stat-yellow-foreground: 55 92% 95%;
+    --dashboard-stat-orange: 25 95% 53%;
+    --dashboard-stat-orange-foreground: 33 100% 96%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

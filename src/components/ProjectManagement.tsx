@@ -57,6 +57,7 @@ export const ProjectManagement: React.FC = () => {
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+  const [updatingTaskStatusId, setUpdatingTaskStatusId] = useState<number | null>(null);
 
   const selectedProject = useMemo(
     () => projects.find(project => project.id === viewState.selectedProjectId) || null,
@@ -206,12 +207,15 @@ export const ProjectManagement: React.FC = () => {
   const handleTaskStatusChange = async (task: ProjectTask, status: ProjectTask['status']) => {
     if (!selectedProject?.id) return;
     if (task.status === status) return;
+    setUpdatingTaskStatusId(task.id);
     try {
       await sqliteService.updateProjectTask(selectedProject.id, task.id, { status });
       toast.success('Task status updated');
       await refreshSelectedProject(selectedProject.id);
     } catch (error) {
       toast.error((error as Error).message || 'Failed to update task status');
+    } finally {
+      setUpdatingTaskStatusId(null);
     }
   };
 
@@ -488,7 +492,19 @@ export const ProjectManagement: React.FC = () => {
                               </p>
                             </div>
                             <div className="flex gap-2 items-center">
-                              <span className={getStatusColor(task.status)}>{task.status.replace('_', ' ')}</span>
+                              <select
+                                className={`${themeClasses.select} min-w-[140px]`}
+                                value={task.status}
+                                onChange={(event) => handleTaskStatusChange(task, event.target.value as ProjectTask['status'])}
+                                disabled={updatingTaskStatusId === task.id}
+                                aria-label="Update task status"
+                              >
+                                {taskStatuses.map(status => (
+                                  <option key={status} value={status}>
+                                    {status.replace('_', ' ')}
+                                  </option>
+                                ))}
+                              </select>
                               <button
                                 className="text-primary hover:opacity-80 text-xs border border-border rounded px-2 py-1"
                                 onClick={() => handleEditTask(task)}

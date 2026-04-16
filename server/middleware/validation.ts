@@ -144,8 +144,17 @@ export const validationRules = {
 export const validationSets = {
   // User validation sets
   createUser: [
-    validationRules.name,
-    validationRules.email,
+    body('userData.name')
+      .trim()
+      .isLength({ min: 1, max: validationConfig.maxFieldLengths.name })
+      .withMessage(`Name must be between 1 and ${validationConfig.maxFieldLengths.name} characters`)
+      .escape(),
+    body('userData.email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Must be a valid email address')
+      .isLength({ max: validationConfig.maxFieldLengths.email })
+      .withMessage(`Email must be less than ${validationConfig.maxFieldLengths.email} characters`),
     body('userData.password')
       .isLength({
         min: validationConfig.password.minLength,
@@ -160,6 +169,31 @@ export const validationSets = {
       .optional()
       .isArray({ min: 1 })
       .withMessage('Roles must be a non-empty array when provided')
+  ] as ValidationChain[],
+
+  inviteUser: [
+    body('userData.name')
+      .trim()
+      .isLength({ min: 1, max: validationConfig.maxFieldLengths.name })
+      .withMessage(`Name must be between 1 and ${validationConfig.maxFieldLengths.name} characters`)
+      .escape(),
+    body('userData.email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Must be a valid email address')
+      .isLength({ max: validationConfig.maxFieldLengths.email })
+      .withMessage(`Email must be less than ${validationConfig.maxFieldLengths.email} characters`),
+    body('userData.username')
+      .optional()
+      .trim()
+      .isLength({ min: 1, max: 100 })
+      .withMessage('Username must be between 1 and 100 characters'),
+    body('userData.roles')
+      .isArray({ min: 1 })
+      .withMessage('Roles must be a non-empty array'),
+    body('userData.roles.*')
+      .isIn(['admin', 'client_manager', 'project_manager', 'user_manager'])
+      .withMessage('Invalid role in roles list')
   ] as ValidationChain[],
   
   updateUser: [

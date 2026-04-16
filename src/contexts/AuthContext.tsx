@@ -7,6 +7,7 @@ import { User, AuthResponse } from '@/types';
 import { AuthService } from '@/services/auth.svc';
 import { TokenManagerService } from '@/services/tokenManager.svc';
 import { toast } from 'sonner';
+import type { AppRole } from '@/types';
 
 interface AuthContextType {
   user: User | null;
@@ -16,6 +17,8 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  hasRole: (role: AppRole) => boolean;
+  hasAnyRole: (roles: AppRole[]) => boolean;
   refreshUser: () => Promise<void>;
 }
 
@@ -250,6 +253,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const getEffectiveRoles = (): AppRole[] => {
+    if (!user) return [];
+    const fromList = Array.isArray(user.roles) ? user.roles : [];
+    const normalizedRole = user.role as AppRole;
+    if (normalizedRole && !fromList.includes(normalizedRole)) {
+      return [...fromList, normalizedRole];
+    }
+    return fromList;
+  };
+
+  const hasRole = (role: AppRole): boolean => {
+    return getEffectiveRoles().includes(role);
+  };
+
+  const hasAnyRole = (roles: AppRole[]): boolean => {
+    const effective = getEffectiveRoles();
+    return roles.some(role => effective.includes(role));
+  };
+
   const value: AuthContextType = {
     user,
     loading,
@@ -257,7 +279,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     isAuthenticated: !!user,
-    isAdmin: user?.role === 'admin',
+    isAdmin: hasRole('admin'),
+    hasRole,
+    hasAnyRole,
     refreshUser
   };
 
@@ -321,14 +345,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 // Hook for checking permissions
 export const usePermissions = () => {
   const { user } = useAuth();
+  const effectiveRoles = Array.from(new Set([...(user?.roles || []), user?.role as AppRole]));
+  const hasRole = (role: AppRole) => effectiveRoles.includes(role);
+  const hasAnyRole = (roles: AppRole[]) => roles.some(hasRole);
 
   return {
-    canViewAdminPanel: user?.role === 'admin',
-    canManageUsers: user?.role === 'admin',
-    canManageSettings: user?.role === 'admin',
-    canViewReports: !!user,
-    canCreateInvoices: !!user,
-    canManageClients: !!user,
-    canManageExpenses: !!user
+    canViewAdminPanel: hasRole('admin'),
+    canManageUsers: hasAnyRole(['admin', 'user_manager']),
+    canManageSettings: hasAnyRole(['admin', 'user_manager']),
+    canViewReports: hasAnyRole(['admin', 'client_manager', 'project_manager']),
+    canCreateInvoices: hasAnyRole(['admin', 'client_manager', 'project_manager']),
+    canManageClients: hasAnyRole(['admin', 'client_manager', 'project_manager']),
+    canManageExpenses: hasAnyRole(['admin', 'project_manager']),
+    canManageProjects: hasAnyRole(['admin', 'project_manager'])
   };
 };

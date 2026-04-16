@@ -19,6 +19,7 @@ export * from './domain/invoice.types';
 export * from './domain/expense.types';
 export * from './domain/payment.types';
 export * from './domain/settings.types';
+export * from './domain/project.types';
 
 // Export additional domain types if they exist
 export * from './domain/stripe.types';

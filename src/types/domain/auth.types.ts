@@ -4,12 +4,15 @@
 import type { BaseEntity } from '../shared/common.types';
 
 // User entity with all possible fields - BaseEntity is imported from shared/common.types.ts
+export type AppRole = 'admin' | 'client_manager' | 'project_manager' | 'user_manager';
+
 export interface User extends BaseEntity {
   name: string;
   email: string;
   username: string;
   password_hash?: string;
   role: 'admin' | 'user' | 'viewer';
+  roles?: AppRole[];
   email_verified: number; // SQLite uses INTEGER for boolean (0 or 1)
   google_id?: string;
   two_factor_enabled?: number;

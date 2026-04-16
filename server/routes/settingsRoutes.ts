@@ -13,7 +13,7 @@ import {
   saveSetting,
   saveMultipleSettings
 } from '../controllers/settingsController.js';
-import { requireAuth, requireAdmin } from '../middleware/index.js';
+import { requireAuth, requireAdmin, requireRole } from '../middleware/index.js';
 import { emailProviderService } from '../services/EmailProviderService.js';
 
 const router: Router = Router();
@@ -438,10 +438,10 @@ router.get('/', requireAuth, getAllSettings);
 router.get('/:key', requireAuth, getSettingByKey);
 
 // Save individual setting
-router.post('/', requireAuth, requireAdmin, saveSetting);
+router.post('/', requireAuth, requireRole(['admin', 'user_manager']), saveSetting);
 
 // Save multiple settings at once
-router.put('/', requireAuth, requireAdmin, saveMultipleSettings);
+router.put('/', requireAuth, requireRole(['admin', 'user_manager']), saveMultipleSettings);
 
 // Note: Project settings are handled in separate routes at /api/project-settings
 

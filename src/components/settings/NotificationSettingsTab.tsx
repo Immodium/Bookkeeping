@@ -5,7 +5,7 @@ import { themeClasses } from '@/utils/themeUtils.util';
 import { toast } from 'sonner';
 import { useNotificationSettings } from '@/hooks/useSettings.hook';
 import type { NotificationSettings } from '@/types';
-import type { SettingsTabRef } from '../Settings';
+import type { SettingsTabRef } from '@/types';
 
 export const NotificationSettingsTab = forwardRef<SettingsTabRef>((props, ref) => {
   const {

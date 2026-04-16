@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { authConfig } from '../config/index.js';
 import { authService } from '../services/AuthService.js';
-import { User, UserPublic, UserRole } from '../types/index.js';
+import { AppRole, User, UserPublic, UserRole } from '../types/index.js';
 
 // Extend the Request interface to include user property
 declare global {
@@ -34,6 +34,22 @@ interface AccountLockoutSettings {
   maxAttempts: number;
   lockoutDuration: number;
 }
+
+const APP_ROLES: AppRole[] = ['admin', 'client_manager', 'project_manager', 'user_manager'];
+
+const getEffectiveRoles = (user: UserPublic): Set<string> => {
+  const roles = new Set<string>();
+
+  if (user.role) {
+    roles.add(user.role);
+  }
+
+  if (Array.isArray(user.roles)) {
+    user.roles.forEach(role => roles.add(role));
+  }
+
+  return roles;
+};
 
 /**
  * Middleware to require authentication
@@ -127,7 +143,8 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction): v
     return;
   }
   
-  if (req.user.role !== 'admin') {
+  const userRoles = getEffectiveRoles(req.user);
+  if (!userRoles.has('admin')) {
     res.status(403).json({
       success: false,
       error: 'Admin access required'
@@ -154,7 +171,11 @@ export const requireRole = (roles: UserRole | UserRole[]) => {
       return;
     }
     
-    if (!allowedRoles.includes(req.user.role)) {
+    const userRoles = getEffectiveRoles(req.user);
+    const hasRole = allowedRoles.some(role => userRoles.has(role));
+    const isAdmin = userRoles.has('admin');
+
+    if (!hasRole && !isAdmin) {
       res.status(403).json({
         success: false,
         error: `Access denied. Required role: ${allowedRoles.join(' or ')}`
@@ -254,6 +275,12 @@ export const verifyToken = (token: string): JWTPayload => {
  */
 export const isAccountLocked = (user: User | UserPublic): boolean => {
   return user.account_locked_until ? new Date(user.account_locked_until) > new Date() : false;
+};
+
+export const getUserAppRoles = (user?: UserPublic): AppRole[] => {
+  if (!user) return [];
+  const effectiveRoles = getEffectiveRoles(user);
+  return APP_ROLES.filter(role => effectiveRoles.has(role));
 };
 
 /**

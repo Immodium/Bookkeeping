@@ -14,7 +14,11 @@ export {
   updateUserLastLogin,
   updateLoginAttemptsByUserId,
   updateLastLoginByUserId,
-  verifyUserEmail
+  verifyUserEmail,
+  assignUserRoles,
+  adminResetUserPassword,
+  getAssignableRoles,
+  inviteUser
 } from './userController.js';
 
 // Client controller
@@ -116,6 +120,28 @@ export {
   getSettingsCount,
   resetSettings
 } from './settingsController.js';
+
+// Project controller
+export {
+  getProjects,
+  getProjectById,
+  createProject,
+  updateProject,
+  deleteProject,
+  getProjectTasks,
+  createProjectTask,
+  updateProjectTask,
+  deleteProjectTask,
+  getProjectDocuments,
+  uploadProjectDocument,
+  deleteProjectDocument
+} from './projectController.js';
+
+// RBAC controller
+export {
+  getRoleCatalog,
+  getCurrentUserRoles
+} from './rbacController.js';
 
 // Note: Database, Template, and PDF controllers not yet implemented
 

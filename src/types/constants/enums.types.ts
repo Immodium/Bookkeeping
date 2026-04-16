@@ -69,6 +69,9 @@ export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus];
 // User roles
 export const UserRole = {
   ADMIN: 'admin',
+  CLIENT_MANAGER: 'client_manager',
+  PROJECT_MANAGER: 'project_manager',
+  USER_MANAGER: 'user_manager',
   USER: 'user',
   VIEWER: 'viewer'
 } as const;

@@ -22,6 +22,7 @@ const CreateRecurringInvoicePage = lazy(() => import('./components/invoices/Crea
 const ExpenseManagement = lazy(() => import('./components/ExpenseManagement').then(m => ({ default: m.ExpenseManagement })));
 const PaymentManagement = lazy(() => import('./components/PaymentManagement').then(m => ({ default: m.PaymentManagement })));
 const ReportsManagement = lazy(() => import('./components/ReportsManagement').then(m => ({ default: m.ReportsManagement })));
+const ProjectManagement = lazy(() => import('./components/ProjectManagement').then(m => ({ default: m.ProjectManagement })));
 const ResponsiveSettings = lazy(() => import('./components/ResponsiveSettings').then(m => ({ default: m.ResponsiveSettings })));
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
@@ -198,6 +199,14 @@ const App = () => {
               <ProtectedRoute>
                 <ResponsiveLayout>
                   <ReportsManagement />
+                </ResponsiveLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/projects" element={
+              <ProtectedRoute>
+                <ResponsiveLayout>
+                  <ProjectManagement />
                 </ResponsiveLayout>
               </ProtectedRoute>
             } />

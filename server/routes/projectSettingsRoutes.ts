@@ -6,7 +6,7 @@ import {
   getProjectSettings,
   updateProjectSettings
 } from '../controllers/settingsController.js';
-import { requireAuth, requireAdmin } from '../middleware/index.js';
+import { requireAuth, requireRole } from '../middleware/index.js';
 
 const router: Router = Router();
 
@@ -14,6 +14,6 @@ const router: Router = Router();
 router.get('/', getProjectSettings);
 
 // Update project settings
-router.put('/', requireAuth, requireAdmin, updateProjectSettings);
+router.put('/', requireAuth, requireRole(['admin', 'user_manager']), updateProjectSettings);
 
 export default router;

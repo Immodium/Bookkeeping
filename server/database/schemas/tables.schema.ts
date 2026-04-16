@@ -59,6 +59,109 @@ const clientsSchema: TableSchema = {
 };
 
 /**
+ * User role assignments table (supports multi-role users)
+ */
+const userRolesSchema: TableSchema = {
+  name: 'user_roles',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'user_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'role', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'UNIQUE(user_id, role)',
+    'FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE'
+  ]
+};
+
+/**
+ * Project management table
+ */
+const projectsSchema: TableSchema = {
+  name: 'projects',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'description', type: 'TEXT' },
+    { name: 'client_id', type: 'INTEGER' },
+    { name: 'status', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'planning'"] },
+    { name: 'start_date', type: 'TEXT' },
+    { name: 'end_date', type: 'TEXT' },
+    { name: 'created_by', type: 'INTEGER' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (client_id) REFERENCES clients (id) ON DELETE SET NULL',
+    'FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL'
+  ]
+};
+
+/**
+ * Project task table
+ */
+const projectTasksSchema: TableSchema = {
+  name: 'project_tasks',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'project_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'title', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'description', type: 'TEXT' },
+    { name: 'status', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'todo'"] },
+    { name: 'start_date', type: 'TEXT' },
+    { name: 'due_date', type: 'TEXT' },
+    { name: 'created_by', type: 'INTEGER' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE',
+    'FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL'
+  ]
+};
+
+/**
+ * Project task assignees table (supports assigning multiple users per task)
+ */
+const projectTaskAssigneesSchema: TableSchema = {
+  name: 'project_task_assignees',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'task_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'user_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'UNIQUE(task_id, user_id)',
+    'FOREIGN KEY (task_id) REFERENCES project_tasks (id) ON DELETE CASCADE',
+    'FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE'
+  ]
+};
+
+/**
+ * Project documents table
+ */
+const projectDocumentsSchema: TableSchema = {
+  name: 'project_documents',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'project_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'uploaded_by', type: 'INTEGER' },
+    { name: 'original_name', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'file_name', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'file_path', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'mime_type', type: 'TEXT' },
+    { name: 'file_size', type: 'INTEGER', constraints: ['DEFAULT 0'] },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE',
+    'FOREIGN KEY (uploaded_by) REFERENCES users (id) ON DELETE SET NULL'
+  ]
+};
+
+/**
  * Invoice management table
  */
 const invoicesSchema: TableSchema = {
@@ -294,7 +397,12 @@ const countersSchema: TableSchema = {
 // Export all schemas
 export const tableSchemas: TableSchema[] = [
   usersSchema,
+  userRolesSchema,
   clientsSchema,
+  projectsSchema,
+  projectTasksSchema,
+  projectTaskAssigneesSchema,
+  projectDocumentsSchema,
   invoiceDesignTemplatesSchema, // Create design templates before invoices due to FK
   recurringInvoiceTemplatesSchema, // Create recurring templates
   invoicesSchema,

@@ -3,12 +3,35 @@
 
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/index.js';
+import { rbacService } from '../services/RbacService.js';
 import { reportService, ReportData } from '../services/ReportService.js';
 
 const router: Router = Router();
 
 // All report routes require authentication
 router.use(requireAuth);
+
+router.use(async (req: Request, res: Response, next): Promise<void> => {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return;
+  }
+
+  const allowed = await rbacService.userHasAnyRole(req.user.id, [
+    'admin',
+    'client_manager',
+    'project_manager'
+  ]);
+  if (!allowed) {
+    res.status(403).json({
+      success: false,
+      error: 'Insufficient permissions for reports'
+    });
+    return;
+  }
+
+  next();
+});
 
 // Get all reports
 router.get('/', async (req: Request, res: Response): Promise<void> => {

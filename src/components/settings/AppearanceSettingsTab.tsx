@@ -5,7 +5,7 @@ import { themeClasses } from '@/utils/themeUtils.util';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/hooks/useTheme.hook';
 import { getToken } from '@/utils/api';
-import type { SettingsTabRef } from '../Settings';
+import type { SettingsTabRef } from '@/types';
 
 const hueToHex = (hue: number): string => {
   const normalizedHue = ((hue % 360) + 360) % 360;

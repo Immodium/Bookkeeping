@@ -19,7 +19,8 @@ export const initializeCounters = (db: IDatabase): void => {
         { name: 'templates', value: 0 },
         { name: 'expenses', value: 0 },
         { name: 'reports', value: 0 },
-        { name: 'payments', value: 0 }
+        { name: 'payments', value: 0 },
+        { name: 'projects', value: 0 }
       ]
     };
     
@@ -279,6 +280,10 @@ const syncCountersWithData = (db: IDatabase): void => {
     expenses: 'expenses',
     reports: 'reports',
     payments: 'payments',
+    projects: 'projects',
+    project_tasks: 'project_tasks',
+    project_documents: 'project_documents',
+    user_roles: 'user_roles',
   };
 
   for (const [counterName, tableName] of Object.entries(counterTables)) {

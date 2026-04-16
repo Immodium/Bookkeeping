@@ -14,6 +14,7 @@ import {
 } from '../controllers/index.js';
 import {
   requireAuth,
+  requireRole,
   validateRequest,
   validationSets
 } from '../middleware/index.js';
@@ -22,6 +23,7 @@ const router: Router = Router();
 
 // All expense routes require authentication
 router.use(requireAuth);
+router.use(requireRole(['admin', 'project_manager']));
 
 // Get all expenses
 router.get('/', getAllExpenses);

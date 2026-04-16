@@ -19,6 +19,7 @@ import {
 } from '../controllers/index.js';
 import {
   requireAuth,
+  requireRole,
   validateRequest,
   validationSets
 } from '../middleware/index.js';
@@ -31,6 +32,7 @@ router.get('/public/:id', getPublicInvoiceById);
 
 // All other invoice routes require authentication
 router.use(requireAuth);
+router.use(requireRole(['admin', 'client_manager', 'project_manager']));
 
 // Get all invoices
 router.get('/', getAllInvoices);

@@ -5,6 +5,7 @@
 import { 
   User, 
   UserPublic, 
+  AppRole,
   Client, 
   Invoice, 
   Template, 
@@ -65,8 +66,10 @@ export interface CreateUserRequest {
     name: string;
     email: string;
     username?: string;
+    password?: string;
     password_hash?: string;
-    role?: 'user' | 'admin';
+    role?: 'user' | AppRole;
+    roles?: AppRole[];
     email_verified?: boolean;
     google_id?: string;
     last_login?: string;
@@ -76,7 +79,9 @@ export interface CreateUserRequest {
 }
 
 export interface UpdateUserRequest {
-  userData: Partial<Pick<User, 'name' | 'email' | 'username' | 'role' | 'email_verified' | 'google_id' | 'password_hash'>>;
+  userData: Partial<Pick<User, 'name' | 'email' | 'username' | 'role' | 'email_verified' | 'google_id' | 'password_hash'>> & {
+    roles?: AppRole[];
+  };
 }
 
 export interface UpdateUserResponse {

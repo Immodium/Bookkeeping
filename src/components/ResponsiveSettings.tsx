@@ -8,6 +8,7 @@ import { GeneralSettingsTab } from './settings/GeneralSettingsTab';
 import { StripeSettingsTab } from './settings/StripeSettingsTab';
 import { NotificationSettingsTab } from './settings/NotificationSettingsTab';
 import { AppearanceSettingsTab } from './settings/AppearanceSettingsTab';
+import { UserManagementSettingsTab } from './settings/UserManagementSettingsTab';
 import { ProjectSettingsTab, ProjectSettingsRef } from './settings/ProjectSettingsTab';
 import { DatabaseBackupSection } from './settings/DatabaseBackupSection';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
@@ -15,6 +16,7 @@ import { toast } from 'sonner';
 import { useProjectSettings } from '@/hooks/useProjectSettings';
 import { cn } from '@/utils/themeUtils.util';
 import type { SettingsTabRef } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SettingsTab {
   id: string;
@@ -23,6 +25,8 @@ interface SettingsTab {
 }
 
 export const ResponsiveSettings = () => {
+  const { hasAnyRole } = useAuth();
+  const canManageUsers = hasAnyRole(['admin', 'user_manager']);
   const [activeTab, setActiveTab] = useState('company');
   const [isLoading, setIsLoading] = useState(false);
   const [isMobileTabsOpen, setIsMobileTabsOpen] = useState(false);
@@ -40,6 +44,7 @@ export const ResponsiveSettings = () => {
   const stripeSettingsRef = useRef<SettingsTabRef>(null);
   const notificationSettingsRef = useRef<SettingsTabRef>(null);
   const appearanceSettingsRef = useRef<SettingsTabRef>(null);
+  const userManagementSettingsRef = useRef<SettingsTabRef>(null);
 
   const baseTabs: SettingsTab[] = [
     { id: 'company', name: 'Company' },
@@ -48,6 +53,7 @@ export const ResponsiveSettings = () => {
     { id: 'shipping', name: 'Shipping' },
     { id: 'notifications', name: 'Notifications' },
     { id: 'appearance', name: 'Appearance' },
+    ...(canManageUsers ? [{ id: 'users', name: 'User Management' }] : []),
     { id: 'project', name: 'Integration Settings' },
     { id: 'backup', name: 'Backup & Restore' }
   ];
@@ -105,6 +111,9 @@ export const ResponsiveSettings = () => {
         case 'appearance':
           settingsRef = appearanceSettingsRef.current;
           break;
+        case 'users':
+          settingsRef = userManagementSettingsRef.current;
+          break;
         case 'project':
           settingsRef = projectSettingsRef.current;
           break;
@@ -141,6 +150,7 @@ export const ResponsiveSettings = () => {
       case 'stripe': return projectSettings?.stripe?.enabled ? <StripeSettingsTab ref={stripeSettingsRef} /> : null;
       case 'notifications': return <NotificationSettingsTab ref={notificationSettingsRef} />;
       case 'appearance': return <AppearanceSettingsTab ref={appearanceSettingsRef} />;
+      case 'users': return canManageUsers ? <UserManagementSettingsTab ref={userManagementSettingsRef} /> : null;
       case 'project': return <ProjectSettingsTab ref={projectSettingsRef} />;
       case 'backup': return <DatabaseBackupSection />;
       default: return <CompanySettings ref={companySettingsRef} />;

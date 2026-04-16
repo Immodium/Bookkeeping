@@ -2,7 +2,8 @@
 // Handles user CRUD operations and user profile management
 
 import { databaseService } from '../core/DatabaseService.js';
-import { User, UserPublic, ServiceOptions } from '../types/index.js';
+import { rbacService } from './RbacService.js';
+import { AppRole, User, UserPublic, ServiceOptions } from '../types/index.js';
 
 /**
  * User Management Service
@@ -14,14 +15,16 @@ export class UserService {
    */
   async getAllUsers(options: ServiceOptions = {}): Promise<UserPublic[]> {
     const { limit = 100, offset = 0 } = options;
-    
-    return databaseService.getMany<UserPublic>(`
+
+    const users = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
              last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
+
+    return rbacService.attachRolesToUsers(users);
   }
 
   /**
@@ -32,12 +35,18 @@ export class UserService {
       throw new Error('Valid user ID is required');
     }
 
-    return databaseService.getOne<UserPublic>(`
+    const user = databaseService.getOne<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
              last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
       WHERE id = ?
     `, [id]);
+
+    if (!user) {
+      return null;
+    }
+
+    return rbacService.attachRoles(user);
   }
 
   /**
@@ -73,7 +82,8 @@ export class UserService {
     email: string;
     username?: string;
     password_hash?: string;
-    role?: 'user' | 'admin';
+    role?: 'user' | AppRole;
+    roles?: AppRole[];
     email_verified?: boolean;
     google_id?: string;
     last_login?: string;
@@ -85,7 +95,8 @@ export class UserService {
       email, 
       username, 
       password_hash, 
-      role = 'user', 
+      role = 'user',
+      roles = [],
       email_verified = false, 
       google_id, 
       last_login, 
@@ -123,7 +134,7 @@ export class UserService {
       email, 
       username || email, 
       password_hash || null, 
-      role, 
+      role,
       email_verified ? 1 : 0,
       google_id || null,
       last_login || null,
@@ -132,6 +143,11 @@ export class UserService {
       now, 
       now
     ]);
+
+    const assignedRoles: AppRole[] = roles.length > 0 ? roles : role === 'admin' ? ['admin'] : [];
+    if (assignedRoles.length > 0) {
+      rbacService.setUserRoles(nextId, assignedRoles);
+    }
 
     return nextId;
   }
@@ -143,7 +159,8 @@ export class UserService {
     name: string;
     email: string;
     username: string;
-    role: 'user' | 'admin';
+    role: 'user' | AppRole;
+    roles: AppRole[];
     email_verified: boolean;
     google_id: string;
     password_hash: string;
@@ -172,7 +189,7 @@ export class UserService {
       }
     });
 
-    if (Object.keys(updateData).length === 0) {
+    if (Object.keys(updateData).length === 0 && !userData.roles) {
       throw new Error('No valid fields to update');
     }
 
@@ -199,6 +216,10 @@ export class UserService {
       updateData.email_verified = updateData.email_verified ? 1 : 0;
     }
 
+    if (userData.roles) {
+      rbacService.setUserRoles(id, userData.roles);
+    }
+
     const success = databaseService.updateById('users', id, updateData);
     return success ? 1 : 0;
   }
@@ -218,12 +239,19 @@ export class UserService {
     }
 
     // Don't allow deletion of the last admin
-    const adminCount = databaseService.getOne<{count: number}>(
-      "SELECT COUNT(*) as count FROM users WHERE role = 'admin'"
-    );
-    
-    if (existingUser.role === 'admin' && (adminCount?.count || 0) <= 1) {
-      throw new Error('Cannot delete the last administrator');
+    const existingRoles = rbacService.getUserRoles(id);
+    if (existingRoles.includes('admin')) {
+      const adminRoleCount = databaseService.getOne<{ count: number }>(
+        "SELECT COUNT(DISTINCT user_id) as count FROM user_roles WHERE role = 'admin'"
+      )?.count || 0;
+      const fallbackAdminCount = databaseService.getOne<{ count: number }>(
+        "SELECT COUNT(*) as count FROM users WHERE role = 'admin'"
+      )?.count || 0;
+      const effectiveAdminCount = Math.max(adminRoleCount, fallbackAdminCount);
+
+      if (effectiveAdminCount <= 1) {
+        throw new Error('Cannot delete the last administrator');
+      }
     }
 
     const success = databaseService.deleteById('users', id);
@@ -319,10 +347,10 @@ export class UserService {
   /**
    * Get users by role
    */
-  async getUsersByRole(role: 'user' | 'admin', options: ServiceOptions = {}): Promise<UserPublic[]> {
+  async getUsersByRole(role: 'user' | AppRole, options: ServiceOptions = {}): Promise<UserPublic[]> {
     const { limit = 100, offset = 0 } = options;
 
-    return databaseService.getMany<UserPublic>(`
+    const users = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
              last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
@@ -330,6 +358,8 @@ export class UserService {
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
     `, [role, limit, offset]);
+
+    return rbacService.attachRolesToUsers(users);
   }
 
   /**
@@ -338,7 +368,7 @@ export class UserService {
   async getLockedUsers(options: ServiceOptions = {}): Promise<UserPublic[]> {
     const { limit = 100, offset = 0 } = options;
 
-    return databaseService.getMany<UserPublic>(`
+    const users = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
              last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
@@ -346,6 +376,8 @@ export class UserService {
       ORDER BY account_locked_until DESC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
+
+    return rbacService.attachRolesToUsers(users);
   }
 
   /**
@@ -375,7 +407,7 @@ export class UserService {
     const { limit = 50, offset = 0 } = options;
     const searchPattern = `%${searchTerm}%`;
 
-    return databaseService.getMany<UserPublic>(`
+    const users = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
              last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
@@ -394,6 +426,8 @@ export class UserService {
       searchTerm, searchTerm, searchTerm,
       limit, offset
     ]);
+
+    return rbacService.attachRolesToUsers(users);
   }
 
   /**
@@ -439,6 +473,41 @@ export class UserService {
       locked,
       recentLogins
     };
+  }
+
+  async listAssignableRoles(): Promise<AppRole[]> {
+    return rbacService.getAppRoles();
+  }
+
+  async getAllUsersWithRoles(options: ServiceOptions = {}): Promise<UserPublic[]> {
+    return this.getAllUsers(options);
+  }
+
+  async getUserByIdWithRoles(id: number): Promise<UserPublic | null> {
+    return this.getUserById(id);
+  }
+
+  async createUserWithRoles(userData: {
+    name: string;
+    email: string;
+    username?: string;
+    password_hash: string;
+    roles: AppRole[];
+    email_verified?: boolean;
+  }): Promise<number> {
+    const role = userData.roles.includes('admin') ? 'admin' : 'user';
+    return this.createUser({
+      ...userData,
+      role,
+      roles: userData.roles
+    });
+  }
+
+  async resetUserPasswordByAdmin(userId: number, passwordHash: string): Promise<void> {
+    const changes = await this.updateUser(userId, { password_hash: passwordHash });
+    if (!changes) {
+      throw new Error('User not found');
+    }
   }
 
   /**

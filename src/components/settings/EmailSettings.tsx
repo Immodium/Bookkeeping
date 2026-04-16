@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { themeClasses } from '@/utils/themeUtils.util';
 import { useEmailSettings } from '@/hooks/useSettings.hook';
 import { authenticatedFetch } from '@/utils/api';
-import type { SettingsTabRef } from '../Settings';
+import type { SettingsTabRef } from '@/types';
 
 export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
   const {

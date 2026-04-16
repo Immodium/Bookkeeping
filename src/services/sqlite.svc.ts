@@ -1,6 +1,13 @@
 // Database service that communicates with backend API
 import {
   User,
+  RoleAwareUser,
+  AppRole,
+  Project,
+  ProjectTask,
+  ProjectDocument,
+  ProjectFormData,
+  ProjectTaskFormData,
   Client,
   Invoice,
   InvoiceTemplate,
@@ -12,7 +19,6 @@ import {
   ValidationError,
   ProjectSettings
 } from '@/types';
-import type { ApiResponse } from '@/types/shared/common.types';
 import { parseProjectSettingsWithDefaults, validateProjectSettings } from '@/utils/settingsValidation';
 import { getToken } from '@/utils/api';
 class SQLiteService {
@@ -228,6 +234,38 @@ class SQLiteService {
     await this.apiCall(`/users/${id}/verify-email`, 'PUT');
   }
 
+  async inviteUser(userData: {
+    name: string;
+    email: string;
+    username?: string;
+    roles: AppRole[];
+    password?: string;
+  }): Promise<{ id: number; temporary_password: string }> {
+    const result = await this.apiCall<{ id: number; temporary_password: string }>(
+      '/users/invite',
+      'POST',
+      { userData }
+    );
+    if (!result.data) {
+      throw new Error('Failed to invite user');
+    }
+    return result.data;
+  }
+
+  async assignUserRoles(userId: number, roles: AppRole[]): Promise<RoleAwareUser | null> {
+    const result = await this.apiCall<RoleAwareUser>(`/users/${userId}/roles`, 'PUT', { roles });
+    return result.data || null;
+  }
+
+  async adminResetUserPassword(userId: number, newPassword: string): Promise<void> {
+    await this.apiCall(`/users/${userId}/reset-password`, 'POST', { newPassword });
+  }
+
+  async getRoleCatalog(): Promise<AppRole[]> {
+    const result = await this.apiCall<AppRole[]>('/users/roles/catalog');
+    return result.data || [];
+  }
+
   // ===== CLIENT API METHODS =====
   async getClients(): Promise<Client[]> {
     const result = await this.apiCall<Client[]>('/clients');
@@ -259,6 +297,82 @@ class SQLiteService {
   async deleteClient(id: number): Promise<{ changes: number }> {
     const result = await this.apiCall<unknown, { changes: number }>(`/clients/${id}`, 'DELETE');
     return result.result || { changes: 0 };
+  }
+
+  // ===== PROJECT API METHODS =====
+  async getProjects(filters?: { client_id?: number; status?: string }): Promise<Project[]> {
+    const result = await this.apiCall<Project[]>('/projects', 'GET', filters || {});
+    return result.data || [];
+  }
+
+  async getProjectById(id: number): Promise<Project | null> {
+    const result = await this.apiCall<Project>(`/projects/${id}`);
+    return result.data || null;
+  }
+
+  async createProject(projectData: ProjectFormData): Promise<{ id: number }> {
+    const result = await this.apiCall<{ id: number }>('/projects', 'POST', { projectData });
+    if (!result.data) {
+      throw new Error('Failed to create project');
+    }
+    return result.data;
+  }
+
+  async updateProject(id: number, projectData: Partial<ProjectFormData>): Promise<void> {
+    await this.apiCall(`/projects/${id}`, 'PUT', { projectData });
+  }
+
+  async deleteProject(id: number): Promise<void> {
+    await this.apiCall(`/projects/${id}`, 'DELETE');
+  }
+
+  async createProjectTask(projectId: number, taskData: ProjectTaskFormData): Promise<{ id: number }> {
+    const result = await this.apiCall<{ id: number }>(`/projects/${projectId}/tasks`, 'POST', { taskData });
+    if (!result.data) {
+      throw new Error('Failed to create task');
+    }
+    return result.data;
+  }
+
+  async updateProjectTask(projectId: number, taskId: number, taskData: Partial<ProjectTaskFormData>): Promise<void> {
+    await this.apiCall(`/projects/${projectId}/tasks/${taskId}`, 'PUT', { taskData });
+  }
+
+  async deleteProjectTask(projectId: number, taskId: number): Promise<void> {
+    await this.apiCall(`/projects/${projectId}/tasks/${taskId}`, 'DELETE');
+  }
+
+  async uploadProjectDocument(projectId: number, file: File): Promise<{ id: number; file_path: string }> {
+    const formData = new FormData();
+    formData.append('document', file);
+
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${this.baseUrl}/projects/${projectId}/documents`, {
+      method: 'POST',
+      headers,
+      body: formData
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || 'Document upload failed');
+    }
+
+    const result = await response.json();
+    if (!result.success || !result.data) {
+      throw new Error(result.error || 'Document upload failed');
+    }
+
+    return result.data as { id: number; file_path: string };
+  }
+
+  async deleteProjectDocument(projectId: number, documentId: number): Promise<void> {
+    await this.apiCall(`/projects/${projectId}/documents/${documentId}`, 'DELETE');
   }
 
   // Counter operations

@@ -14,7 +14,11 @@ import {
   updateUserLastLogin,
   updateLoginAttemptsByUserId,
   updateLastLoginByUserId,
-  verifyUserEmail
+  verifyUserEmail,
+  assignUserRoles,
+  adminResetUserPassword,
+  getAssignableRoles,
+  inviteUser
 } from '../controllers/index.js';
 import {
   requireAuth,
@@ -45,22 +49,6 @@ router.get('/admin-exists', async (req: Request, res: Response) => {
     });
   }
 });
-
-// Get all users (admin only)
-router.get('/',
-  requireAuth,
-  requireAdmin,
-  getAllUsers
-);
-
-// Get user by ID (admin only)
-router.get('/:id', 
-  requireAuth, 
-  requireAdmin, 
-  validationSets.updateUser.slice(0, 1), // Just ID validation
-  validateRequest,
-  getUserById
-);
 
 // Get user by email (public for admin check, otherwise admin only)
 router.get('/email/:email', async (req: Request, res: Response, next: NextFunction): Promise<any> => {
@@ -104,6 +92,13 @@ router.get('/email/:email', async (req: Request, res: Response, next: NextFuncti
   }
 });
 
+// Role catalog for user management UI
+router.get('/roles/catalog',
+  requireAuth,
+  requireAdmin,
+  getAssignableRoles
+);
+
 // Get user by Google ID (admin only)
 router.get('/google/:googleId', 
   requireAuth, 
@@ -129,6 +124,29 @@ router.post('/create',
   createUser
 );
 
+// Invite user with generated temporary password (admin only)
+router.post('/invite',
+  requireAuth,
+  requireAdmin,
+  validationSets.createUser,
+  validateRequest,
+  inviteUser
+);
+
+// Get all users (admin only)
+router.get('/',
+  requireAuth,
+  requireAdmin,
+  getAllUsers
+);
+
+// Get user by ID (admin only)
+router.get('/:id',
+  requireAuth,
+  requireAdmin,
+  getUserById
+);
+
 // Update user (admin only)
 router.put('/:id', 
   requireAuth, 
@@ -136,6 +154,20 @@ router.put('/:id',
   validationSets.updateUser,
   validateRequest,
   updateUser
+);
+
+// Assign multiple roles to a user (admin only)
+router.put('/:id/roles',
+  requireAuth,
+  requireAdmin,
+  assignUserRoles
+);
+
+// Reset user password by admin (admin only)
+router.post('/:id/reset-password',
+  requireAuth,
+  requireAdmin,
+  adminResetUserPassword
 );
 
 // Delete user (admin only)

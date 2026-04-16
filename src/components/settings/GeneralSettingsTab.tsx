@@ -38,7 +38,7 @@ import {
 import { validatePaginationSettings } from '@/utils/settingsValidation';
 import { getToken } from '@/utils/api';
 import type { DateTimeSettings, InvoiceNumberSettings, PaginationSettings, CurrencySettings } from '@/types';
-import type { SettingsTabRef } from '../Settings';
+import type { SettingsTabRef } from '@/types';
 
 export const GeneralSettingsTab = forwardRef<SettingsTabRef>((props, ref) => {
   const [dateTimeSettings, setDateTimeSettings] = useState<DateTimeSettings>({ dateFormat: 'MM/DD/YYYY', timeFormat: '12-hour' });

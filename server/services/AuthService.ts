@@ -4,6 +4,7 @@
 import { databaseService } from '../core/DatabaseService.js';
 import { settingsService } from './SettingsService.js';
 import { User, UserPublic } from '../types/index.js';
+import { rbacService } from './RbacService.js';
 
 /**
  * Authentication Service
@@ -27,10 +28,16 @@ export class AuthService {
     if (!userId || typeof userId !== 'number') {
       throw new Error('Valid user ID is required');
     }
-    return databaseService.getOne<UserPublic>(
+    const user = databaseService.getOne<UserPublic>(
       'SELECT id, name, email, username, role, email_verified FROM users WHERE id = ?', 
       [userId]
     );
+
+    if (!user) {
+      return null;
+    }
+
+    return rbacService.attachRoles(user);
   }
 
   /**
@@ -170,11 +177,17 @@ export class AuthService {
       throw new Error('Valid email is required');
     }
 
-    return databaseService.getOne<User>(`
+    const user = databaseService.getOne<User>(`
       SELECT id, name, email, username, password_hash, role, email_verified, 
              failed_login_attempts, account_locked_until, last_login
       FROM users WHERE email = ?
     `, [email]);
+
+    if (!user) {
+      return null;
+    }
+
+    return rbacService.attachRoles(user);
   }
 
   /**

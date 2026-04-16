@@ -13,6 +13,7 @@ import {
 } from '../controllers/index.js';
 import {
   requireAuth,
+  requireRole,
   validateRequest,
   validationSets
 } from '../middleware/index.js';
@@ -20,7 +21,7 @@ import {
 const router: Router = Router();
 
 // All client routes require authentication
-router.use(requireAuth);
+router.use(requireAuth, requireRole(['admin', 'client_manager', 'project_manager']));
 
 // Get all clients
 router.get('/', getAllClients);
@@ -68,7 +69,6 @@ router.delete('/:id',
 
 // Bulk import clients
 router.post('/bulk-import',
-  requireAuth,
   async (req: any, res: any) => {
     try {
       const { clients } = req.body;

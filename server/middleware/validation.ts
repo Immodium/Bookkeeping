@@ -146,15 +146,32 @@ export const validationSets = {
   createUser: [
     validationRules.name,
     validationRules.email,
-    validationRules.password,
-    validationRules.role
+    body('userData.password')
+      .isLength({
+        min: validationConfig.password.minLength,
+        max: validationConfig.password.maxLength
+      })
+      .withMessage(`Password must be between ${validationConfig.password.minLength} and ${validationConfig.password.maxLength} characters`),
+    body('userData.role')
+      .optional()
+      .isIn(['user', 'admin', 'client_manager', 'project_manager', 'user_manager'])
+      .withMessage('Invalid user role'),
+    body('userData.roles')
+      .optional()
+      .isArray({ min: 1 })
+      .withMessage('Roles must be a non-empty array when provided')
   ] as ValidationChain[],
   
   updateUser: [
     validationRules.id,
-    body('name').optional().trim().isLength({ min: 1, max: 100 }).escape(),
-    body('email').optional().isEmail().normalizeEmail(),
-    body('role').optional().isIn(['user', 'admin'])
+    body('userData.name').optional().trim().isLength({ min: 1, max: 100 }).escape(),
+    body('userData.email').optional().isEmail().normalizeEmail(),
+    body('userData.role').optional().isIn(['user', 'admin', 'client_manager', 'project_manager', 'user_manager']),
+    body('userData.roles').optional().isArray({ min: 1 }),
+    body('userData.roles.*')
+      .optional()
+      .isIn(['admin', 'client_manager', 'project_manager', 'user_manager'])
+      .withMessage('Invalid role in roles list')
   ] as ValidationChain[],
   
   // Client validation sets

@@ -203,6 +203,18 @@ export const ProjectManagement: React.FC = () => {
     }
   };
 
+  const handleTaskStatusChange = async (task: ProjectTask, status: ProjectTask['status']) => {
+    if (!selectedProject?.id) return;
+    if (task.status === status) return;
+    try {
+      await sqliteService.updateProjectTask(selectedProject.id, task.id, { status });
+      toast.success('Task status updated');
+      await refreshSelectedProject(selectedProject.id);
+    } catch (error) {
+      toast.error((error as Error).message || 'Failed to update task status');
+    }
+  };
+
   const handleEditTask = (task: ProjectTask) => {
     setEditingTaskId(task.id);
     setShowTaskEditor(true);

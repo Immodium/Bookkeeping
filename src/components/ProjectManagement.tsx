@@ -1,10 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Briefcase, Calendar, FileText, Plus, Save, Search, Trash2, Upload, Users } from 'lucide-react';
+import { Briefcase, Calendar, Check, ChevronDown, FileText, Plus, Save, Search, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { sqliteService } from '@/services/sqlite.svc';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePagination } from '@/hooks/usePagination';
 import { PaginationControls } from './ui/PaginationControls';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from './ui/dropdown-menu';
 import { themeClasses, getButtonClasses, getIconColorClasses, getStatusColor } from '@/utils/themeUtils.util';
 import type { AppRole, Client, Project, ProjectFormData, ProjectTask, ProjectTaskFormData, User, UserRole } from '@/types';
 
@@ -44,6 +50,7 @@ export const ProjectManagement: React.FC = () => {
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectForm, setProjectForm] = useState<ProjectFormData>(emptyProjectForm);
   const [taskForm, setTaskForm] = useState<ProjectTaskFormData>(emptyTaskForm);
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
@@ -165,12 +172,18 @@ export const ProjectManagement: React.FC = () => {
 
     setIsSavingTask(true);
     try {
-      await sqliteService.createProjectTask(selectedProject.id, taskForm);
-      toast.success('Task added');
+      if (editingTaskId) {
+        await sqliteService.updateProjectTask(selectedProject.id, editingTaskId, taskForm);
+        toast.success('Task updated');
+      } else {
+        await sqliteService.createProjectTask(selectedProject.id, taskForm);
+        toast.success('Task added');
+      }
       setTaskForm(emptyTaskForm);
+      setEditingTaskId(null);
       await refreshSelectedProject(selectedProject.id);
     } catch (error) {
-      toast.error((error as Error).message || 'Failed to add task');
+      toast.error((error as Error).message || 'Failed to save task');
     } finally {
       setIsSavingTask(false);
     }
@@ -186,6 +199,36 @@ export const ProjectManagement: React.FC = () => {
       toast.error((error as Error).message || 'Failed to delete task');
     }
   };
+
+  const handleEditTask = (task: ProjectTask) => {
+    setEditingTaskId(task.id);
+    setTaskForm({
+      title: task.title,
+      description: task.description || '',
+      status: task.status,
+      start_date: task.start_date || '',
+      due_date: task.due_date || '',
+      assignee_ids: (task.assignees || []).map(assignee => assignee.id)
+    });
+  };
+
+  const toggleTaskAssignee = (userId: number) => {
+    setTaskForm(prev => ({
+      ...prev,
+      assignee_ids: prev.assignee_ids.includes(userId)
+        ? prev.assignee_ids.filter(id => id !== userId)
+        : [...prev.assignee_ids, userId]
+    }));
+  };
+
+  const selectedAssigneeLabel = useMemo(() => {
+    if (taskForm.assignee_ids.length === 0) return 'Unassigned';
+    const names = users
+      .filter(user => taskForm.assignee_ids.includes(user.id))
+      .map(user => user.name);
+    if (names.length <= 2) return names.join(', ');
+    return `${names.slice(0, 2).join(', ')} +${names.length - 2} more`;
+  }, [taskForm.assignee_ids, users]);
 
   const handleUploadDocument = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -413,30 +456,52 @@ export const ProjectManagement: React.FC = () => {
                     onChange={(event) => setTaskForm(prev => ({ ...prev, description: event.target.value }))}
                   />
                   <label className={themeClasses.label}>Assign Users</label>
-                  <div className="max-h-32 overflow-y-auto border border-border rounded-lg p-2 space-y-1">
-                    {users.map(user => (
-                      <label key={user.id} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={taskForm.assignee_ids.includes(user.id)}
-                          onChange={(event) => {
-                            setTaskForm(prev => ({
-                              ...prev,
-                              assignee_ids: event.target.checked
-                                ? [...prev.assignee_ids, user.id]
-                                : prev.assignee_ids.filter(id => id !== user.id)
-                            }));
-                          }}
-                        />
-                        <Users className="h-3 w-3" />
-                        {user.name} ({user.email})
-                      </label>
-                    ))}
-                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className={`${themeClasses.select} flex items-center justify-between`}
+                      >
+                        <span className="truncate">{selectedAssigneeLabel}</span>
+                        <ChevronDown className="h-4 w-4 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-[320px] max-h-72 overflow-y-auto">
+                      {users.length === 0 ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">No assignable users</div>
+                      ) : (
+                        users.map(user => (
+                          <DropdownMenuCheckboxItem
+                            key={user.id}
+                            checked={taskForm.assignee_ids.includes(user.id)}
+                            onCheckedChange={() => toggleTaskAssignee(user.id)}
+                            onSelect={(event) => event.preventDefault()}
+                          >
+                            <span className="truncate">{user.name} ({user.email})</span>
+                          </DropdownMenuCheckboxItem>
+                        ))
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <button className={getButtonClasses('primary')} onClick={handleTaskSubmit} disabled={isSavingTask}>
                     <Save className={themeClasses.iconButton} />
-                    {isSavingTask ? 'Saving task...' : 'Add Task'}
+                    {isSavingTask ? 'Saving task...' : editingTaskId ? 'Update Task' : 'Add Task'}
                   </button>
+                  {editingTaskId ? (
+                    <button
+                      className={getButtonClasses('outline')}
+                      onClick={() => {
+                        setEditingTaskId(null);
+                        setTaskForm(emptyTaskForm);
+                      }}
+                    >
+                      Cancel Task Edit
+                    </button>
+                  ) : null}
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Check className="h-3 w-3" />
+                    Use the dropdown to select multiple assignees per task.
+                  </div>
 
                   <div className="space-y-2">
                     {(selectedProject.tasks || []).map(task => (
@@ -445,6 +510,13 @@ export const ProjectManagement: React.FC = () => {
                           <p className="font-medium text-card-foreground">{task.title}</p>
                           <div className="flex gap-2 items-center">
                             <span className={getStatusColor(task.status)}>{task.status.replace('_', ' ')}</span>
+                            <button
+                              className="text-primary hover:opacity-80 text-xs border border-border rounded px-2 py-1"
+                              onClick={() => handleEditTask(task)}
+                              aria-label="Edit task"
+                            >
+                              Edit
+                            </button>
                             <button
                               className="text-destructive hover:opacity-80"
                               onClick={() => handleDeleteTask(task.id)}

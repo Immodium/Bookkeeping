@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Users, Building, Mail, Phone, LayoutGrid, Table, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Users, Building, Mail, LayoutGrid, Table, Edit, Trash2 } from 'lucide-react';
 import { ClientForm } from './ClientForm';
 import { ClientImportExport } from './clients/ClientImportExport';
 import { PaginationControls } from './ui/PaginationControls';
@@ -288,7 +288,7 @@ export const ClientManagement: React.FC = () => {
         </div>
 
         {/* Statistics Cards */}
-        <div className={themeClasses.statsGrid}>
+        <div className={themeClasses.statsGridThree}>
           <div className={themeClasses.statCard}>
             <div className={themeClasses.statCardContent}>
               <div>
@@ -314,15 +314,6 @@ export const ClientManagement: React.FC = () => {
                 <p className={`${themeClasses.statValueMedium} ${getIconColorClasses('purple')}`}>{Math.floor(clients.length * 0.2)}</p>
               </div>
               <Mail className={`${themeClasses.iconLarge} ${getIconColorClasses('purple')}`} />
-            </div>
-          </div>
-          <div className={themeClasses.statCard}>
-            <div className={themeClasses.statCardContent}>
-              <div>
-                <p className={themeClasses.statLabel}>Response Rate</p>
-                <p className={`${themeClasses.statValueMedium} ${getIconColorClasses('orange')}`}>94%</p>
-              </div>
-              <Phone className={`${themeClasses.iconLarge} ${getIconColorClasses('orange')}`} />
             </div>
           </div>
         </div>

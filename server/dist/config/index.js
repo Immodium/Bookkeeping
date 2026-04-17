@@ -11,8 +11,11 @@ dotenv.config({ path: join(__dirname, '..', '..', '.env') });
  * Server configuration
  */
 export const serverConfig = {
-    port: parseInt(process.env.PORT || '3443'),
-    httpsPort: parseInt(process.env.HTTPS_PORT || process.env.PORT || '3443'),
+    // Keep HTTP compatibility listener on 3002 by default.
+    port: parseInt(process.env.PORT || '3002'),
+    // Dedicated HTTPS listener.
+    httpsPort: parseInt(process.env.HTTPS_PORT || '3443'),
+    httpPort: parseInt(process.env.HTTP_PORT || '3002'),
     host: process.env.HOST || '0.0.0.0',
     nodeEnv: process.env.NODE_ENV || 'development',
     isDevelopment: process.env.NODE_ENV === 'development',

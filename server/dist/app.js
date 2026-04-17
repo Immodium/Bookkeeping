@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
 import https from 'https';
+import http from 'http';
 import { execSync } from 'child_process';
 // Import configuration
 import { serverConfig, validateConfig } from './config/index.js';
@@ -146,6 +147,17 @@ export const createApp = async () => {
 export const startServer = async () => {
     try {
         const app = await createApp();
+        // Keep HTTP listener for compatibility and redirect to HTTPS.
+        const httpRedirectServer = http.createServer((req, res) => {
+            const hostHeader = req.headers.host || `localhost:${serverConfig.port}`;
+            const hostWithoutPort = hostHeader.split(':')[0];
+            const location = `https://${hostWithoutPort}:${serverConfig.httpsPort}${req.url || '/'}`;
+            res.writeHead(301, { Location: location });
+            res.end();
+        });
+        httpRedirectServer.listen(serverConfig.port, serverConfig.host, () => {
+            console.log(`↪️  HTTP redirect server running on http://${serverConfig.host}:${serverConfig.port} -> https://localhost:${serverConfig.httpsPort}`);
+        });
         const tlsOptions = ensureHttpsCertificate();
         // HTTPS server
         const server = https.createServer(tlsOptions, app).listen(serverConfig.httpsPort, serverConfig.host, () => {
@@ -167,6 +179,7 @@ export const startServer = async () => {
         const { gracefulShutdown } = await import('./middleware/index.js');
         const { db } = await import('./models/index.js');
         gracefulShutdown(server, db);
+        gracefulShutdown(httpRedirectServer, null);
         return server;
     }
     catch (error) {

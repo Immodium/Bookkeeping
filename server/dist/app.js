@@ -4,9 +4,11 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
+import https from 'https';
+import { execSync } from 'child_process';
 // Import configuration
 import { serverConfig, validateConfig } from './config/index.js';
 // Import database
@@ -17,6 +19,43 @@ import { createGeneralRateLimit, createSecurityHeaders, createCorsOptions, reque
 import routes from './routes/index.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const ensureHttpsCertificate = () => {
+    // Use configured certs when provided.
+    if (serverConfig.httpsKeyPath && serverConfig.httpsCertPath &&
+        existsSync(serverConfig.httpsKeyPath) &&
+        existsSync(serverConfig.httpsCertPath)) {
+        return {
+            key: readFileSync(serverConfig.httpsKeyPath),
+            cert: readFileSync(serverConfig.httpsCertPath)
+        };
+    }
+    // Fall back to generating local self-signed cert for cloud/dev use.
+    const certDir = join(__dirname, '..', 'data', 'certs');
+    const keyPath = join(certDir, 'localhost-key.pem');
+    const certPath = join(certDir, 'localhost-cert.pem');
+    if (!existsSync(keyPath) || !existsSync(certPath)) {
+        mkdirSync(certDir, { recursive: true });
+        try {
+            execSync(`openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes -keyout "${keyPath}" -out "${certPath}" -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`, { stdio: 'ignore' });
+        }
+        catch (error) {
+            // Final fallback if openssl is unavailable in runtime.
+            const fallbackKey = process.env.HTTPS_KEY_PEM;
+            const fallbackCert = process.env.HTTPS_CERT_PEM;
+            if (fallbackKey && fallbackCert) {
+                writeFileSync(keyPath, fallbackKey);
+                writeFileSync(certPath, fallbackCert);
+            }
+            else {
+                throw new Error('Unable to generate HTTPS certificate. Install openssl or set HTTPS_KEY_PEM/HTTPS_CERT_PEM.');
+            }
+        }
+    }
+    return {
+        key: readFileSync(keyPath),
+        cert: readFileSync(certPath)
+    };
+};
 /**
  * Create and configure Express application
  */
@@ -107,15 +146,17 @@ export const createApp = async () => {
 export const startServer = async () => {
     try {
         const app = await createApp();
-        // HTTP Server
-        const server = app.listen(serverConfig.port, serverConfig.host, () => {
-            console.log(`🚀 Slimbooks server running on http://${serverConfig.host}:${serverConfig.port}`);
+        const tlsOptions = ensureHttpsCertificate();
+        // HTTPS server
+        const server = https.createServer(tlsOptions, app).listen(serverConfig.httpsPort, serverConfig.host, () => {
+            console.log(`🚀 Slimbooks server running on https://${serverConfig.host}:${serverConfig.httpsPort}`);
             console.log(`📊 Environment: ${serverConfig.nodeEnv} | CORS: ${serverConfig.corsOrigin} | Rate limit: ${serverConfig.rateLimiting.maxRequests}/${serverConfig.rateLimiting.windowMs / 1000}s`);
             const features = [];
             if (serverConfig.enableDebugEndpoints)
                 features.push('Debug');
             if (serverConfig.enableSampleData || serverConfig.isDevelopment)
                 features.push('Sample data');
+            features.push('HTTPS');
             if (features.length > 0) {
                 console.log(`🔧 Features: ${features.join(', ')}`);
             }

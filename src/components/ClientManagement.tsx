@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Users, Building, Mail, LayoutGrid, Table, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Users, Building, Mail, Phone, LayoutGrid, Table, Edit, Trash2 } from 'lucide-react';
 import { ClientForm } from './ClientForm';
 import { ClientImportExport } from './clients/ClientImportExport';
 import { PaginationControls } from './ui/PaginationControls';

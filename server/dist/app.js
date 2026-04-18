@@ -116,7 +116,10 @@ export const createApp = async () => {
         });
     });
     // Serve static files from uploads directory
-    const uploadsPath = join(__dirname, '..', 'public', 'uploads');
+    // Prefer workspace-level uploads used by route handlers in this deployment.
+    const workspaceUploadsPath = join(__dirname, '..', '..', 'public', 'uploads');
+    const serverUploadsPath = join(__dirname, '..', 'public', 'uploads');
+    const uploadsPath = existsSync(workspaceUploadsPath) ? workspaceUploadsPath : serverUploadsPath;
     app.use('/uploads', express.static(uploadsPath));
     // Serve static files from dist directory (built frontend).
     // In this cloud workspace snapshot, frontend assets are under /workspace/dist

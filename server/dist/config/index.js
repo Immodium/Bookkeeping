@@ -33,8 +33,8 @@ export const serverConfig = {
     enableSampleData: process.env.ENABLE_SAMPLE_DATA === 'true',
     // Rate limiting configuration
     rateLimiting: {
-        windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-        maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // requests per window
+        windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'), // 1 minute
+        maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '300'), // requests per window
         loginWindowMs: parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || '900000'),
         loginMaxRequests: parseInt(process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || '5') // login attempts per window
     }

@@ -1,0 +1,471 @@
+// Report Service - Domain-specific service for report management operations
+// Handles all report-related business logic and database operations
+
+import { databaseService } from '../core/DatabaseService.js';
+
+export interface ReportData {
+  name: string;
+  type: string;
+  date_range_start?: string;
+  date_range_end?: string;
+  data?: any;
+}
+
+export interface DatabaseReport {
+  id: number;
+  name: string;
+  type: string;
+  date_range_start: string;
+  date_range_end: string;
+  data: string | null;
+  created_at: string;
+}
+
+/**
+ * Report Management Service
+ * Handles report lifecycle management, data processing, and CRUD operations
+ */
+export class ReportService {
+  /**
+   * Get all reports ordered by creation date
+   */
+  async getAllReports(): Promise<DatabaseReport[]> {
+    return databaseService.getMany<DatabaseReport>(`
+      SELECT id, name, type, date_range_start, date_range_end, data, created_at
+      FROM reports
+      ORDER BY created_at DESC
+    `);
+  }
+
+  /**
+   * Get report by ID with parsed data field
+   */
+  async getReportById(id: number): Promise<DatabaseReport | null> {
+    if (!id || typeof id !== 'number') {
+      throw new Error('Valid report ID is required');
+    }
+
+    const report = databaseService.getOne<DatabaseReport>(`
+      SELECT id, name, type, date_range_start, date_range_end, data, created_at
+      FROM reports
+      WHERE id = ?
+    `, [id]);
+
+    if (!report) {
+      return null;
+    }
+
+    // Parse JSON data field if it exists
+    const parsedReport: any = { ...report };
+    if (report.data) {
+      try {
+        parsedReport.data = JSON.parse(report.data);
+      } catch (e) {
+        console.warn('Failed to parse report data:', e);
+        // Keep original data if parsing fails
+      }
+    }
+
+    return parsedReport;
+  }
+
+  /**
+   * Create new report
+   */
+  async createReport(reportData: ReportData): Promise<{ id: number; changes: number }> {
+    if (!reportData || !reportData.name || !reportData.type) {
+      throw new Error('Report name and type are required');
+    }
+
+    // Get next ID from counter service
+    const nextId = databaseService.getNextId('reports');
+    const now = new Date().toISOString();
+
+    const result = databaseService.executeQuery(`
+      INSERT INTO reports (id, name, type, date_range_start, date_range_end, data, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [
+      nextId,
+      reportData.name,
+      reportData.type,
+      reportData.date_range_start || '',
+      reportData.date_range_end || '',
+      reportData.data ? JSON.stringify(reportData.data) : null,
+      now
+    ]);
+
+    return {
+      id: nextId,
+      changes: result.changes
+    };
+  }
+
+  /**
+   * Update existing report
+   */
+  async updateReport(id: number, reportData: ReportData): Promise<{ id: number; changes: number }> {
+    if (!id || typeof id !== 'number') {
+      throw new Error('Valid report ID is required');
+    }
+
+    if (!reportData) {
+      throw new Error('Report data is required');
+    }
+
+    const result = databaseService.executeQuery(`
+      UPDATE reports
+      SET name = ?, type = ?, date_range_start = ?, date_range_end = ?, data = ?
+      WHERE id = ?
+    `, [
+      reportData.name,
+      reportData.type,
+      reportData.date_range_start || '',
+      reportData.date_range_end || '',
+      reportData.data ? JSON.stringify(reportData.data) : null,
+      id
+    ]);
+
+    if (result.changes === 0) {
+      throw new Error('Report not found');
+    }
+
+    return {
+      id: id,
+      changes: result.changes
+    };
+  }
+
+  /**
+   * Delete report by ID
+   */
+  async deleteReport(id: number): Promise<{ id: number; changes: number }> {
+    if (!id || typeof id !== 'number') {
+      throw new Error('Valid report ID is required');
+    }
+
+    const result = databaseService.executeQuery('DELETE FROM reports WHERE id = ?', [id]);
+
+    if (result.changes === 0) {
+      throw new Error('Report not found');
+    }
+
+    return {
+      id: id,
+      changes: result.changes
+    };
+  }
+
+  /**
+   * Check if report exists
+   */
+  async reportExists(id: number): Promise<boolean> {
+    if (!id || typeof id !== 'number') {
+      return false;
+    }
+
+    return databaseService.exists('reports', 'id', id);
+  }
+
+  /**
+   * Get reports by type
+   */
+  async getReportsByType(type: string): Promise<DatabaseReport[]> {
+    if (!type || typeof type !== 'string') {
+      throw new Error('Valid report type is required');
+    }
+
+    return databaseService.getMany<DatabaseReport>(`
+      SELECT id, name, type, date_range_start, date_range_end, data, created_at
+      FROM reports
+      WHERE type = ?
+      ORDER BY created_at DESC
+    `, [type]);
+  }
+
+  /**
+   * Get reports within date range
+   */
+  async getReportsByDateRange(startDate: string, endDate: string): Promise<DatabaseReport[]> {
+    if (!startDate || !endDate) {
+      throw new Error('Valid date range is required');
+    }
+
+    return databaseService.getMany<DatabaseReport>(`
+      SELECT id, name, type, date_range_start, date_range_end, data, created_at
+      FROM reports
+      WHERE created_at >= ? AND created_at <= ?
+      ORDER BY created_at DESC
+    `, [startDate, endDate]);
+  }
+
+  /**
+   * Get report count
+   */
+  async getReportCount(): Promise<number> {
+    const result = databaseService.getOne<{count: number}>(
+      'SELECT COUNT(*) as count FROM reports'
+    );
+    return result?.count || 0;
+  }
+
+  /**
+   * Get report count by type
+   */
+  async getReportCountByType(type: string): Promise<number> {
+    if (!type || typeof type !== 'string') {
+      throw new Error('Valid report type is required');
+    }
+
+    const result = databaseService.getOne<{count: number}>(
+      'SELECT COUNT(*) as count FROM reports WHERE type = ?',
+      [type]
+    );
+    return result?.count || 0;
+  }
+
+  /**
+   * Generate Profit & Loss Report Data
+   */
+  async generateProfitLossData(
+    startDate: string,
+    endDate: string,
+    accountingMethod: 'cash' | 'accrual' = 'accrual',
+    preset?: string,
+    breakdownPeriod: 'monthly' | 'quarterly' = 'quarterly'
+  ): Promise<any> {
+    // Get invoices in date range
+    const invoices = databaseService.getMany<any>(`
+      SELECT i.*, c.name as client_name
+      FROM invoices i
+      LEFT JOIN clients c ON i.client_id = c.id
+      WHERE i.created_at >= ? AND i.created_at <= ?
+      AND i.deleted_at IS NULL
+      ORDER BY i.created_at DESC
+    `, [startDate, endDate + 'T23:59:59.999Z']);
+
+    // Get expenses in date range
+    const expenses = databaseService.getMany<any>(`
+      SELECT *
+      FROM expenses
+      WHERE date >= ? AND date <= ?
+      AND deleted_at IS NULL
+      ORDER BY date DESC
+    `, [startDate, endDate]);
+
+    const toNumber = (value: unknown): number => {
+      if (value === null || value === undefined) return 0;
+      const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+      return isNaN(num) ? 0 : num;
+    };
+
+    // Calculate revenue
+    const totalInvoiceRevenue = invoices.reduce((sum: number, inv: any) => sum + toNumber(inv.amount), 0);
+    const paidRevenue = invoices
+      .filter((inv: any) => inv.status === 'paid')
+      .reduce((sum: number, inv: any) => sum + toNumber(inv.amount), 0);
+    const pendingRevenue = invoices
+      .filter((inv: any) => inv.status !== 'paid')
+      .reduce((sum: number, inv: any) => sum + toNumber(inv.amount), 0);
+
+    const recognizedRevenue = accountingMethod === 'cash' ? paidRevenue : totalInvoiceRevenue;
+
+    // Calculate expenses
+    const totalExpenses = expenses.reduce((sum: number, exp: any) => sum + toNumber(exp.amount), 0);
+    const expensesByCategory = expenses.reduce((acc: Record<string, number>, exp: any) => {
+      const category = exp.category || 'Uncategorized';
+      acc[category] = (acc[category] || 0) + toNumber(exp.amount);
+      return acc;
+    }, {});
+
+    const netProfit = recognizedRevenue - totalExpenses;
+
+    return {
+      revenue: {
+        total: recognizedRevenue,
+        paid: paidRevenue,
+        pending: pendingRevenue,
+        invoices: recognizedRevenue,
+        otherIncome: 0
+      },
+      expenses: {
+        total: totalExpenses,
+        ...expensesByCategory
+      },
+      profit: {
+        net: netProfit,
+        gross: netProfit,
+        margin: recognizedRevenue > 0 ? (netProfit / recognizedRevenue) * 100 : 0
+      },
+      netIncome: netProfit,
+      accountingMethod,
+      invoices,
+      periodColumns: [],
+      hasBreakdown: false,
+      breakdownPeriod
+    };
+  }
+
+  /**
+   * Generate Expense Report Data
+   */
+  async generateExpenseData(startDate: string, endDate: string): Promise<any> {
+    const expenses = databaseService.getMany<any>(`
+      SELECT *
+      FROM expenses
+      WHERE date >= ? AND date <= ?
+      AND deleted_at IS NULL
+      ORDER BY date DESC
+    `, [startDate, endDate]);
+
+    const toNumber = (value: unknown): number => {
+      if (value === null || value === undefined) return 0;
+      const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+      return isNaN(num) ? 0 : num;
+    };
+
+    const expensesByCategory = expenses.reduce((acc: any, exp: any) => {
+      const category = exp.category || 'Uncategorized';
+      acc[category] = (acc[category] || 0) + toNumber(exp.amount);
+      return acc;
+    }, {});
+
+    const totalAmount = expenses.reduce((sum: number, exp: any) => sum + toNumber(exp.amount), 0);
+
+    return {
+      expenses,
+      expensesByCategory,
+      totalAmount,
+      totalCount: expenses.length
+    };
+  }
+
+  /**
+   * Generate Invoice Report Data
+   */
+  async generateInvoiceData(startDate: string, endDate: string): Promise<any> {
+    const invoices = databaseService.getMany<any>(`
+      SELECT i.*, c.name as client_name
+      FROM invoices i
+      LEFT JOIN clients c ON i.client_id = c.id
+      WHERE i.created_at >= ? AND i.created_at <= ?
+      AND i.deleted_at IS NULL
+      ORDER BY i.created_at DESC
+    `, [startDate, endDate + 'T23:59:59.999Z']);
+
+    const toNumber = (value: unknown): number => {
+      if (value === null || value === undefined) return 0;
+      const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+      return isNaN(num) ? 0 : num;
+    };
+
+    const invoicesByStatus = invoices.reduce((acc: any, inv: any) => {
+      const status = inv.status || 'draft';
+      acc[status] = (acc[status] || 0) + toNumber(inv.amount);
+      return acc;
+    }, {});
+
+    const invoicesByClient = invoices.reduce((acc: any, inv: any) => {
+      const clientName = inv.client_name || 'Unknown Client';
+      acc[clientName] = (acc[clientName] || 0) + toNumber(inv.amount);
+      return acc;
+    }, {});
+
+    const totalAmount = invoices.reduce((sum: number, inv: any) => sum + toNumber(inv.amount), 0);
+    const paidAmount = invoices
+      .filter((inv: any) => inv.status === 'paid')
+      .reduce((sum: number, inv: any) => sum + toNumber(inv.amount), 0);
+    const pendingAmount = invoices
+      .filter((inv: any) => inv.status !== 'paid')
+      .reduce((sum: number, inv: any) => sum + toNumber(inv.amount), 0);
+    const overdueAmount = invoices
+      .filter((inv: any) => inv.status === 'overdue')
+      .reduce((sum: number, inv: any) => sum + toNumber(inv.amount), 0);
+
+    return {
+      invoices,
+      invoicesByStatus,
+      invoicesByClient,
+      totalAmount,
+      paidAmount,
+      pendingAmount,
+      overdueAmount,
+      totalCount: invoices.length
+    };
+  }
+
+  /**
+   * Generate Client Report Data
+   */
+  async generateClientData(startDate?: string, endDate?: string): Promise<any> {
+    const clients = databaseService.getMany<any>(`
+      SELECT *
+      FROM clients
+      WHERE deleted_at IS NULL
+      ORDER BY name ASC
+    `);
+
+    let invoiceFilter = '';
+    const params: string[] = [];
+
+    if (startDate && endDate) {
+      invoiceFilter = 'WHERE i.created_at >= ? AND i.created_at <= ? AND i.deleted_at IS NULL';
+      params.push(startDate, endDate + 'T23:59:59.999Z');
+    } else {
+      invoiceFilter = 'WHERE i.deleted_at IS NULL';
+    }
+
+    const invoices = databaseService.getMany<any>(`
+      SELECT i.*, c.name as client_name
+      FROM invoices i
+      LEFT JOIN clients c ON i.client_id = c.id
+      ${invoiceFilter}
+      ORDER BY i.created_at DESC
+    `, params);
+
+    const toNumber = (value: unknown): number => {
+      if (value === null || value === undefined) return 0;
+      const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+      return isNaN(num) ? 0 : num;
+    };
+
+    const clientStats = clients.map((client: any) => {
+      const clientInvoices = invoices.filter((inv: any) => inv.client_id === client.id);
+      const totalRevenue = clientInvoices.reduce((sum: number, inv: any) => sum + toNumber(inv.amount), 0);
+      const paidRevenue = clientInvoices
+        .filter((inv: any) => inv.status === 'paid')
+        .reduce((sum: number, inv: any) => sum + toNumber(inv.amount), 0);
+      const pendingRevenue = clientInvoices
+        .filter((inv: any) => inv.status !== 'paid')
+        .reduce((sum: number, inv: any) => sum + toNumber(inv.amount), 0);
+      const overdueRevenue = clientInvoices
+        .filter((inv: any) => inv.status === 'overdue')
+        .reduce((sum: number, inv: any) => sum + toNumber(inv.amount), 0);
+
+      return {
+        ...client,
+        totalInvoices: clientInvoices.length,
+        totalRevenue,
+        paidRevenue,
+        pendingRevenue,
+        overdueRevenue
+      };
+    }).filter((client: any) => client.totalInvoices > 0);
+
+    const totalRevenue = clientStats.reduce((sum: number, client: any) => sum + client.totalRevenue, 0);
+    const totalPaidRevenue = clientStats.reduce((sum: number, client: any) => sum + client.paidRevenue, 0);
+    const totalPendingRevenue = clientStats.reduce((sum: number, client: any) => sum + client.pendingRevenue, 0);
+    const totalOverdueRevenue = clientStats.reduce((sum: number, client: any) => sum + client.overdueRevenue, 0);
+
+    return {
+      clients: clientStats,
+      totalClients: clientStats.length,
+      totalRevenue,
+      totalPaidRevenue,
+      totalPendingRevenue,
+      totalOverdueRevenue
+    };
+  }
+}
+
+// Export singleton instance
+export const reportService = new ReportService();

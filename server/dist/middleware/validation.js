@@ -2,12 +2,29 @@
 // Handles input validation, sanitization, and validation rules
 import { body, param, query, validationResult } from 'express-validator';
 import { validationConfig, serverConfig } from '../config/index.js';
+import { appendFileSync } from 'fs';
+const debugLog = (hypothesisId, location, message, data = {}) => {
+    try {
+        appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify({ hypothesisId, location, message, data, timestamp: Date.now() }) + '\n');
+    }
+    catch { }
+};
 /**
  * Middleware to check validation results
  */
 export const validateRequest = (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+        if (req.originalUrl.includes('/api/payments')) {
+            // #region agent log
+            debugLog('A', 'validation.js:validateRequest', 'Payment validation failed', {
+                method: req.method,
+                path: req.originalUrl,
+                errorCount: errors.array().length,
+                errors: errors.array().map((item) => ({ path: item.path, msg: item.msg }))
+            });
+            // #endregion
+        }
         res.status(400).json({
             success: false,
             error: 'Validation failed',

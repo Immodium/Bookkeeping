@@ -511,15 +511,13 @@ export const EditInvoicePage = () => {
                     </button>
                   )}
 
-                  {permissions.canSave && (
-                    <button
-                      onClick={handleSave}
-                      disabled={!isValidForSave() || isSaving}
-                      className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 disabled:bg-muted disabled:cursor-not-allowed transition-colors"
-                    >
-                      {isSaving ? 'Saving...' : 'Save Invoice'}
-                    </button>
-                  )}
+                  <button
+                    onClick={handleSave}
+                    disabled={!isValidForSave() || isSaving}
+                    className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 disabled:bg-muted disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isSaving ? 'Saving...' : 'Save Invoice'}
+                  </button>
 
                   {(() => {
                     const canSendEmails = emailConfig?.canSendEmails ?? false;

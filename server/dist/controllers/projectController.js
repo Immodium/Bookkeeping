@@ -1,16 +1,9 @@
 import { promises as fs } from 'fs';
-import { appendFileSync } from 'fs';
 import { join } from 'path';
 import { asyncHandler, NotFoundError, ValidationError } from '../middleware/index.js';
 import { projectService } from '../services/ProjectService.js';
 import { rbacService } from '../services/RbacService.js';
 const uploadRoot = join(process.cwd(), 'public', 'uploads', 'projects');
-const debugLog = (hypothesisId, location, message, data = {}) => {
-    try {
-        appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify({ hypothesisId, location, message, data, timestamp: Date.now() }) + '\n');
-    }
-    catch { }
-};
 const ensureUser = (req) => {
     if (!req.user) {
         throw new ValidationError('Authentication required');
@@ -72,15 +65,6 @@ export const createProject = asyncHandler(async (req, res) => {
     await assertProjectManagerAccess(req);
     const user = ensureUser(req);
     const projectData = req.body?.projectData;
-    // #region agent log
-    debugLog('A', 'projectController.js:createProject:entry', 'createProject entry', {
-        method: req.method,
-        path: req.originalUrl,
-        hasProjectData: !!projectData,
-        projectName: typeof projectData?.name === 'string' ? projectData.name : null,
-        projectDataId: projectData?.id ?? null
-    });
-    // #endregion
     if (!projectData || typeof projectData !== 'object') {
         throw new ValidationError('Project data is required');
     }
@@ -99,12 +83,6 @@ export const createProject = asyncHandler(async (req, res) => {
     if (projectData.end_date)
         createPayload.end_date = String(projectData.end_date);
     const projectId = await projectService.createProject(createPayload);
-    // #region agent log
-    debugLog('B', 'projectController.js:createProject:exit', 'createProject exit', {
-        createdProjectId: projectId,
-        createdBy: user.id
-    });
-    // #endregion
     res.status(201).json({
         success: true,
         data: { id: projectId },
@@ -115,15 +93,6 @@ export const updateProject = asyncHandler(async (req, res) => {
     await assertProjectManagerAccess(req);
     const projectId = parseId(req.params.id, 'Project ID');
     const projectData = req.body?.projectData;
-    // #region agent log
-    debugLog('A', 'projectController.js:updateProject:entry', 'updateProject entry', {
-        method: req.method,
-        path: req.originalUrl,
-        projectId,
-        hasProjectData: !!projectData,
-        projectDataId: projectData?.id ?? null
-    });
-    // #endregion
     if (!projectData || typeof projectData !== 'object') {
         throw new ValidationError('Project data is required');
     }
@@ -141,12 +110,6 @@ export const updateProject = asyncHandler(async (req, res) => {
     if (projectData.end_date)
         updatePayload.end_date = String(projectData.end_date);
     await projectService.updateProject(projectId, updatePayload);
-    // #region agent log
-    debugLog('C', 'projectController.js:updateProject:exit', 'updateProject exit', {
-        projectId,
-        updatedFields: Object.keys(updatePayload)
-    });
-    // #endregion
     res.json({ success: true, message: 'Project updated successfully' });
 });
 export const deleteProject = asyncHandler(async (req, res) => {

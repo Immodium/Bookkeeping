@@ -1,14 +1,7 @@
 // Payment controller for Slimbooks
 // Handles all payment-related business logic
-import { appendFileSync } from 'fs';
 import { paymentService } from '../services/PaymentService.js';
 import { AppError, NotFoundError, ValidationError, asyncHandler } from '../middleware/index.js';
-const debugLog = (hypothesisId, location, message, data = {}) => {
-    try {
-        appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify({ hypothesisId, location, message, data, timestamp: Date.now() }) + '\n');
-    }
-    catch { }
-};
 /**
  * Get all payments
  */
@@ -57,24 +50,11 @@ export const getPaymentById = asyncHandler(async (req, res) => {
  */
 export const createPayment = asyncHandler(async (req, res) => {
     const { paymentData } = req.body;
-    // #region agent log
-    debugLog('B', 'paymentController.js:createPayment:entry', 'createPayment entry', {
-        method: req.method,
-        path: req.originalUrl,
-        hasPaymentData: !!paymentData,
-        paymentDataKeys: paymentData && typeof paymentData === 'object' ? Object.keys(paymentData) : []
-    });
-    // #endregion
     if (!paymentData) {
         throw new ValidationError('Payment data is required');
     }
     try {
         const paymentId = await paymentService.createPayment(paymentData);
-        // #region agent log
-        debugLog('B', 'paymentController.js:createPayment:exit', 'createPayment success', {
-            paymentId
-        });
-        // #endregion
         res.status(201).json({
             success: true,
             data: { id: paymentId },
@@ -82,11 +62,6 @@ export const createPayment = asyncHandler(async (req, res) => {
         });
     }
     catch (error) {
-        // #region agent log
-        debugLog('C', 'paymentController.js:createPayment:catch', 'createPayment caught error', {
-            errorMessage: error instanceof Error ? error.message : String(error)
-        });
-        // #endregion
         const errorMessage = error.message;
         if (errorMessage.includes('date') && errorMessage.includes('required')) {
             throw new ValidationError('Payment date, client information, amount, and method are required');

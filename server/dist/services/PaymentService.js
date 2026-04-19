@@ -1,13 +1,6 @@
 // Payment Service - Domain-specific service for payment operations
 // Handles all payment-related business logic and database operations
-import { appendFileSync } from 'fs';
 import { databaseService } from '../core/DatabaseService.js';
-const debugLog = (hypothesisId, location, message, data = {}) => {
-    try {
-        appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify({ hypothesisId, location, message, data, timestamp: Date.now() }) + '\n');
-    }
-    catch { }
-};
 /**
  * Payment Service
  * Manages payment-related operations with proper validation and security
@@ -96,17 +89,6 @@ export class PaymentService {
      * Create new payment
      */
     async createPayment(paymentData) {
-        // #region agent log
-        debugLog('A', 'PaymentService.js:createPayment:entry', 'createPayment entry', {
-            hasPaymentData: !!paymentData,
-            date: paymentData?.date ?? null,
-            clientName: paymentData?.client_name ?? null,
-            clientId: paymentData?.client_id ?? null,
-            amountType: typeof paymentData?.amount,
-            amountValue: paymentData?.amount ?? null,
-            method: paymentData?.method ?? null
-        });
-        // #endregion
         if (!paymentData || !paymentData.date || !paymentData.amount || !paymentData.method || (!paymentData.client_id && !paymentData.client_name)) {
             throw new Error('Invalid payment data - date, client_id/client_name, amount, and method are required');
         }
@@ -165,15 +147,6 @@ export class PaymentService {
             created_at: now,
             updated_at: now
         };
-        // #region agent log
-        debugLog('C', 'PaymentService.js:createPayment:beforeInsert', 'createPayment before insert', {
-            id: paymentRecord.id,
-            date: paymentRecord.date,
-            clientId: paymentRecord.client_id,
-            amount: paymentRecord.amount,
-            method: paymentRecord.method
-        });
-        // #endregion
         // Create payment
         databaseService.executeQuery(`
       INSERT INTO payments (
@@ -186,11 +159,6 @@ export class PaymentService {
             paymentRecord.transaction_id, paymentRecord.notes, paymentRecord.status,
             paymentRecord.created_at, paymentRecord.updated_at
         ]);
-        // #region agent log
-        debugLog('D', 'PaymentService.js:createPayment:exit', 'createPayment exit', {
-            nextId
-        });
-        // #endregion
         return nextId;
     }
     /**

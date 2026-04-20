@@ -112,7 +112,9 @@ describe('EditInvoicePage', () => {
 
     mockAuthenticatedFetch.mockImplementation(async (url: string) => {
       if (url === '/api/invoices/1') {
-        return { data: invoiceRecord };
+        return {
+          json: async () => ({ data: invoiceRecord })
+        };
       }
 
       if (url === '/api/clients') {

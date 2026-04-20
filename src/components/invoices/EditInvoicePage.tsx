@@ -60,7 +60,8 @@ export const EditInvoicePage = () => {
         try {
           // Load invoice data
           const response = await authenticatedFetch(`/api/invoices/${id}`);
-          const invoiceRecord = response.data;
+          const invoicePayload = await response.json();
+          const invoiceRecord = invoicePayload?.data;
 
           if (invoiceRecord) {
             setInvoice(invoiceRecord);

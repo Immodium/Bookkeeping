@@ -8,8 +8,40 @@ import { ExpenseViewModalProps } from '@/types/components/expense.types';
 export const ExpenseViewModal: React.FC<ExpenseViewModalProps> = ({ expense, isOpen, onClose }) => {
   if (!isOpen || !expense) return null;
 
-  // Using imported formatDate and formatDateTime functions
-  const handleViewReceipt = () => {
+  const detectMimeType = (bytes: Uint8Array): string => {
+    if (bytes.length >= 4) {
+      if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
+        return 'application/pdf';
+      }
+      if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+        return 'image/jpeg';
+      }
+      if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+        return 'image/png';
+      }
+      if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+        return 'image/gif';
+      }
+      if (
+        bytes.length >= 12 &&
+        bytes[0] === 0x52 &&
+        bytes[1] === 0x49 &&
+        bytes[2] === 0x46 &&
+        bytes[3] === 0x46 &&
+        bytes[8] === 0x57 &&
+        bytes[9] === 0x45 &&
+        bytes[10] === 0x42 &&
+        bytes[11] === 0x50
+      ) {
+        return 'image/webp';
+      }
+    }
+
+    return 'application/pdf';
+  };
+
+  // Use the browser's native file viewer (same experience as invoice tab preview).
+  const handleViewReceipt = async () => {
     if (!expense.receipt_url) {
       return;
     }
@@ -17,277 +49,50 @@ export const ExpenseViewModal: React.FC<ExpenseViewModalProps> = ({ expense, isO
     const receiptUrl = expense.receipt_url.startsWith('http')
       ? expense.receipt_url
       : `${window.location.origin}${expense.receipt_url}`;
-    const popup = window.open('', '_blank', 'width=1100,height=800');
 
-    // If the popup is blocked, fallback to opening the raw receipt URL.
-    if (!popup) {
-      window.open(receiptUrl, '_blank');
+    const viewerTab = window.open('', '_blank');
+    if (!viewerTab) {
+      console.error('Receipt viewer popup blocked by browser');
       return;
     }
 
-    const receiptName = expense.receipt_url.split('/').pop() || 'receipt';
-    const escapedName = receiptName.replace(/"/g, '&quot;');
-    const escapedUrl = receiptUrl.replace(/"/g, '&quot;');
+    viewerTab.document.write('<html><body style="font-family:sans-serif;padding:24px;">Preparing receipt preview...</body></html>');
+    viewerTab.document.close();
 
-    popup.document.write(`<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Receipt Viewer</title>
-    <style>
-      :root {
-        color-scheme: light dark;
+    try {
+      const response = await fetch(receiptUrl, { credentials: 'include' });
+      if (!response.ok) {
+        throw new Error(`Failed to load receipt (${response.status})`);
       }
-      body {
-        margin: 0;
-        font-family: Inter, system-ui, -apple-system, sans-serif;
-        background: #f8fafc;
-        color: #0f172a;
+
+      const buffer = await response.arrayBuffer();
+      if (!buffer.byteLength) {
+        throw new Error('Receipt file is empty');
       }
-      .toolbar {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 12px 16px;
-        border-bottom: 1px solid #e2e8f0;
-        background: #ffffff;
-      }
-      .title {
-        font-size: 14px;
-        font-weight: 600;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .actions {
-        display: flex;
-        gap: 8px;
-      }
-      button {
-        border: 1px solid #cbd5e1;
-        background: #ffffff;
-        color: #0f172a;
-        border-radius: 8px;
-        padding: 8px 12px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      button:hover {
-        background: #f1f5f9;
-      }
-      button:disabled {
-        cursor: not-allowed;
-        opacity: 0.5;
-      }
-      #status {
-        padding: 16px;
-        font-size: 14px;
-        color: #475569;
-      }
-      #preview {
-        padding: 12px;
-      }
-      #preview img,
-      #preview iframe,
-      #preview embed {
-        width: 100%;
-        min-height: calc(100vh - 110px);
-        border: none;
-        border-radius: 10px;
-        background: #ffffff;
-      }
-      #preview img {
-        object-fit: contain;
-      }
-      @media (prefers-color-scheme: dark) {
-        body {
-          background: #0f172a;
-          color: #e2e8f0;
+
+      const bytes = new Uint8Array(buffer.slice(0, 16));
+      const sniffedMimeType = detectMimeType(bytes);
+      const responseMimeType = response.headers.get('content-type') || '';
+      const mimeType =
+        !responseMimeType || responseMimeType === 'application/octet-stream'
+          ? sniffedMimeType
+          : responseMimeType;
+      const blob = new Blob([buffer], { type: mimeType });
+      const objectUrl = window.URL.createObjectURL(blob);
+
+      viewerTab.location.href = objectUrl;
+
+      // Clean up blob URL once the viewer tab is closed.
+      const cleanup = window.setInterval(() => {
+        if (viewerTab.closed) {
+          window.clearInterval(cleanup);
+          window.URL.revokeObjectURL(objectUrl);
         }
-        .toolbar {
-          background: #111827;
-          border-bottom-color: #334155;
-        }
-        button {
-          background: #111827;
-          color: #e2e8f0;
-          border-color: #475569;
-        }
-        button:hover {
-          background: #1e293b;
-        }
-        #status {
-          color: #94a3b8;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="toolbar">
-      <div class="title">${escapedName}</div>
-      <div class="actions">
-        <button id="print-btn" type="button" disabled>Print</button>
-        <button id="download-btn" type="button" disabled>Download</button>
-      </div>
-    </div>
-    <div id="status">Loading receipt…</div>
-    <div id="preview"></div>
-
-    <script>
-      (function () {
-        const receiptUrl = "${escapedUrl}";
-        const fallbackFileName = "${escapedName}";
-        const statusEl = document.getElementById('status');
-        const previewEl = document.getElementById('preview');
-        const printBtn = document.getElementById('print-btn');
-        const downloadBtn = document.getElementById('download-btn');
-        let objectUrl = '';
-        let fileType = '';
-
-        const detectMimeType = (bytes) => {
-          if (bytes.length >= 4) {
-            if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
-              return 'application/pdf';
-            }
-            if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-              return 'image/jpeg';
-            }
-            if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
-              return 'image/png';
-            }
-            if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
-              return 'image/gif';
-            }
-            if (
-              bytes.length >= 12 &&
-              bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
-              bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
-            ) {
-              return 'image/webp';
-            }
-          }
-          return '';
-        };
-
-        const extensionForMime = (mimeType) => {
-          if (mimeType === 'application/pdf') return 'pdf';
-          if (mimeType === 'image/jpeg') return 'jpg';
-          if (mimeType === 'image/png') return 'png';
-          if (mimeType === 'image/gif') return 'gif';
-          if (mimeType === 'image/webp') return 'webp';
-          return '';
-        };
-
-        const getDownloadName = () => {
-          if (fallbackFileName.includes('.')) {
-            return fallbackFileName;
-          }
-          const ext = extensionForMime(fileType);
-          return ext ? fallbackFileName + '.' + ext : fallbackFileName;
-        };
-
-        const renderPreview = () => {
-          previewEl.innerHTML = '';
-
-          if (fileType.startsWith('image/')) {
-            const img = document.createElement('img');
-            img.src = objectUrl;
-            img.alt = 'Expense receipt';
-            previewEl.appendChild(img);
-            return;
-          }
-
-          const frame = document.createElement('iframe');
-          frame.src = objectUrl;
-          frame.title = 'Receipt preview';
-          previewEl.appendChild(frame);
-        };
-
-        const handlePrint = () => {
-          if (!objectUrl) {
-            return;
-          }
-
-          if (fileType.startsWith('image/')) {
-            const printWindow = window.open('', '_blank', 'width=900,height=700');
-            if (!printWindow) {
-              return;
-            }
-            printWindow.document.write(
-              '<!doctype html><html><head><title>Print receipt</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;background:#fff;"><img src="' +
-                objectUrl +
-                '" style="max-width:100%;max-height:100vh;" alt="Receipt" onload="window.focus();window.print();" /></body></html>'
-            );
-            printWindow.document.close();
-            return;
-          }
-
-          const iframe = previewEl.querySelector('iframe');
-          if (iframe && iframe.contentWindow) {
-            iframe.contentWindow.focus();
-            iframe.contentWindow.print();
-            return;
-          }
-
-          window.print();
-        };
-
-        const handleDownload = () => {
-          if (!objectUrl) {
-            return;
-          }
-          const a = document.createElement('a');
-          a.href = objectUrl;
-          a.download = getDownloadName();
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-        };
-
-        const loadReceipt = async () => {
-          try {
-            const response = await fetch(receiptUrl, { credentials: 'include' });
-            if (!response.ok) {
-              throw new Error('Failed to load receipt (' + response.status + ')');
-            }
-
-            const buffer = await response.arrayBuffer();
-            const bytes = new Uint8Array(buffer.slice(0, 16));
-            const detectedType = detectMimeType(bytes);
-            const headerType = response.headers.get('content-type') || '';
-            fileType = detectedType || (headerType === 'application/octet-stream' ? '' : headerType) || 'application/pdf';
-
-            const blob = new Blob([buffer], { type: fileType });
-            objectUrl = URL.createObjectURL(blob);
-            renderPreview();
-            statusEl.textContent = '';
-            printBtn.disabled = false;
-            downloadBtn.disabled = false;
-          } catch (error) {
-            statusEl.textContent = error instanceof Error ? error.message : 'Unable to load receipt';
-          }
-        };
-
-        printBtn.addEventListener('click', handlePrint);
-        downloadBtn.addEventListener('click', handleDownload);
-        window.addEventListener('beforeunload', () => {
-          if (objectUrl) {
-            URL.revokeObjectURL(objectUrl);
-          }
-        });
-
-        loadReceipt();
-      })();
-    </script>
-  </body>
-</html>`);
-    popup.document.close();
+      }, 1500);
+    } catch (error) {
+      console.error('Failed to open receipt viewer:', error);
+      viewerTab.close();
+    }
   };
 
   return (

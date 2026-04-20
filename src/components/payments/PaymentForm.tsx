@@ -3,8 +3,7 @@ import { ArrowLeft, Search, X } from 'lucide-react';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { authenticatedFetch } from '@/utils/api';
-import { Payment, PaymentFormProps } from '@/types';
-import { Invoice } from '@/types';
+import { Client, Invoice, Payment, PaymentFormProps } from '@/types';
 
 export const PaymentForm: React.FC<PaymentFormProps> = ({ 
   payment, 
@@ -17,6 +16,7 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
   const [formData, setFormData] = useState({
     date: payment?.date || new Date().toISOString().split('T')[0],
     client_name: payment?.client_name || preselectedClientName || '',
+    client_id: payment?.client_id?.toString() || '',
     invoice_id: payment?.invoice_id?.toString() || preselectedInvoiceId?.toString() || '',
     amount: payment?.amount?.toString() || preselectedAmount?.toString() || '',
     method: payment?.method || 'bank_transfer' as const,
@@ -26,10 +26,12 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
   });
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [showInvoiceSearch, setShowInvoiceSearch] = useState(false);
   const [invoiceSearchTerm, setInvoiceSearchTerm] = useState('');
   const [originalFormData, setOriginalFormData] = useState<any>(null);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [loadingClients, setLoadingClients] = useState(false);
 
   // Track if form has been modified
   const isDirty = originalFormData ? JSON.stringify(formData) !== JSON.stringify(originalFormData) : false;
@@ -55,6 +57,7 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
     const initialData = {
       date: payment?.date || new Date().toISOString().split('T')[0],
       client_name: payment?.client_name || preselectedClientName || '',
+      client_id: payment?.client_id?.toString() || '',
       invoice_id: payment?.invoice_id?.toString() || preselectedInvoiceId?.toString() || '',
       amount: payment?.amount?.toString() || preselectedAmount?.toString() || '',
       method: payment?.method || 'bank_transfer' as const,
@@ -64,6 +67,25 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
     };
     setOriginalFormData(initialData);
   }, [payment, preselectedInvoiceId, preselectedClientName, preselectedAmount]);
+
+  const loadClients = async () => {
+    try {
+      setLoadingClients(true);
+      const response = await authenticatedFetch('/api/clients');
+      const data = await response.json();
+
+      if (data.success) {
+        setClients(data.data || []);
+      } else {
+        setClients([]);
+      }
+    } catch (error) {
+      console.error('Error loading clients:', error);
+      setClients([]);
+    } finally {
+      setLoadingClients(false);
+    }
+  };
 
   const loadInvoices = async (searchTerm = '') => {
     try {
@@ -94,6 +116,32 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
   }, [showInvoiceSearch]);
 
   useEffect(() => {
+    loadClients();
+  }, []);
+
+  useEffect(() => {
+    if (!clients.length || formData.client_id) {
+      return;
+    }
+
+    const preferredName = payment?.client_name || preselectedClientName || formData.client_name;
+    if (!preferredName) {
+      return;
+    }
+
+    const matchedClient = clients.find((client) => client.name.toLowerCase() === preferredName.toLowerCase());
+    if (!matchedClient) {
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      client_id: matchedClient.id.toString(),
+      client_name: matchedClient.name
+    }));
+  }, [clients, formData.client_id, formData.client_name, payment?.client_name, preselectedClientName]);
+
+  useEffect(() => {
     if (showInvoiceSearch && invoiceSearchTerm) {
       const timeoutId = setTimeout(() => {
         loadInvoices(invoiceSearchTerm);
@@ -104,10 +152,14 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    const selectedClient = clients.find((client) => client.id.toString() === formData.client_id);
+    const resolvedClientName = selectedClient?.name || formData.client_name;
+
     const paymentData = {
       date: formData.date,
-      client_name: formData.client_name,
+      client_name: resolvedClientName,
+      client_id: formData.client_id ? parseInt(formData.client_id, 10) : undefined,
       invoice_id: formData.invoice_id ? parseInt(formData.invoice_id) : undefined,
       amount: parseFloat(formData.amount),
       method: formData.method,
@@ -119,11 +171,31 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
     onSave(paymentData);
   };
 
+  const handleClientChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedClientId = event.target.value;
+    const selectedClient = clients.find((client) => client.id.toString() === selectedClientId);
+
+    setFormData((prev) => ({
+      ...prev,
+      client_id: selectedClientId,
+      client_name: selectedClient?.name || ''
+    }));
+  };
+
   const selectInvoice = (invoice: Invoice) => {
+    const invoiceClientId =
+      typeof invoice.client_id === 'number' ? invoice.client_id.toString() : '';
+    const clientFromName = clients.find(
+      (client) => invoice.client_name && client.name.toLowerCase() === invoice.client_name.toLowerCase()
+    );
+    const resolvedClientId = invoiceClientId || (clientFromName ? clientFromName.id.toString() : formData.client_id);
+    const resolvedClientName = invoice.client_name || clientFromName?.name || formData.client_name;
+
     setFormData({
       ...formData,
       invoice_id: invoice.id.toString(),
-      client_name: invoice.client_name || formData.client_name,
+      client_name: resolvedClientName,
+      client_id: resolvedClientId,
       amount: invoice.total_amount.toString(),
       description: `Payment for ${invoice.invoice_number}`
     });
@@ -204,16 +276,30 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
 
               <div>
                 <label className={themeClasses.label}>
-                  Client Name *
+                  Client *
                 </label>
-                <input
-                  type="text"
+                <select
                   required
-                  className={themeClasses.input}
-                  value={formData.client_name}
-                  onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
-                  placeholder="e.g., John Smith, Acme Corp"
-                />
+                  className={themeClasses.select}
+                  value={formData.client_id}
+                  onChange={handleClientChange}
+                  disabled={loadingClients || clients.length === 0}
+                >
+                  <option value="">
+                    {loadingClients ? 'Loading clients...' : clients.length === 0 ? 'No clients available' : 'Select a client'}
+                  </option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                      {client.company ? ` (${client.company})` : ''}
+                    </option>
+                  ))}
+                </select>
+                {clients.length === 0 && !loadingClients && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Add a client in the Clients module before creating payments.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -395,6 +481,7 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
                 </button>
                 <button
                   type="submit"
+                  disabled={clients.length === 0}
                   className={getButtonClasses('primary')}
                 >
                   {payment ? 'Update Payment' : 'Save Payment'}

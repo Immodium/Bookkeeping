@@ -120,8 +120,8 @@ export const validationRules = {
   
   // Role validation
   role: body('role')
-    .isIn(['user', 'admin'])
-    .withMessage('Role must be either user or admin'),
+    .isIn(['admin', 'client_manager', 'project_manager', 'user_manager', 'user', 'viewer'])
+    .withMessage('Role must be one of admin, client_manager, project_manager, user_manager, user, viewer'),
   
   // Category validation (for expenses)
   category: body('category')
@@ -150,11 +150,43 @@ export const validationSets = {
     validationRules.role
   ] as ValidationChain[],
   
+  inviteUser: [
+    body('inviteData.name')
+      .trim()
+      .isLength({ min: 1, max: validationConfig.maxFieldLengths.name })
+      .withMessage(`Name must be between 1 and ${validationConfig.maxFieldLengths.name} characters`)
+      .escape(),
+    body('inviteData.email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Must be a valid email address')
+      .isLength({ max: validationConfig.maxFieldLengths.email })
+      .withMessage(`Email must be less than ${validationConfig.maxFieldLengths.email} characters`),
+    body('inviteData.roles')
+      .isArray({ min: 1 })
+      .withMessage('At least one role is required'),
+    body('inviteData.roles.*')
+      .isIn(['admin', 'client_manager', 'project_manager', 'user_manager', 'user', 'viewer'])
+      .withMessage('Invalid role provided')
+  ] as ValidationChain[],
+  
+  adminResetPassword: [
+    validationRules.id,
+    body('newPassword')
+      .isLength({
+        min: validationConfig.password.minLength,
+        max: validationConfig.password.maxLength
+      })
+      .withMessage(`Password must be between ${validationConfig.password.minLength} and ${validationConfig.password.maxLength} characters`)
+  ] as ValidationChain[],
+  
   updateUser: [
     validationRules.id,
     body('name').optional().trim().isLength({ min: 1, max: 100 }).escape(),
     body('email').optional().isEmail().normalizeEmail(),
-    body('role').optional().isIn(['user', 'admin'])
+    body('role').optional().isIn(['admin', 'client_manager', 'project_manager', 'user_manager', 'user', 'viewer']),
+    body('userData.roles').optional().isArray({ min: 1 }),
+    body('userData.roles.*').optional().isIn(['admin', 'client_manager', 'project_manager', 'user_manager', 'user', 'viewer'])
   ] as ValidationChain[],
   
   // Client validation sets

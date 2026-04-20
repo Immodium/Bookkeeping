@@ -6,6 +6,7 @@ import { Request, Response, NextFunction } from 'express';
 import { authConfig } from '../config/index.js';
 import { authService } from '../services/AuthService.js';
 import { User, UserPublic, UserRole } from '../types/index.js';
+import { hasRole as roleListHasRole, hasAnyRole } from '../auth/roles.js';
 
 // Extend the Request interface to include user property
 declare global {
@@ -20,6 +21,7 @@ interface JWTPayload {
   userId: number;
   email: string;
   role: UserRole;
+  roles?: UserRole[];
   type: string;
   iat: number;
 }
@@ -28,6 +30,7 @@ interface TokenGenerationUser {
   id: number;
   email: string;
   role: UserRole;
+  roles?: UserRole[];
 }
 
 interface AccountLockoutSettings {
@@ -127,7 +130,7 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction): v
     return;
   }
   
-  if (req.user.role !== 'admin') {
+  if (!roleListHasRole(req.user.roles, 'admin')) {
     res.status(403).json({
       success: false,
       error: 'Admin access required'
@@ -154,7 +157,7 @@ export const requireRole = (roles: UserRole | UserRole[]) => {
       return;
     }
     
-    if (!allowedRoles.includes(req.user.role)) {
+    if (!hasAnyRole(req.user.roles, allowedRoles)) {
       res.status(403).json({
         success: false,
         error: `Access denied. Required role: ${allowedRoles.join(' or ')}`
@@ -229,6 +232,7 @@ export const generateToken = (user: TokenGenerationUser): string => {
     userId: user.id,
     email: user.email,
     role: user.role,
+    ...(user.roles ? { roles: user.roles } : {}),
     type: 'access',
     iat: Math.floor(Date.now() / 1000)
   };
@@ -254,6 +258,39 @@ export const verifyToken = (token: string): JWTPayload => {
  */
 export const isAccountLocked = (user: User | UserPublic): boolean => {
   return user.account_locked_until ? new Date(user.account_locked_until) > new Date() : false;
+};
+
+export const userHasRole = (user: UserPublic | undefined, role: UserRole): boolean => {
+  return roleListHasRole(user?.roles, role);
+};
+
+export const requireAnyRole = (roles: UserRole[]) => requireRole(roles);
+export const requireRoles = (roles: UserRole[]) => requireRole(roles);
+
+export type PermissionKey =
+  | 'users.read'
+  | 'users.write'
+  | 'users.reset_password'
+  | 'clients.manage'
+  | 'reports.view'
+  | 'projects.manage'
+  | 'settings.manage'
+  | 'all';
+
+const PERMISSION_ROLE_MAP: Record<PermissionKey, UserRole[]> = {
+  'users.read': ['admin', 'user_manager'],
+  'users.write': ['admin', 'user_manager'],
+  'users.reset_password': ['admin', 'user_manager'],
+  'clients.manage': ['admin', 'client_manager', 'project_manager'],
+  'reports.view': ['admin', 'client_manager', 'project_manager'],
+  'projects.manage': ['admin', 'project_manager'],
+  'settings.manage': ['admin'],
+  all: ['admin']
+};
+
+export const requirePermission = (permission: PermissionKey) => {
+  const roles = PERMISSION_ROLE_MAP[permission] || PERMISSION_ROLE_MAP.all;
+  return requireRole(roles);
 };
 
 /**

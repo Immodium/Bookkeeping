@@ -9,7 +9,8 @@ export interface User extends BaseEntity {
   email: string;
   username: string;
   password_hash?: string;
-  role: 'admin' | 'user' | 'viewer';
+  role: 'admin' | 'client_manager' | 'project_manager' | 'user_manager' | 'user' | 'viewer';
+  roles?: Array<'admin' | 'client_manager' | 'project_manager' | 'user_manager' | 'user' | 'viewer'>;
   email_verified: number; // SQLite uses INTEGER for boolean (0 or 1)
   google_id?: string;
   two_factor_enabled?: number;

@@ -9,12 +9,14 @@ import { GeneralSettingsTab } from './settings/GeneralSettingsTab';
 import { StripeSettingsTab } from './settings/StripeSettingsTab';
 import { NotificationSettingsTab } from './settings/NotificationSettingsTab';
 import { AppearanceSettingsTab } from './settings/AppearanceSettingsTab';
+import { UserManagementTab } from './settings/UserManagementTab';
 import { ProjectSettingsTab, ProjectSettingsRef } from './settings/ProjectSettingsTab';
 import { DatabaseBackupSection } from './settings/DatabaseBackupSection';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { toast } from 'sonner';
 import { useProjectSettings } from '@/hooks/useProjectSettings';
 import type { SettingsTabRef } from '@/types';
+import { usePermissions } from '@/contexts/AuthContext';
 
 export const Settings = () => {
   const [activeTab, setActiveTab] = useState('company');
@@ -30,12 +32,24 @@ export const Settings = () => {
   const notificationSettingsRef = useRef<SettingsTabRef>(null);
   const appearanceSettingsRef = useRef<SettingsTabRef>(null);
   const projectSettingsRef = useRef<ProjectSettingsRef>(null);
+  const userManagementRef = useRef<SettingsTabRef>(null);
 
   const { settings: projectSettings } = useProjectSettings();
+  const { canManageUsers, canManageSettings } = usePermissions();
 
   useEffect(() => {
     const hash = location.hash.replace('#', '');
-    const availableTabs = ['company', 'general', 'tax', 'shipping', 'notifications', 'appearance', 'project', 'backup'];
+    const availableTabs = [
+      'company',
+      'general',
+      'tax',
+      'shipping',
+      'notifications',
+      'appearance',
+      'project',
+      ...(canManageUsers ? ['users'] : []),
+      'backup'
+    ];
     
     // Add stripe tab only if the integration is enabled
     if (projectSettings?.stripe?.enabled) {
@@ -50,7 +64,7 @@ export const Settings = () => {
     } else {
       setActiveTab('company');
     }
-  }, [location.hash, projectSettings?.stripe?.enabled]);
+  }, [location.hash, projectSettings?.stripe?.enabled, canManageUsers]);
 
   const handleSaveSettings = async () => {
     setIsLoading(true);
@@ -82,6 +96,9 @@ export const Settings = () => {
           break;
         case 'project':
           settingsRef = projectSettingsRef.current;
+          break;
+        case 'users':
+          settingsRef = userManagementRef.current;
           break;
         default:
           // For backup and other tabs that don't have save functionality
@@ -135,6 +152,7 @@ export const Settings = () => {
               { key: 'notifications', label: 'Notifications' },
               { key: 'appearance', label: 'Appearance' },
               { key: 'project', label: 'Integration Settings' },
+              ...(canManageUsers ? [{ key: 'users', label: 'User Management' }] : []),
               { key: 'backup', label: 'Backup' }
             ].map(tab => (
               <button
@@ -167,6 +185,7 @@ export const Settings = () => {
           {activeTab === 'notifications' && <NotificationSettingsTab ref={notificationSettingsRef} />}
           {activeTab === 'appearance' && <AppearanceSettingsTab ref={appearanceSettingsRef} />}
           {activeTab === 'project' && <ProjectSettingsTab ref={projectSettingsRef} />}
+          {activeTab === 'users' && canManageUsers && <UserManagementTab ref={userManagementRef} />}
           {activeTab === 'backup' && <DatabaseBackupSection />}
         </div>
       </div>

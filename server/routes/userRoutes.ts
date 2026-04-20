@@ -8,22 +8,28 @@ import {
   getUserByEmail,
   getUserByGoogleId,
   createUser,
+  inviteUser,
   updateUser,
   deleteUser,
   updateUserLoginAttempts,
   updateUserLastLogin,
   updateLoginAttemptsByUserId,
   updateLastLoginByUserId,
-  verifyUserEmail
+  verifyUserEmail,
+  resetUserPasswordByAdmin
 } from '../controllers/index.js';
 import {
   requireAuth,
-  requireAdmin,
+  requirePermission,
   validateRequest,
   validationSets
 } from '../middleware/index.js';
 
 const router: Router = Router();
+
+const requireUsersRead = requirePermission('users.read');
+const requireUsersWrite = requirePermission('users.write');
+const requireUsersResetPassword = requirePermission('users.reset_password');
 
 // Check if admin user exists (public endpoint for initialization)
 router.get('/admin-exists', async (req: Request, res: Response) => {
@@ -49,14 +55,14 @@ router.get('/admin-exists', async (req: Request, res: Response) => {
 // Get all users (admin only)
 router.get('/',
   requireAuth,
-  requireAdmin,
+  requireUsersRead,
   getAllUsers
 );
 
 // Get user by ID (admin only)
 router.get('/:id', 
   requireAuth, 
-  requireAdmin, 
+  requireUsersRead, 
   validationSets.updateUser.slice(0, 1), // Just ID validation
   validateRequest,
   getUserById
@@ -96,7 +102,7 @@ router.get('/email/:email', async (req: Request, res: Response, next: NextFuncti
     // For all other emails, require authentication and admin privileges
     requireAuth(req, res, (err: any) => {
       if (err) return next(err);
-      requireAdmin(req, res, (err: any) => {
+      requireUsersRead(req, res, (err: any) => {
         if (err) return next(err);
         getUserByEmail(req, res, next);
       });
@@ -107,14 +113,14 @@ router.get('/email/:email', async (req: Request, res: Response, next: NextFuncti
 // Get user by Google ID (admin only)
 router.get('/google/:googleId', 
   requireAuth, 
-  requireAdmin, 
+  requireUsersRead, 
   getUserByGoogleId
 );
 
 // Create new user (admin only)
 router.post('/', 
   requireAuth, 
-  requireAdmin, 
+  requireUsersWrite, 
   validationSets.createUser,
   validateRequest,
   createUser
@@ -123,16 +129,25 @@ router.post('/',
 // Alternative create user endpoint (legacy support)
 router.post('/create', 
   requireAuth, 
-  requireAdmin, 
+  requireUsersWrite, 
   validationSets.createUser,
   validateRequest,
   createUser
 );
 
+// Invite user (create account + optional invitation email)
+router.post('/invite',
+  requireAuth,
+  requireUsersWrite,
+  validationSets.inviteUser,
+  validateRequest,
+  inviteUser
+);
+
 // Update user (admin only)
 router.put('/:id', 
   requireAuth, 
-  requireAdmin, 
+  requireUsersWrite, 
   validationSets.updateUser,
   validateRequest,
   updateUser
@@ -141,7 +156,7 @@ router.put('/:id',
 // Delete user (admin only)
 router.delete('/:id', 
   requireAuth, 
-  requireAdmin, 
+  requireUsersWrite, 
   validationSets.updateUser.slice(0, 1), // Just ID validation
   validateRequest,
   deleteUser
@@ -170,8 +185,17 @@ router.put('/:id/last-login',
 // Verify user email (admin only)
 router.put('/:id/verify-email', 
   requireAuth, 
-  requireAdmin, 
+  requireUsersWrite, 
   verifyUserEmail
+);
+
+// Admin password reset for a user account
+router.post('/:id/reset-password',
+  requireAuth,
+  requireUsersResetPassword,
+  validationSets.adminResetPassword,
+  validateRequest,
+  resetUserPasswordByAdmin
 );
 
 export default router;

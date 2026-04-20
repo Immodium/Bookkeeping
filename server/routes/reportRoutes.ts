@@ -2,13 +2,14 @@
 // Handles report generation and management endpoints
 
 import { Router, Request, Response } from 'express';
-import { requireAuth } from '../middleware/index.js';
+import { requireAuth, requireRole } from '../middleware/index.js';
 import { reportService, ReportData } from '../services/ReportService.js';
 
 const router: Router = Router();
 
 // All report routes require authentication
 router.use(requireAuth);
+router.use(requireRole(['admin', 'client_manager', 'project_manager']));
 
 // Get all reports
 router.get('/', async (req: Request, res: Response): Promise<void> => {

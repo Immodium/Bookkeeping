@@ -16,6 +16,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
+import { usePermissions } from '@/contexts/AuthContext';
+import { getRoleDisplayName } from '@/auth/roles';
 
 const navigation = [
   { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
@@ -43,6 +45,7 @@ const navigation = [
       { id: 'notifications', name: 'Notifications', path: '/settings#notifications' },
       { id: 'appearance', name: 'Appearance', path: '/settings#appearance' },
       { id: 'project', name: 'Integration Settings', path: '/settings#project' },
+      { id: 'user-management', name: 'User Management', path: '/settings#user-management' },
       { id: 'backup', name: 'Backup & Restore', path: '/settings#backup' }
     ]
   },
@@ -54,9 +57,37 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
   const { logout, user } = useAuth();
+  const { canManageClients, canViewReports, canManageSettings, canManageProjects, roles } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
   const { settings: companySettings, isLoading: companySettingsLoading } = useCompanySettings();
+  const filteredNavigation = navigation
+    .filter((item) => {
+      if (item.id === 'clients') return canManageClients;
+      if (item.id === 'reports') return canViewReports;
+      if (item.id === 'settings') return canManageSettings || canManageProjects;
+      return true;
+    })
+    .map((item) => {
+      if (item.id !== 'settings' || !item.subItems) {
+        return item;
+      }
+
+      const subItems = item.subItems.filter((subItem) => {
+        if (subItem.id === 'project') {
+          return canManageProjects;
+        }
+        if (subItem.id === 'user-management') {
+          return canManageSettings;
+        }
+        return canManageSettings;
+      });
+
+      return {
+        ...item,
+        subItems
+      };
+    });
   
   const isOnFormPage = location.pathname.includes('/new') || location.pathname.includes('/edit') || 
                        location.pathname.includes('/create');
@@ -143,7 +174,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-4 py-6">
-          {navigation.map((item) => {
+          {filteredNavigation.map((item) => {
             const Icon = item.icon;
             const parentActive = isParentActive(item.path);
             return (
@@ -199,8 +230,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
         <div className="border-t border-border p-4">
           <div className="flex items-center mb-3">
             <div className="flex-1">
-              <p className="text-sm font-medium text-card-foreground">Welcome, {user?.username}</p>
-              <p className="text-xs text-muted-foreground">Administrator</p>
+              <p className="text-sm font-medium text-card-foreground">Welcome, {user?.username || user?.name || 'User'}</p>
+              <p className="text-xs text-muted-foreground">
+                {roles.length > 0
+                  ? roles.map((role) => getRoleDisplayName(role)).join(', ')
+                  : 'No role assigned'}
+              </p>
             </div>
           </div>
           <button 

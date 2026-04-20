@@ -3,6 +3,7 @@
 
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/index.js';
+import { userHasRole } from '../auth/roles.js';
 import { counterService } from '../services/CounterService.js';
 
 interface AuthenticatedRequest extends Request {
@@ -76,8 +77,8 @@ router.put('/:counterName/reset', async (req: AuthenticatedRequest, res: Respons
     const { counterName } = req.params;
     const { value = 0 } = req.body;
     
-    // Check if user is admin
-    if (req.user?.role !== 'admin') {
+    // Check if user has admin role
+    if (!userHasRole(req.user?.roles, 'admin')) {
       res.status(403).json({
         success: false,
         error: 'Admin access required'

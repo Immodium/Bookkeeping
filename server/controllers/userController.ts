@@ -2,13 +2,63 @@
 // Handles all user-related business logic
 
 import { Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { userService } from '../services/UserService.js';
+import { authConfig } from '../config/index.js';
+import { emailProviderService } from '../services/EmailProviderService.js';
 import { 
   NotFoundError, 
   ValidationError,
   asyncHandler
 } from '../middleware/index.js';
 import { CreateUserRequest, UpdateUserRequest, UpdateUserResponse } from '../types/api.types.js';
+import { UserRole } from '../types/index.js';
+
+const parseRolesInput = (roles: unknown): UserRole[] | undefined => {
+  if (roles === undefined || roles === null) {
+    return undefined;
+  }
+
+  if (!Array.isArray(roles)) {
+    throw new ValidationError('roles must be an array');
+  }
+
+  const allowedRoles: UserRole[] = ['admin', 'client_manager', 'project_manager', 'user_manager', 'user', 'viewer'];
+  const normalized = Array.from(
+    new Set(
+      roles
+        .map((role) => String(role).trim())
+        .filter((role) => role.length > 0) as UserRole[]
+    )
+  );
+
+  if (normalized.length === 0) {
+    throw new ValidationError('At least one role is required');
+  }
+
+  for (const role of normalized) {
+    if (!allowedRoles.includes(role)) {
+      throw new ValidationError(`Invalid role: ${role}`);
+    }
+  }
+
+  return normalized;
+};
+
+const extractUserDataPayload = (payload: unknown): Record<string, unknown> => {
+  if (!payload || typeof payload !== 'object') {
+    return {};
+  }
+
+  const record = payload as Record<string, unknown>;
+  const nested = record.userData;
+  if (nested && typeof nested === 'object') {
+    return nested as Record<string, unknown>;
+  }
+
+  return record;
+};
 
 /**
  * Get all users
@@ -86,10 +136,103 @@ export const getUserByGoogleId = asyncHandler(async (req: Request, res: Response
  * Create new user
  */
 export const createUser = asyncHandler(async (req: Request<object, object, CreateUserRequest>, res: Response): Promise<void> => {
-  const { userData } = req.body;
+  const bodyUserData = extractUserDataPayload(req.body);
 
   try {
-    const userId = await userService.createUser(userData);
+    const roles = parseRolesInput(bodyUserData.roles);
+    const rawPassword = bodyUserData.password;
+    let passwordHash = typeof bodyUserData.password_hash === 'string' ? bodyUserData.password_hash : undefined;
+    const name = typeof bodyUserData.name === 'string' ? bodyUserData.name : '';
+    const email = typeof bodyUserData.email === 'string' ? bodyUserData.email : '';
+    const username = typeof bodyUserData.username === 'string' ? bodyUserData.username : undefined;
+    const role = typeof bodyUserData.role === 'string' ? (bodyUserData.role as UserRole) : undefined;
+    const email_verified = Boolean(bodyUserData.email_verified);
+    const google_id = typeof bodyUserData.google_id === 'string' ? bodyUserData.google_id : undefined;
+    const last_login = typeof bodyUserData.last_login === 'string' ? bodyUserData.last_login : undefined;
+    const failed_login_attempts = typeof bodyUserData.failed_login_attempts === 'number' ? bodyUserData.failed_login_attempts : undefined;
+    const account_locked_until = typeof bodyUserData.account_locked_until === 'string' ? bodyUserData.account_locked_until : undefined;
+
+    if (!passwordHash && typeof rawPassword === 'string' && rawPassword.trim()) {
+      passwordHash = await bcrypt.hash(rawPassword.trim(), authConfig.bcryptRounds);
+    }
+
+    const createPayload: {
+      name: string;
+      email: string;
+      username?: string;
+      password_hash?: string;
+      role?: UserRole;
+      roles?: UserRole[];
+      email_verified?: boolean;
+      google_id?: string;
+      last_login?: string;
+      failed_login_attempts?: number;
+      account_locked_until?: string;
+    } = {
+      name,
+      email
+    };
+    if (username) createPayload.username = username;
+    if (passwordHash) createPayload.password_hash = passwordHash;
+    if (role) createPayload.role = role;
+    if (roles) createPayload.roles = roles;
+    if (email_verified !== undefined) createPayload.email_verified = email_verified;
+    if (google_id) createPayload.google_id = google_id;
+    if (last_login) createPayload.last_login = last_login;
+    if (failed_login_attempts !== undefined) createPayload.failed_login_attempts = failed_login_attempts;
+    if (account_locked_until) createPayload.account_locked_until = account_locked_until;
+
+    const sanitizedCreatePayload: {
+      name: string;
+      email: string;
+      username?: string;
+      password_hash?: string;
+      role?: UserRole;
+      roles?: UserRole[];
+      email_verified?: boolean;
+      google_id?: string;
+      last_login?: string;
+      failed_login_attempts?: number;
+      account_locked_until?: string;
+    } = {
+      name: createPayload.name,
+      email: createPayload.email
+    };
+    if (createPayload.username) sanitizedCreatePayload.username = createPayload.username;
+    if (createPayload.password_hash) sanitizedCreatePayload.password_hash = createPayload.password_hash;
+    if (createPayload.role) sanitizedCreatePayload.role = createPayload.role;
+    if (createPayload.roles) sanitizedCreatePayload.roles = createPayload.roles;
+    if (createPayload.email_verified !== undefined) sanitizedCreatePayload.email_verified = createPayload.email_verified;
+    if (createPayload.google_id) sanitizedCreatePayload.google_id = createPayload.google_id;
+    if (createPayload.last_login) sanitizedCreatePayload.last_login = createPayload.last_login;
+    if (createPayload.failed_login_attempts !== undefined) {
+      sanitizedCreatePayload.failed_login_attempts = createPayload.failed_login_attempts;
+    }
+    if (createPayload.account_locked_until) {
+      sanitizedCreatePayload.account_locked_until = createPayload.account_locked_until;
+    }
+
+    const userId = await userService.createUser(sanitizedCreatePayload);
+    const createdUser = await userService.getUserById(userId);
+
+    const effectivePassword = typeof rawPassword === 'string' ? rawPassword.trim() : null;
+    if (createdUser && effectivePassword) {
+      await emailProviderService.sendEmail({
+        to: createdUser.email,
+        subject: 'You have been invited to Slimbooks',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
+            <h2>Welcome to Slimbooks</h2>
+            <p>Hello ${createdUser.name},</p>
+            <p>An administrator invited you to the app.</p>
+            <p><strong>Email:</strong> ${createdUser.email}</p>
+            <p><strong>Temporary password:</strong> ${effectivePassword}</p>
+            <p>Please sign in and change your password immediately.</p>
+          </div>
+        `,
+        text: `Hello ${createdUser.name},\n\nYou have been invited to Slimbooks.\nEmail: ${createdUser.email}\nTemporary password: ${effectivePassword}\n\nPlease sign in and change your password immediately.`
+      });
+    }
 
     res.status(201).json({ 
       success: true, 
@@ -112,7 +255,7 @@ export const createUser = asyncHandler(async (req: Request<object, object, Creat
  */
 export const updateUser = asyncHandler(async (req: Request<{id: string}, UpdateUserResponse, UpdateUserRequest>, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { userData } = req.body;
+  const userData = extractUserDataPayload(req.body);
   const userId = parseInt(id, 10);
 
   if (isNaN(userId)) {
@@ -125,7 +268,8 @@ export const updateUser = asyncHandler(async (req: Request<{id: string}, UpdateU
       name: string;
       email: string;
       username: string;
-      role: 'user' | 'admin';
+      role: UserRole;
+      roles: UserRole[];
       email_verified: boolean;
       google_id: string;
       password_hash: string;
@@ -143,6 +287,20 @@ export const updateUser = asyncHandler(async (req: Request<{id: string}, UpdateU
       convertedUserData.email_verified = userData.email_verified === 1;
     }
     
+    const requestedRoles = parseRolesInput((userData as Record<string, unknown>).roles);
+    const newPassword = (userData as Record<string, unknown>).password;
+
+    if (!convertedUserData.password_hash && typeof newPassword === 'string' && newPassword.trim()) {
+      convertedUserData.password_hash = await bcrypt.hash(newPassword.trim(), authConfig.bcryptRounds);
+    }
+
+    if (requestedRoles) {
+      convertedUserData.roles = requestedRoles;
+      if (requestedRoles[0]) {
+        convertedUserData.role = requestedRoles[0];
+      }
+    }
+
     const changes = await userService.updateUser(userId, convertedUserData);
 
     res.json({ 
@@ -308,3 +466,129 @@ export const verifyUserEmail = asyncHandler(async (req: Request, res: Response):
   const success = await userService.verifyUserEmail(userId);
   res.json({ success: true, message: 'Email verified successfully' });
 });
+
+/**
+ * Admin: Invite user and send temporary password
+ */
+export const inviteUser = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const inviteData = extractUserDataPayload(req.body);
+  const name = typeof inviteData.name === 'string' ? inviteData.name.trim() : '';
+  const email = typeof inviteData.email === 'string' ? inviteData.email.trim() : '';
+  const username = typeof inviteData.username === 'string' ? inviteData.username.trim() : undefined;
+  const roles = inviteData.roles;
+  const sendInviteEmail =
+    typeof inviteData.sendInviteEmail === 'boolean' ? inviteData.sendInviteEmail : true;
+
+  if (!name || !email) {
+    throw new ValidationError('Name and email are required');
+  }
+
+  const nameValue = typeof name === 'string' ? name : '';
+  const emailValue = typeof email === 'string' ? email : '';
+  const usernameValue = typeof username === 'string' && username.trim().length > 0 ? username : undefined;
+  const parsedRoles = parseRolesInput(roles) || ['viewer'];
+  const tempPassword = `${crypto.randomBytes(6).toString('base64url')}A1!`;
+  const password_hash = await bcrypt.hash(tempPassword, authConfig.bcryptRounds);
+
+  const createPayload: {
+    name: string;
+    email: string;
+    username?: string;
+    password_hash: string;
+    role: UserRole;
+    roles: UserRole[];
+    email_verified: boolean;
+  } = {
+    name: nameValue,
+    email: emailValue,
+    password_hash,
+    role: parsedRoles[0] || 'viewer',
+    roles: parsedRoles,
+    email_verified: false
+  };
+  if (usernameValue) {
+    createPayload.username = usernameValue;
+  }
+
+  const userId = await userService.createUser(createPayload);
+  const createdUser = await userService.getUserById(userId);
+
+  if (createdUser && sendInviteEmail) {
+    await emailProviderService.sendEmail({
+      to: createdUser.email,
+      subject: 'You are invited to Slimbooks',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
+          <h2>You're invited</h2>
+          <p>Hello ${createdUser.name},</p>
+          <p>You were invited to Slimbooks.</p>
+          <p><strong>Email:</strong> ${createdUser.email}</p>
+          <p><strong>Temporary password:</strong> ${tempPassword}</p>
+          <p>Please log in and change your password.</p>
+        </div>
+      `,
+      text: `Hello ${createdUser.name},\n\nYou were invited to Slimbooks.\nEmail: ${createdUser.email}\nTemporary password: ${tempPassword}\n\nPlease log in and change your password.`
+    });
+  }
+
+  res.status(201).json({
+    success: true,
+    data: {
+      id: userId,
+      tempPassword
+    },
+    message: 'User invited successfully'
+  });
+});
+
+/**
+ * Admin: Reset user password directly
+ */
+export const resetUserPasswordByAdmin = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  if (!id) {
+    throw new ValidationError('User ID is required');
+  }
+  const userId = parseInt(id, 10);
+  const { newPassword, sendEmail = false } = req.body || {};
+
+  if (isNaN(userId)) {
+    throw new ValidationError('Invalid user ID');
+  }
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.trim().length < 8) {
+    throw new ValidationError('newPassword must be at least 8 characters');
+  }
+
+  const user = await userService.getUserById(userId);
+  if (!user) {
+    throw new NotFoundError('User');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword.trim(), authConfig.bcryptRounds);
+  await userService.updateUser(userId, { password_hash: passwordHash });
+  await userService.updateUserLoginAttempts(userId, 0, null);
+
+  if (sendEmail) {
+    await emailProviderService.sendEmail({
+      to: user.email,
+      subject: 'Your Slimbooks password was reset',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
+          <h2>Password reset</h2>
+          <p>Hello ${user.name},</p>
+          <p>An administrator reset your password.</p>
+          <p><strong>New password:</strong> ${newPassword}</p>
+          <p>Please log in and update it immediately.</p>
+        </div>
+      `,
+      text: `Hello ${user.name},\n\nAn administrator reset your Slimbooks password.\nNew password: ${newPassword}\n\nPlease log in and update it immediately.`
+    });
+  }
+
+  res.json({
+    success: true,
+    message: 'Password reset successfully'
+  });
+});
+
+export const adminResetUserPassword = resetUserPasswordByAdmin;

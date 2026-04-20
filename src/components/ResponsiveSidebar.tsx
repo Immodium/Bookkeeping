@@ -15,30 +15,17 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { cn } from '@/utils/themeUtils.util';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, usePermissions } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
 
-const navigation = [
-  { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-  { id: 'clients', name: 'Clients', icon: Users, path: '/clients' },
-  {
-    id: 'invoices',
-    name: 'Invoices',
-    icon: FileText,
-    path: '/invoices#invoices'
-  },
-  { id: 'expenses', name: 'Expenses', icon: Receipt, path: '/expenses' },
-  { id: 'payments', name: 'Payments', icon: Banknote, path: '/payments' },
-  { id: 'reports', name: 'Reports', icon: BarChart, path: '/reports' },
-  { 
-    id: 'settings', 
-    name: 'Settings', 
-    icon: SettingsIcon, 
-    path: '/settings'
-  },
-];
+interface NavItem {
+  id: string;
+  name: string;
+  icon: React.ComponentType<{ className?: string }>;
+  path: string;
+}
 
 interface ResponsiveSidebarProps {
   onNavigationAttempt?: (path: string) => void;
@@ -46,9 +33,19 @@ interface ResponsiveSidebarProps {
 
 export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigationAttempt }) => {
   const { logout, user } = useAuth();
+  const { canManageClients, canViewReports, canManageUsers, canManageSettings } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
   const { settings: companySettings, isLoading: companySettingsLoading } = useCompanySettings();
+  const navigation: NavItem[] = [
+    { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+    ...(canManageClients ? [{ id: 'clients', name: 'Clients', icon: Users, path: '/clients' }] : []),
+    { id: 'invoices', name: 'Invoices', icon: FileText, path: '/invoices#invoices' },
+    { id: 'expenses', name: 'Expenses', icon: Receipt, path: '/expenses' },
+    { id: 'payments', name: 'Payments', icon: Banknote, path: '/payments' },
+    ...(canViewReports ? [{ id: 'reports', name: 'Reports', icon: BarChart, path: '/reports' }] : []),
+    ...(canManageSettings || canManageUsers ? [{ id: 'settings', name: 'Settings', icon: SettingsIcon, path: '/settings' }] : [])
+  ];
   
   // Responsive state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -221,9 +218,9 @@ export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigati
             <div className="flex items-center mb-3">
               <div className="flex-1">
                 <p className="text-sm font-medium text-card-foreground truncate">
-                  Welcome, Admin
+                  Welcome, {user?.username || user?.name || 'User'}
                 </p>
-                <p className="text-xs text-muted-foreground">Administrator</p>
+                <p className="text-xs text-muted-foreground">{user?.role || 'user'}</p>
               </div>
             </div>
             <button 

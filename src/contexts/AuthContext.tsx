@@ -7,6 +7,7 @@ import { User, AuthResponse } from '@/types';
 import { AuthService } from '@/services/auth.svc';
 import { TokenManagerService } from '@/services/tokenManager.svc';
 import { toast } from 'sonner';
+import { hasAnyRole, hasRole, getUserRoles, AppPermission, hasPermission as hasRolePermission } from '@/auth/roles';
 
 interface AuthContextType {
   user: User | null;
@@ -16,6 +17,9 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  hasRole: (role: string) => boolean;
+  hasAnyRole: (roles: string[]) => boolean;
+  hasPermission: (permission: AppPermission) => boolean;
   refreshUser: () => Promise<void>;
 }
 
@@ -257,7 +261,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     isAuthenticated: !!user,
-    isAdmin: user?.role === 'admin',
+    isAdmin: hasRole(user, 'admin'),
+    hasRole: (role: string) => hasRole(user, role),
+    hasAnyRole: (roles: string[]) => hasAnyRole(user, roles),
+    hasPermission: (permission: AppPermission) => hasRolePermission(user, permission),
     refreshUser
   };
 
@@ -280,12 +287,14 @@ export const useAuth = (): AuthContextType => {
 interface ProtectedRouteProps {
   children: ReactNode;
   requireAdmin?: boolean;
+  requiredRoles?: string[];
   fallback?: ReactNode;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requireAdmin = false,
+  requiredRoles,
   fallback
 }) => {
   const { user, loading } = useAuth();
@@ -304,7 +313,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (requireAdmin && user.role !== 'admin') {
+  if (requireAdmin && !hasRole(user, 'admin')) {
+    return fallback || (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-foreground mb-2">Access Denied</h2>
+          <p className="text-muted-foreground">You don't have permission to access this page.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (requiredRoles && requiredRoles.length > 0 && !hasAnyRole(user, requiredRoles)) {
     return fallback || (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
@@ -321,14 +341,23 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 // Hook for checking permissions
 export const usePermissions = () => {
   const { user } = useAuth();
+  const userRoles = getUserRoles(user);
+  const canAccessEverything = userRoles.includes('admin');
+  const canManageClients = canAccessEverything || userRoles.includes('client_manager') || userRoles.includes('project_manager');
+  const canViewReports = canAccessEverything || userRoles.includes('client_manager') || userRoles.includes('project_manager');
+  const canManageProjects = canAccessEverything || userRoles.includes('project_manager');
+  const canManageUsers = canAccessEverything || userRoles.includes('user_manager');
 
   return {
-    canViewAdminPanel: user?.role === 'admin',
-    canManageUsers: user?.role === 'admin',
-    canManageSettings: user?.role === 'admin',
-    canViewReports: !!user,
-    canCreateInvoices: !!user,
-    canManageClients: !!user,
-    canManageExpenses: !!user
+    roles: userRoles,
+    canViewAdminPanel: canAccessEverything,
+    canManageUsers,
+    canManageSettings: canAccessEverything,
+    canResetUserPasswords: canManageUsers,
+    canViewReports,
+    canCreateInvoices: !!user && canAccessEverything,
+    canManageClients: !!user && canManageClients,
+    canManageProjects: !!user && canManageProjects,
+    canManageExpenses: !!user && canAccessEverything
   };
 };

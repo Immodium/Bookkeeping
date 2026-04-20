@@ -115,7 +115,7 @@ const App = () => {
             } />
 
             <Route path="/clients" element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={['admin', 'client_manager', 'project_manager']}>
                 <ResponsiveLayout>
                   <ClientManagement />
                 </ResponsiveLayout>
@@ -123,7 +123,7 @@ const App = () => {
             } />
 
             <Route path="/clients/new" element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={['admin', 'client_manager', 'project_manager']}>
                 <ResponsiveLayout>
                   <EditClientPage />
                 </ResponsiveLayout>
@@ -131,7 +131,7 @@ const App = () => {
             } />
 
             <Route path="/clients/edit/:id" element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={['admin', 'client_manager', 'project_manager']}>
                 <ResponsiveLayout>
                   <EditClientPage />
                 </ResponsiveLayout>
@@ -195,7 +195,7 @@ const App = () => {
             } />
 
             <Route path="/reports" element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={['admin', 'client_manager', 'project_manager']}>
                 <ResponsiveLayout>
                   <ReportsManagement />
                 </ResponsiveLayout>
@@ -203,7 +203,7 @@ const App = () => {
             } />
 
             <Route path="/settings" element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredRoles={['admin', 'user_manager']}>
                 <ResponsiveLayout>
                   <ResponsiveSettings />
                 </ResponsiveLayout>

@@ -8,7 +8,15 @@ export * from './api.types.js';
 export type PaymentStatus = 'received' | 'pending' | 'failed' | 'refunded';
 export type PaymentMethod = 'cash' | 'check' | 'bank_transfer' | 'credit_card' | 'paypal' | 'stripe' | 'other';
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
-export type UserRole = 'admin' | 'user' | 'viewer';
+export type UserRole = 'admin' | 'client_manager' | 'project_manager' | 'user_manager' | 'user' | 'viewer';
+export const USER_ROLE_VALUES: UserRole[] = [
+  'admin',
+  'client_manager',
+  'project_manager',
+  'user_manager',
+  'user',
+  'viewer'
+];
 
 // Base entity interface for database entities
 export interface BaseEntity {
@@ -24,6 +32,7 @@ export interface User extends BaseEntity {
   username: string;
   password_hash?: string;
   role: UserRole;
+  roles?: UserRole[];
   email_verified: number;
   google_id?: string;
   two_factor_enabled?: number;

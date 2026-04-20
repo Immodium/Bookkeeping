@@ -347,7 +347,19 @@ export const validationSets = {
  * File upload validation middleware
  * @param maxSize - Maximum file size in bytes
  */
-export const validateFileUpload = (maxSize = serverConfig.maxFileSize) => {
+const matchesMimeTypePattern = (mimeType: string, pattern: string): boolean => {
+  if (pattern.endsWith('/*')) {
+    const prefix = pattern.slice(0, pattern.length - 1);
+    return mimeType.startsWith(prefix);
+  }
+
+  return mimeType === pattern;
+};
+
+export const validateFileUpload = (
+  maxSize = serverConfig.maxFileSize,
+  allowedMimeTypes: string[] = validationConfig.allowedMimeTypes
+) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (req.file && req.file.size > maxSize) {
       res.status(400).json({
@@ -357,10 +369,13 @@ export const validateFileUpload = (maxSize = serverConfig.maxFileSize) => {
       return;
     }
     
-    if (req.file && !validationConfig.allowedMimeTypes.includes(req.file.mimetype)) {
+    if (
+      req.file &&
+      !allowedMimeTypes.some((pattern) => matchesMimeTypePattern(req.file!.mimetype, pattern))
+    ) {
       res.status(400).json({
         success: false,
-        error: 'Invalid file type. Only database files are allowed.'
+        error: 'Invalid file type.'
       });
       return;
     }

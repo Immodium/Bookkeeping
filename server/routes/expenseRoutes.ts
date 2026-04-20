@@ -64,7 +64,7 @@ router.get('/date-range', getExpensesByDateRange);
 router.post(
   '/receipt-ocr',
   uploadReceipt.single('receipt'),
-  validateFileUpload(),
+  validateFileUpload(10 * 1024 * 1024, ['image/*', 'application/pdf']),
   uploadReceiptAndExtractExpenseData
 );
 

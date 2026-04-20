@@ -4,7 +4,7 @@
 import { Request, Response } from 'express';
 import { expenseService } from '../services/ExpenseService.js';
 import { extractReceiptDataFromFile } from '../services/ReceiptOCRService.js';
-import { promises as fs } from 'fs';
+import { convertReceiptToPdfIfNeeded } from '../services/ReceiptPdfService.js';
 import { 
   AppError, 
   NotFoundError, 
@@ -127,8 +127,21 @@ export const uploadReceiptAndExtractExpenseData = asyncHandler(async (req: Reque
   }
 
   try {
-    const parsed = await extractReceiptDataFromFile(req.file.path);
-    const receiptUrl = `/uploads/receipts/${req.file.filename}`;
+    const isPdfUpload =
+      req.file.mimetype === 'application/pdf' || req.file.originalname?.toLowerCase().endsWith('.pdf');
+    const parsed = isPdfUpload
+      ? {
+          category: 'Other',
+          description: 'Imported from PDF receipt'
+        }
+      : await extractReceiptDataFromFile(req.file.path);
+
+    const normalizedReceipt = await convertReceiptToPdfIfNeeded(
+      req.file.path,
+      req.file.filename,
+      req.file.mimetype
+    );
+    const receiptUrl = `/uploads/receipts/${normalizedReceipt.filename}`;
 
     res.json({
       success: true,

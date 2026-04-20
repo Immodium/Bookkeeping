@@ -1,17 +1,8 @@
 // Payment Service - Domain-specific service for payment operations
 // Handles all payment-related business logic and database operations
 
-import fs from 'node:fs';
 import { databaseService } from '../core/DatabaseService.js';
 import { Payment, ServiceOptions, PaymentStatus, PaymentMethod } from '../types/index.js';
-
-const debugLog = (payload: Record<string, unknown>): void => {
-  try {
-    fs.appendFileSync('/opt/cursor/logs/debug.log', `${JSON.stringify(payload)}\n`);
-  } catch {
-    // ignore debug log write failures
-  }
-};
 
 /**
  * Payment Service
@@ -195,23 +186,6 @@ export class PaymentService {
     description?: string;
     status?: PaymentStatus;
   }): Promise<number> {
-    // #region agent log
-    debugLog({
-      hypothesisId: 'A',
-      location: 'PaymentService.ts:createPayment:entry',
-      message: 'createPayment called',
-      data: {
-        keys: Object.keys(paymentData || {}),
-        date: paymentData?.date,
-        client_name: paymentData?.client_name,
-        invoice_id: paymentData?.invoice_id,
-        amount: paymentData?.amount,
-        method: paymentData?.method
-      },
-      timestamp: Date.now()
-    });
-    // #endregion
-
     if (!paymentData || !paymentData.date || !paymentData.amount || !paymentData.method) {
       throw new Error('Invalid payment data - date, client_name, amount, and method are required');
     }
@@ -279,53 +253,18 @@ export class PaymentService {
       updated_at: now
     };
 
-    const paymentTableColumns = databaseService
-      .getMany<{ name: string }>('PRAGMA table_info(payments)')
-      .map((column) => column.name);
-
-    // #region agent log
-    debugLog({
-      hypothesisId: 'B',
-      location: 'PaymentService.ts:createPayment:beforeInsert',
-      message: 'Payments table columns and insert payload',
-      data: {
-        paymentTableColumns,
-        hasClientNameColumn: paymentTableColumns.includes('client_name'),
-        hasClientIdColumn: paymentTableColumns.includes('client_id'),
-        insertFields: Object.keys(paymentRecord)
-      },
-      timestamp: Date.now()
-    });
-    // #endregion
-
-    try {
-      // Create payment
-      databaseService.executeQuery(`
-        INSERT INTO payments (
-          id, date, client_id, invoice_id, amount, method, transaction_id, 
-          notes, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        paymentRecord.id, paymentRecord.date, paymentRecord.client_id,
-        paymentRecord.invoice_id, paymentRecord.amount, paymentRecord.method,
-        paymentRecord.transaction_id, paymentRecord.notes, paymentRecord.status,
-        paymentRecord.created_at, paymentRecord.updated_at
-      ]);
-    } catch (error) {
-      // #region agent log
-      debugLog({
-        hypothesisId: 'B',
-        location: 'PaymentService.ts:createPayment:insertError',
-        message: 'Payment insert failed',
-        data: {
-          error: (error as Error).message,
-          hasClientNameColumn: paymentTableColumns.includes('client_name')
-        },
-        timestamp: Date.now()
-      });
-      // #endregion
-      throw error;
-    }
+    // Create payment
+    databaseService.executeQuery(`
+      INSERT INTO payments (
+        id, date, client_id, invoice_id, amount, method, transaction_id, 
+        notes, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      paymentRecord.id, paymentRecord.date, paymentRecord.client_id,
+      paymentRecord.invoice_id, paymentRecord.amount, paymentRecord.method,
+      paymentRecord.transaction_id, paymentRecord.notes, paymentRecord.status,
+      paymentRecord.created_at, paymentRecord.updated_at
+    ]);
 
     return nextId;
   }
@@ -403,25 +342,6 @@ export class PaymentService {
     if (Object.keys(updateData).length === 0) {
       throw new Error('No valid fields to update');
     }
-
-    const paymentTableColumns = databaseService
-      .getMany<{ name: string }>('PRAGMA table_info(payments)')
-      .map((column) => column.name);
-
-    // #region agent log
-    debugLog({
-      hypothesisId: 'C',
-      location: 'PaymentService.ts:updatePayment:beforeUpdate',
-      message: 'Update payload and table columns',
-      data: {
-        id,
-        updateFields: Object.keys(updateData),
-        hasClientNameColumn: paymentTableColumns.includes('client_name'),
-        hasClientIdColumn: paymentTableColumns.includes('client_id')
-      },
-      timestamp: Date.now()
-    });
-    // #endregion
 
     const success = databaseService.updateById('payments', id, updateData);
     return success ? 1 : 0;
@@ -630,24 +550,6 @@ export class PaymentService {
     }
 
     const { limit = 100, offset = 0 } = options;
-
-    const paymentTableColumns = databaseService
-      .getMany<{ name: string }>('PRAGMA table_info(payments)')
-      .map((column) => column.name);
-
-    // #region agent log
-    debugLog({
-      hypothesisId: 'D',
-      location: 'PaymentService.ts:getPaymentsByClientName:query',
-      message: 'Querying payments by client_name',
-      data: {
-        clientName,
-        hasClientNameColumn: paymentTableColumns.includes('client_name'),
-        hasClientIdColumn: paymentTableColumns.includes('client_id')
-      },
-      timestamp: Date.now()
-    });
-    // #endregion
 
     return this.enrichPaymentRows(databaseService.getMany<Payment>(`
       ${this.getPaymentSelectClause()}

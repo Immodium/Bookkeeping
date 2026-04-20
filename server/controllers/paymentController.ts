@@ -2,7 +2,6 @@
 // Handles all payment-related business logic
 
 import { Request, Response } from 'express';
-import fs from 'node:fs';
 import { paymentService } from '../services/PaymentService.js';
 import { 
   AppError, 
@@ -12,14 +11,6 @@ import {
 } from '../middleware/index.js';
 import { PaymentMethod, PaymentStatus } from '../types/index.js';
 import { PaymentRequest } from '../types/api.types.js';
-
-const debugLog = (payload: Record<string, unknown>): void => {
-  try {
-    fs.appendFileSync('/opt/cursor/logs/debug.log', `${JSON.stringify(payload)}\n`);
-  } catch {
-    // ignore debug log write failures
-  }
-};
 
 /**
  * Get all payments
@@ -87,24 +78,6 @@ export const createPayment = asyncHandler(async (req: Request<object, object, { 
     throw new ValidationError('Payment data is required');
   }
 
-  // #region agent log
-  debugLog({
-    hypothesisId: 'A',
-    location: 'paymentController.ts:createPayment:entry',
-    message: 'Create payment request payload received',
-    data: {
-      hasPaymentData: !!paymentData,
-      keys: Object.keys(paymentData || {}),
-      date: paymentData?.date,
-      client_name: paymentData?.client_name,
-      invoice_id: paymentData?.invoice_id,
-      amount: paymentData?.amount,
-      method: paymentData?.method
-    },
-    timestamp: Date.now()
-  });
-  // #endregion
-
   try {
     const paymentId = await paymentService.createPayment(paymentData);
     const createdPayment = await paymentService.getPaymentById(paymentId);
@@ -150,20 +123,6 @@ export const updatePayment = asyncHandler(async (req: Request<{ id: string }, Re
   if (!paymentData) {
     throw new ValidationError('Payment data is required');
   }
-
-  // #region agent log
-  debugLog({
-    hypothesisId: 'C',
-    location: 'paymentController.ts:updatePayment:entry',
-    message: 'Update payment request payload received',
-    data: {
-      paymentId,
-      keys: Object.keys(paymentData || {}),
-      client_name: paymentData?.client_name
-    },
-    timestamp: Date.now()
-  });
-  // #endregion
 
   try {
     const changes = await paymentService.updatePayment(paymentId, paymentData);

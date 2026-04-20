@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { EditInvoicePage } from '@/components/invoices/EditInvoicePage';
 
-const mockNavigate = vi.fn();
-const mockAuthenticatedFetch = vi.fn();
-const mockGetSetting = vi.fn();
+const { mockNavigate, mockAuthenticatedFetch, mockGetSetting } = vi.hoisted(() => ({
+  mockNavigate: vi.fn(),
+  mockAuthenticatedFetch: vi.fn(),
+  mockGetSetting: vi.fn()
+}));
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');

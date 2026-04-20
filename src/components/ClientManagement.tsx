@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Users, Building, Mail, Phone, LayoutGrid, Table, Edit, Trash2 } from 'lucide-react';
+import { Plus, Search, Users, Building, Mail, LayoutGrid, Table, Edit, Trash2 } from 'lucide-react';
 import { ClientForm } from './ClientForm';
 import { ClientImportExport } from './clients/ClientImportExport';
 import { PaginationControls } from './ui/PaginationControls';
@@ -142,14 +142,17 @@ export const ClientManagement: React.FC = () => {
               <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">Name</th>
               <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">Company</th>
               <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">Email</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">Phone</th>
               <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">Created</th>
-              <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</th>
+              <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">Manage</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {pagination.paginatedData.map((client) => (
-              <tr key={client.id} className="hover:bg-muted/50">
+              <tr
+                key={client.id}
+                className="hover:bg-muted/50 cursor-pointer"
+                onClick={() => handleEditClient(client)}
+              >
                 <td className="py-4 px-6 text-sm font-medium text-card-foreground">
                   {client.name}
                 </td>
@@ -159,23 +162,26 @@ export const ClientManagement: React.FC = () => {
                 <td className="py-4 px-6 text-sm text-card-foreground">
                   {client.email}
                 </td>
-                <td className="py-4 px-6 text-sm text-muted-foreground">
-                  {client.phone || 'N/A'}
-                </td>
                 <td className="py-4 px-6 text-sm text-card-foreground">
                   {formatDateSync(client.created_at)}
                 </td>
                 <td className="py-4 px-6 text-sm">
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => handleEditClient(client)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleEditClient(client);
+                      }}
                       className="p-1 text-muted-foreground hover:text-blue-600"
                       title="Edit Client"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => handleDeleteClientWithConfirm(client.id, client.name)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDeleteClientWithConfirm(client.id, client.name);
+                      }}
                       className="p-1 text-muted-foreground hover:text-red-600"
                       title="Delete Client"
                     >
@@ -202,6 +208,7 @@ export const ClientManagement: React.FC = () => {
         <div
           key={client.id}
           className={themeClasses.cardHover}
+          onClick={() => handleEditClient(client)}
         >
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1">
@@ -210,14 +217,20 @@ export const ClientManagement: React.FC = () => {
             </div>
             <div className="flex space-x-2">
               <button
-                onClick={() => handleEditClient(client)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleEditClient(client);
+                }}
                 className="p-1 text-muted-foreground hover:text-white"
                 title="Edit Client"
               >
                 <Edit className="h-4 w-4" />
               </button>
               <button
-                onClick={() => handleDeleteClientWithConfirm(client.id, client.name)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleDeleteClientWithConfirm(client.id, client.name);
+                }}
                 className="p-1 text-muted-foreground hover:text-white"
                 title="Delete Client"
               >
@@ -232,12 +245,10 @@ export const ClientManagement: React.FC = () => {
               <span className="truncate">{client.email}</span>
             </div>
 
-            {client.phone && (
-              <div className={`flex items-center text-sm ${themeClasses.mutedText}`}>
-                <Phone className={`${themeClasses.iconSmall} mr-2`} />
-                <span>{client.phone}</span>
-              </div>
-            )}
+            <div className={`flex items-center text-sm ${themeClasses.mutedText}`}>
+              <span className="font-medium mr-2">Email:</span>
+              <span className="truncate">{client.email}</span>
+            </div>
           </div>
 
           <div className="mt-4 pt-4 border-t border-border">
@@ -288,7 +299,7 @@ export const ClientManagement: React.FC = () => {
         </div>
 
         {/* Statistics Cards */}
-        <div className={themeClasses.statsGrid}>
+        <div className={themeClasses.statsGridThree}>
           <div className={themeClasses.statCard}>
             <div className={themeClasses.statCardContent}>
               <div>
@@ -314,15 +325,6 @@ export const ClientManagement: React.FC = () => {
                 <p className={`${themeClasses.statValueMedium} ${getIconColorClasses('purple')}`}>{Math.floor(clients.length * 0.2)}</p>
               </div>
               <Mail className={`${themeClasses.iconLarge} ${getIconColorClasses('purple')}`} />
-            </div>
-          </div>
-          <div className={themeClasses.statCard}>
-            <div className={themeClasses.statCardContent}>
-              <div>
-                <p className={themeClasses.statLabel}>Response Rate</p>
-                <p className={`${themeClasses.statValueMedium} ${getIconColorClasses('orange')}`}>94%</p>
-              </div>
-              <Phone className={`${themeClasses.iconLarge} ${getIconColorClasses('orange')}`} />
             </div>
           </div>
         </div>

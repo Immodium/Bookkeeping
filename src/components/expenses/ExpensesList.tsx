@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Edit, Receipt, Eye, Trash2, Delete, Tag, Building } from 'lucide-react';
+import { Edit, Receipt, Trash2, Delete, Tag, Building } from 'lucide-react';
 import { formatDateSync } from '@/components/ui/FormattedDate';
 import { FormattedCurrency } from '@/components/ui/FormattedCurrency';
 import { ExpensesListProps } from '@/types/components/expense.types';
@@ -189,12 +189,18 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
           </thead>
           <tbody className="divide-y divide-border">
             {expenses.map((expense) => (
-              <tr key={expense.id} className={`hover:bg-muted/50 ${selectedExpenses.includes(expense.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+              <tr
+                key={expense.id}
+                className={`cursor-pointer hover:bg-muted/50 ${selectedExpenses.includes(expense.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                onClick={() => onViewExpense(expense)}
+                title="Click to view expense details"
+              >
                 <td className="py-4 px-6">
                   <input
                     type="checkbox"
                     checked={selectedExpenses.includes(expense.id)}
                     onChange={(e) => handleSelectExpense(expense.id, e.target.checked)}
+                    onClick={(e) => e.stopPropagation()}
                     className="rounded border-border"
                   />
                 </td>
@@ -224,7 +230,14 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                 </td>
                 <td className="py-4 px-6">
                   {expense.receipt_url ? (
-                    <button className="text-blue-600 hover:text-blue-800">
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onViewExpense(expense);
+                      }}
+                      className="text-blue-600 hover:text-blue-800"
+                      title="View receipt details"
+                    >
                       <Receipt className="h-4 w-4" />
                     </button>
                   ) : (
@@ -234,21 +247,22 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                 <td className="py-4 px-6">
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => onEditExpense(expense)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEditExpense(expense);
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
                       className="p-1 text-muted-foreground hover:text-blue-600"
                       title="Edit expense"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => onViewExpense(expense)}
-                      className="p-1 text-muted-foreground hover:text-white"
-                      title="View details"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(expense.id, expense.vendor)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDelete(expense.id, expense.vendor);
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
                       className="p-1 text-muted-foreground hover:text-red-600"
                       title="Delete expense"
                     >

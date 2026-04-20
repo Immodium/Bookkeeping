@@ -10,7 +10,6 @@ import {
   Upload,
   LayoutGrid,
   Table,
-  Eye,
   Edit,
   Trash2
 } from 'lucide-react';
@@ -292,7 +291,19 @@ export const ExpenseManagement: React.FC = () => {
   const renderPanelView = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {pagination.paginatedData.map((expense) => (
-        <div key={expense.id} className="bg-card rounded-lg shadow-sm border border-border p-6">
+        <div
+          key={expense.id}
+          className="bg-card rounded-lg shadow-sm border border-border p-6 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => handleViewExpense(expense)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              handleViewExpense(expense);
+            }
+          }}
+        >
           <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className="font-semibold text-foreground">{expense.merchant}</h3>
@@ -300,21 +311,20 @@ export const ExpenseManagement: React.FC = () => {
             </div>
             <div className="flex space-x-2">
               <button
-                onClick={() => handleViewExpense(expense)}
-                className="p-1 text-muted-foreground hover:text-white"
-                title="View Expense"
-              >
-                <Eye className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleEditExpense(expense)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleEditExpense(expense);
+                }}
                 className="p-1 text-muted-foreground hover:text-blue-600"
                 title="Edit Expense"
               >
                 <Edit className="h-4 w-4" />
               </button>
               <button
-                onClick={() => handleDeleteExpense(expense.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleDeleteExpense(expense.id);
+                }}
                 className="p-1 text-muted-foreground hover:text-red-600"
                 title="Delete Expense"
               >

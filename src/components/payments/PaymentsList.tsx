@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit, CreditCard, Eye, Trash2, Delete, Receipt, Building } from 'lucide-react';
+import { Edit, CreditCard, Trash2, Delete, Receipt, Building } from 'lucide-react';
 import { getStatusColor } from '@/utils/themeUtils.util';
 import { formatDateSync } from '@/components/ui/FormattedDate';
 import { FormattedCurrency } from '@/components/ui/FormattedCurrency';
@@ -220,11 +220,17 @@ export const PaymentsList: React.FC<PaymentsListProps> = ({
           </thead>
           <tbody className="divide-y divide-border">
             {payments.map((payment) => (
-              <tr key={payment.id} className={`hover:bg-muted/50 ${selectedPayments.includes(payment.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+              <tr
+                key={payment.id}
+                className={`hover:bg-muted/50 cursor-pointer ${selectedPayments.includes(payment.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                onClick={() => onViewPayment(payment)}
+              >
                 <td className="py-4 px-6">
                   <input
                     type="checkbox"
                     checked={selectedPayments.includes(payment.id)}
+                    onClick={(event) => event.stopPropagation()}
+                    onMouseDown={(event) => event.stopPropagation()}
                     onChange={(e) => handleSelectPayment(payment.id, e.target.checked)}
                     className="rounded border-border"
                   />
@@ -269,21 +275,22 @@ export const PaymentsList: React.FC<PaymentsListProps> = ({
                 <td className="py-4 px-6">
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => onEditPayment(payment)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onEditPayment(payment);
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
                       className="p-1 text-muted-foreground hover:text-blue-600"
                       title="Edit payment"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => onViewPayment(payment)}
-                      className="p-1 text-muted-foreground hover:text-white"
-                      title="View details"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(payment.id, payment.client_name)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDelete(payment.id, payment.client_name);
+                      }}
+                      onMouseDown={(event) => event.stopPropagation()}
                       className="p-1 text-muted-foreground hover:text-red-600"
                       title="Delete payment"
                     >

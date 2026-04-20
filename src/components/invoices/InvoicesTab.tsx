@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Eye, DollarSign, Calendar, User, Search, LayoutGrid, Table, FileText } from 'lucide-react';
+import { Plus, Edit, Trash2, DollarSign, Calendar, User, Search, LayoutGrid, Table, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authenticatedFetch, apiPost, apiPut, apiDelete } from '@/utils/api';
 import { InvoiceForm } from './InvoiceForm';
@@ -171,7 +171,11 @@ export const InvoicesTab = () => {
   const renderPanelView = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {pagination.paginatedData.map((invoice) => (
-        <div key={invoice.id} className="bg-card rounded-lg shadow-sm border border-border p-6">
+        <div
+          key={invoice.id}
+          className="bg-card rounded-lg shadow-sm border border-border p-6 cursor-pointer hover:bg-muted/30 transition-colors"
+          onClick={() => handleView(invoice)}
+        >
           <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className="font-semibold text-foreground">{invoice.invoice_number || `Invoice #${invoice.id}`}</h3>
@@ -179,20 +183,19 @@ export const InvoicesTab = () => {
             </div>
             <div className="flex space-x-2">
               <button
-                onClick={() => handleView(invoice)}
-                className="p-1 text-muted-foreground hover:text-white"
-                title="View Invoice"
-              >
-                <Eye className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleEdit(invoice)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleEdit(invoice);
+                }}
                 className="p-1 text-muted-foreground hover:text-blue-600"
               >
                 <Edit className="h-4 w-4" />
               </button>
               <button
-                onClick={() => handleDelete(invoice.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleDelete(invoice.id);
+                }}
                 className="p-1 text-muted-foreground hover:text-red-600"
               >
                 <Trash2 className="h-4 w-4" />
@@ -248,7 +251,11 @@ export const InvoicesTab = () => {
           </thead>
           <tbody className="divide-y divide-border">
             {pagination.paginatedData.map((invoice) => (
-              <tr key={invoice.id}>
+              <tr
+                key={invoice.id}
+                className="cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={() => handleView(invoice)}
+              >
                 <td className="py-4 px-6 text-sm font-medium text-card-foreground">
                   {invoice.invoice_number || `Invoice #${invoice.id}`}
                 </td>
@@ -267,20 +274,19 @@ export const InvoicesTab = () => {
                 <td className="py-4 px-6 text-sm">
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => handleView(invoice)}
-                      className="p-1 text-muted-foreground hover:text-white"
-                      title="View Invoice"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleEdit(invoice)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleEdit(invoice);
+                      }}
                       className="p-1 text-muted-foreground hover:text-blue-600"
                     >
                       <Edit className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(invoice.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleDelete(invoice.id);
+                      }}
                       className="p-1 text-muted-foreground hover:text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />

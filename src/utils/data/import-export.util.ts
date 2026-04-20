@@ -1,6 +1,22 @@
 type CSVValue = string | number | boolean | null | undefined;
 type CSVRow = Record<string, CSVValue>;
 
+export const exportToXLSX = async (
+  rows: CSVRow[],
+  filename = 'export.xlsx',
+  sheetName = 'Sheet1'
+): Promise<void> => {
+  if (!rows.length) {
+    return;
+  }
+
+  const XLSX = await import('xlsx');
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  XLSX.writeFile(workbook, filename);
+};
+
 const escapeCsvCell = (value: CSVValue): string => {
   const raw = value == null ? '' : String(value);
   if (/[",\n]/.test(raw)) {

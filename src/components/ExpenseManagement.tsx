@@ -381,6 +381,13 @@ export const ExpenseManagement: React.FC = () => {
             <p className={themeClasses.sectionSubtitle}>Track and manage company expenses</p>
           </div>
           <div className="flex space-x-3">
+            <button
+              onClick={handleCreateExpense}
+              className={getButtonClasses('primary')}
+            >
+              <Plus className={themeClasses.iconButton} />
+              Add Expense
+            </button>
             <label className={getButtonClasses('primary')}>
               <Upload className={themeClasses.iconButton} />
               {isUploadingReceipt ? 'Uploading...' : 'Upload Receipt'}
@@ -394,17 +401,10 @@ export const ExpenseManagement: React.FC = () => {
             </label>
             <button
               onClick={() => updateUiState({ showImportExport: true })}
-              className={getButtonClasses('secondary')}
+              className={getButtonClasses('primary')}
             >
               <Upload className={themeClasses.iconButton} />
               Import/Export
-            </button>
-            <button
-              onClick={handleCreateExpense}
-              className={getButtonClasses('primary')}
-            >
-              <Plus className={themeClasses.iconButton} />
-              Add Expense
             </button>
           </div>
         </div>

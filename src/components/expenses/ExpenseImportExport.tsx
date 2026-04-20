@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { Upload, Download, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { authenticatedFetch } from '@/utils/api';
-import { exportToCSV, parseCSV, validateExpenseData } from '@/utils/data';
+import { exportToCSV, exportToXLSX, parseCSV, validateExpenseData } from '@/utils/data';
 import { toast } from 'sonner';
 import { themeClasses, getIconColorClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { FieldMapping, ImportExportProps, EXPENSE_FIELDS } from '@/types/shared/import.types';
@@ -10,6 +10,7 @@ import { EXPENSE_STATUSES } from '@/types/constants/enums.types';
 
 export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onImportComplete }) => {
   const [mode, setMode] = useState<'select' | 'import' | 'export'>('select');
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('csv');
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
@@ -43,8 +44,13 @@ export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
         status: expense.status || 'pending'
       }));
       
-      exportToCSV(exportData, `expenses-${new Date().toISOString().split('T')[0]}.csv`);
-      toast.success('Expenses exported successfully');
+      const exportDate = new Date().toISOString().split('T')[0];
+      if (exportFormat === 'xlsx') {
+        await exportToXLSX(exportData, `expenses-${exportDate}.xlsx`);
+      } else {
+        exportToCSV(exportData, `expenses-${exportDate}.csv`);
+      }
+      toast.success(`Expenses exported successfully as ${exportFormat.toUpperCase()}`);
       onClose();
     } catch (error) {
       toast.error('Failed to export expenses');
@@ -248,7 +254,7 @@ export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
               <Download className={`${themeClasses.iconMedium} ${getIconColorClasses('blue')} mr-3`} />
               <div className="text-left">
                 <div className="font-medium text-foreground">Export Expenses</div>
-                <div className="text-sm text-muted-foreground">Download all expenses as CSV</div>
+                <div className="text-sm text-muted-foreground">Download all expenses as CSV or XLSX</div>
               </div>
             </button>
 
@@ -292,14 +298,29 @@ export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
 
           <div className="text-center py-6">
             <FileText className={`h-12 w-12 ${getIconColorClasses('blue')} mx-auto mb-4`} />
-            <p className="text-muted-foreground mb-6">Export all expenses to a CSV file for backup or analysis.</p>
+            <p className="text-muted-foreground mb-6">Export all expenses as CSV or XLSX for backup or analysis.</p>
+
+            <div className="mb-4">
+              <label htmlFor="expense-export-format" className="block text-sm font-medium text-foreground mb-2">
+                Export format
+              </label>
+              <select
+                id="expense-export-format"
+                value={exportFormat}
+                onChange={(event) => setExportFormat(event.target.value as 'csv' | 'xlsx')}
+                className={themeClasses.select}
+              >
+                <option value="csv">CSV (.csv)</option>
+                <option value="xlsx">Excel (.xlsx)</option>
+              </select>
+            </div>
 
             <div className="space-y-3">
               <button
                 onClick={handleExport}
                 className={getButtonClasses('primary')}
               >
-                Download CSV
+                {exportFormat === 'xlsx' ? 'Download XLSX' : 'Download CSV'}
               </button>
               <button
                 onClick={() => setMode('select')}

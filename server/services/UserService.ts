@@ -10,6 +10,29 @@ import { getPrimaryRole, normalizeRoles } from '../auth/roles.js';
  * Handles user lifecycle management, profile updates, and administrative operations
  */
 export class UserService {
+  private reserveNextUserId(): number {
+    const counterNextId = databaseService.getNextId('users');
+    const maxUserIdRow = databaseService.getOne<{ maxId: number }>(
+      'SELECT COALESCE(MAX(id), 0) as maxId FROM users'
+    );
+    const maxUserId = maxUserIdRow?.maxId || 0;
+
+    if (counterNextId > maxUserId) {
+      return counterNextId;
+    }
+
+    const reconciledNextId = maxUserId + 1;
+    databaseService.executeQuery(
+      `
+        INSERT INTO counters (name, value)
+        VALUES ('users', ?)
+        ON CONFLICT(name) DO UPDATE SET value = excluded.value
+      `,
+      [reconciledNextId]
+    );
+    return reconciledNextId;
+  }
+
   private mapUserPublic(row: UserPublic): UserPublic {
     const roles = normalizeRoles(row.roles);
     return {
@@ -141,32 +164,63 @@ export class UserService {
     const normalizedRoles = normalizeRoles(roles && roles.length > 0 ? roles : [role]);
     const primaryRole = getPrimaryRole(normalizedRoles, role);
 
-    // Get next user ID from counter
-    const nextId = databaseService.getNextId('users');
+    // Keep user ID generation resilient if counters drift behind real IDs.
+    const nextId = this.reserveNextUserId();
     
     // Create user
     const now = new Date().toISOString();
-    databaseService.executeQuery(`
-      INSERT INTO users (
-        id, name, email, username, password_hash, role, roles, email_verified,
-        google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      nextId, 
-      name, 
-      email, 
-      username || email, 
-      password_hash || null, 
-      primaryRole,
-      JSON.stringify(normalizedRoles),
-      email_verified ? 1 : 0,
-      google_id || null,
-      last_login || null,
-      failed_login_attempts,
-      account_locked_until || null,
-      now, 
-      now
-    ]);
+    try {
+      databaseService.executeQuery(`
+        INSERT INTO users (
+          id, name, email, username, password_hash, role, roles, email_verified,
+          google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        nextId, 
+        name, 
+        email, 
+        username || email, 
+        password_hash || null, 
+        primaryRole,
+        JSON.stringify(normalizedRoles),
+        email_verified ? 1 : 0,
+        google_id || null,
+        last_login || null,
+        failed_login_attempts,
+        account_locked_until || null,
+        now, 
+        now
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('UNIQUE constraint failed: users.id')) {
+        throw error;
+      }
+
+      const fallbackId = this.reserveNextUserId();
+      databaseService.executeQuery(`
+        INSERT INTO users (
+          id, name, email, username, password_hash, role, roles, email_verified,
+          google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        fallbackId,
+        name,
+        email,
+        username || email,
+        password_hash || null,
+        primaryRole,
+        JSON.stringify(normalizedRoles),
+        email_verified ? 1 : 0,
+        google_id || null,
+        last_login || null,
+        failed_login_attempts,
+        account_locked_until || null,
+        now,
+        now
+      ]);
+      return fallbackId;
+    }
 
     return nextId;
   }

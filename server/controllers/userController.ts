@@ -57,6 +57,11 @@ const extractUserDataPayload = (payload: unknown): Record<string, unknown> => {
     return nested as Record<string, unknown>;
   }
 
+  const inviteNested = record.inviteData;
+  if (inviteNested && typeof inviteNested === 'object') {
+    return inviteNested as Record<string, unknown>;
+  }
+
   return record;
 };
 
@@ -471,7 +476,14 @@ export const verifyUserEmail = asyncHandler(async (req: Request, res: Response):
  * Admin: Invite user and send temporary password
  */
 export const inviteUser = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const inviteData = extractUserDataPayload(req.body);
+  const bodyRecord = (req.body && typeof req.body === 'object')
+    ? (req.body as Record<string, unknown>)
+    : {};
+  const invitePayload =
+    bodyRecord.inviteData && typeof bodyRecord.inviteData === 'object'
+      ? (bodyRecord.inviteData as Record<string, unknown>)
+      : bodyRecord;
+  const inviteData = extractUserDataPayload(invitePayload);
   const name = typeof inviteData.name === 'string' ? inviteData.name.trim() : '';
   const email = typeof inviteData.email === 'string' ? inviteData.email.trim() : '';
   const username = typeof inviteData.username === 'string' ? inviteData.username.trim() : undefined;

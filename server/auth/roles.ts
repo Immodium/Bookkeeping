@@ -10,12 +10,33 @@ export const SYSTEM_ROLES: UserRole[] = [
 ];
 
 export const normalizeRoles = (roles: unknown): UserRole[] => {
-  if (!Array.isArray(roles)) {
+  let sourceRoles: unknown[] = [];
+  if (Array.isArray(roles)) {
+    sourceRoles = roles;
+  } else if (typeof roles === 'string') {
+    const trimmed = roles.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          sourceRoles = parsed;
+        }
+      } catch {
+        sourceRoles = [];
+      }
+    } else {
+      sourceRoles = [trimmed];
+    }
+  } else {
     return [];
   }
 
   const normalized = new Set<UserRole>();
-  for (const role of roles) {
+  for (const role of sourceRoles) {
     if (typeof role !== 'string') {
       continue;
     }
@@ -38,7 +59,7 @@ export const normalizeRole = (role: unknown): UserRole => {
 };
 
 export const getPrimaryRole = (roles: unknown, fallbackRole: unknown = 'user'): UserRole => {
-  const normalized = normalizeRoles(Array.isArray(roles) ? roles : []);
+  const normalized = normalizeRoles(roles);
   if (normalized.length > 0) {
     return normalized[0]!;
   }

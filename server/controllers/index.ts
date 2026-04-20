@@ -58,6 +58,8 @@ export {
   getAllExpenses,
   getExpenseById,
   createExpense,
+  uploadReceiptAndExtractExpenseData,
+  parseReceiptOCR,
   updateExpense,
   deleteExpense,
   getExpenseStats,

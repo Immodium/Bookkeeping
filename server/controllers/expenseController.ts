@@ -3,6 +3,8 @@
 
 import { Request, Response } from 'express';
 import { expenseService } from '../services/ExpenseService.js';
+import { extractReceiptDataFromFile } from '../services/ReceiptOCRService.js';
+import { promises as fs } from 'fs';
 import { 
   AppError, 
   NotFoundError, 
@@ -115,6 +117,37 @@ export const createExpense = asyncHandler(async (req: Request<object, object, { 
     throw new ValidationError(errorMessage);
   }
 });
+
+/**
+ * Extract expense details from an uploaded receipt image/PDF via OCR.
+ */
+export const uploadReceiptAndExtractExpenseData = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  if (!req.file) {
+    throw new ValidationError('Receipt file is required');
+  }
+
+  try {
+    const parsed = await extractReceiptDataFromFile(req.file.path);
+    const receiptUrl = `/uploads/receipts/${req.file.filename}`;
+
+    res.json({
+      success: true,
+      data: {
+        ...parsed,
+        receipt_url: receiptUrl
+      },
+      message: 'Receipt parsed successfully'
+    });
+  } catch (error) {
+    const errorMessage = (error as Error).message || 'Failed to parse receipt';
+    throw new AppError(errorMessage, 500);
+  } finally {
+    // Keep uploaded file available for later viewing when OCR succeeded.
+    // If OCR failed or client retries, stale files can be cleaned via maintenance jobs.
+  }
+});
+
+export const parseReceiptOCR = uploadReceiptAndExtractExpenseData;
 
 /**
  * Update expense

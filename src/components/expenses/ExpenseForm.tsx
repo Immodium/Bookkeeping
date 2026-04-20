@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Upload, X, Receipt } from 'lucide-react';
+import { ArrowLeft, Upload, X, Receipt, Loader2 } from 'lucide-react';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { Expense, ExpenseFormData } from '@/types';
 import { EXPENSE_CATEGORIES, EXPENSE_STATUSES } from '@/types/constants/enums.types';
 import { ExpenseFormProps } from '@/types/components/expense.types';
+import { authenticatedFetch } from '@/utils/api';
+import { toast } from 'sonner';
 
 export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
@@ -20,6 +22,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
 
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [originalFormData, setOriginalFormData] = useState<any>(null);
+  const [isOCRProcessing, setIsOCRProcessing] = useState(false);
 
   // Track if form has been modified
   const isDirty = originalFormData ? JSON.stringify(formData) !== JSON.stringify(originalFormData) : false;
@@ -76,6 +79,47 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
       setReceiptFile(file);
       // In a real app, you'd upload this file and get a URL
       setFormData({ ...formData, receipt_url: `receipt_${Date.now()}.${file.name.split('.').pop()}` });
+    }
+  };
+
+  const handleReceiptUploadWithOCR = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || isOCRProcessing) {
+      return;
+    }
+
+    setReceiptFile(file);
+    setIsOCRProcessing(true);
+
+    try {
+      const uploadData = new FormData();
+      uploadData.append('receipt', file);
+
+      const response = await authenticatedFetch('/api/expenses/receipt-ocr', {
+        method: 'POST',
+        body: uploadData,
+        headers: {}
+      });
+      const payload = await response.json();
+      const parsed = payload?.data || {};
+
+      setFormData((prev) => ({
+        ...prev,
+        date: parsed.date || prev.date,
+        vendor: parsed.vendor || prev.vendor,
+        category: parsed.category || prev.category,
+        amount: parsed.amount ? String(parsed.amount) : prev.amount,
+        description: parsed.description || prev.description,
+        receipt_url: parsed.receipt_url || prev.receipt_url
+      }));
+
+      toast.success('Receipt processed and expense fields auto-filled');
+    } catch (error) {
+      console.error('Receipt OCR failed:', error);
+      toast.error('Failed to process receipt. Please fill details manually.');
+    } finally {
+      setIsOCRProcessing(false);
+      e.target.value = '';
     }
   };
 
@@ -206,13 +250,14 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
               {!receiptFile && !formData.receipt_url ? (
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center bg-muted/30">
                   <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground mb-2">Upload receipt image</p>
-                  <label className={`cursor-pointer ${getButtonClasses('primary')}`}>
-                    Choose File
+                  <p className="text-sm text-muted-foreground mb-2">Upload receipt for OCR auto-fill</p>
+                  <label className={`cursor-pointer ${getButtonClasses('primary')} ${isOCRProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    {isOCRProcessing ? 'Processing...' : 'Upload Receipt'}
                     <input
                       type="file"
                       accept="image/*,.pdf"
-                      onChange={handleFileUpload}
+                      onChange={handleReceiptUploadWithOCR}
+                      disabled={isOCRProcessing}
                       className="hidden"
                     />
                   </label>
@@ -224,6 +269,12 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
                     <span className="text-sm text-foreground">
                       {receiptFile?.name || 'Receipt uploaded'}
                     </span>
+                    {isOCRProcessing && (
+                      <span className="inline-flex items-center ml-3 text-xs text-muted-foreground">
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        OCR processing
+                      </span>
+                    )}
                   </div>
                   <button
                     type="button"

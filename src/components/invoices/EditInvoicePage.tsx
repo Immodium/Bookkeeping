@@ -17,6 +17,7 @@ import { InvoiceItem, Invoice, InvoiceStatus } from '@/types';
 import { Client } from '@/types';
 import { TaxRate, ShippingRate, validateTaxRateArray } from '@/types';
 import { formatCurrencySync, formatClientAddressSingleLine } from '@/utils/formatting';
+import { getButtonClasses } from '@/utils/themeUtils.util';
 
 export const EditInvoicePage = () => {
   const { id } = useParams();
@@ -374,10 +375,7 @@ export const EditInvoicePage = () => {
     }
 
     try {
-      await pdfService.downloadInvoicePDF(
-        invoice.id,
-        invoice.invoice_number
-      );
+      await pdfService.printInvoicePDF(invoice.id);
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
@@ -515,7 +513,7 @@ export const EditInvoicePage = () => {
                   <button
                     onClick={handleSave}
                     disabled={!isValidForSave() || isSaving}
-                    className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 disabled:bg-muted disabled:cursor-not-allowed transition-colors"
+                    className={`${getButtonClasses('primary')} disabled:bg-muted disabled:cursor-not-allowed`}
                   >
                     {isSaving ? 'Saving...' : 'Save Invoice'}
                   </button>
@@ -543,33 +541,15 @@ export const EditInvoicePage = () => {
                         </button>
                       );
                     } else if (hasClientEmail || !canSendEmails) {
-                      // Show print button as fallback with tooltip explaining why send is not available
-                      let tooltipMessage = '';
-                      if (!hasClientEmail) {
-                        tooltipMessage = 'Client email is required to send invoices';
-                      } else if (!canSendEmails) {
-                        tooltipMessage = 'Email settings need to be configured in Settings to send invoices';
-                      } else if (isInvoiceAlreadySent) {
-                        tooltipMessage = 'Invoice has already been sent';
-                      }
-
                       return (
-                        <div className="relative group">
-                          <button
-                            onClick={handlePrintInvoice}
-                            disabled={false}
-                            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed transition-colors flex items-center"
-                          >
-                            <Printer className="h-4 w-4 mr-2" />
-                            Print Invoice
-                          </button>
-                          {tooltipMessage && (
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                              {tooltipMessage}
-                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          onClick={handlePrintInvoice}
+                          disabled={false}
+                          className={`${getButtonClasses('primary')} disabled:bg-muted disabled:cursor-not-allowed`}
+                        >
+                          <Printer className="h-4 w-4 mr-2" />
+                          Print Invoice
+                        </button>
                       );
                     }
                     return null;

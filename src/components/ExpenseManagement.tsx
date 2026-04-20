@@ -1,18 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Receipt, 
-  DollarSign, 
-  Calendar, 
-  FileText, 
-  Upload, 
-  LayoutGrid, 
-  Table, 
-  Eye, 
-  Edit, 
-  Trash2 
+import {
+  Plus,
+  Search,
+  Receipt,
+  DollarSign,
+  Calendar,
+  FileText,
+  Upload,
+  LayoutGrid,
+  Table,
+  Eye,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { ExpenseForm } from './expenses/ExpenseForm';
 import { ExpensesList } from './expenses/ExpensesList';
@@ -36,6 +36,7 @@ import { Expense } from '@/types';
 import { TimePeriod, DateRange } from '@/types';
 
 export const ExpenseManagement: React.FC = () => {
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const [uiState, setUiState] = useState({
     showCreateForm: false,
     showImportExport: false,
@@ -142,6 +143,56 @@ export const ExpenseManagement: React.FC = () => {
     updateUiState({ showCreateForm: true });
   };
 
+  const handleReceiptUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      setIsUploadingReceipt(true);
+      const formData = new FormData();
+      formData.append('receipt', file);
+
+      const response = await authenticatedFetch('/api/expenses/receipt-ocr', {
+        method: 'POST',
+        body: formData,
+        headers: {}
+      });
+      const result = await response.json();
+      if (!result?.success) {
+        throw new Error(result?.error || 'Failed to process receipt');
+      }
+
+      const extracted = result.data;
+      if (!extracted) {
+        throw new Error('Receipt OCR did not return expense data');
+      }
+
+      const payload = {
+        expenseData: {
+          date: extracted.date,
+          vendor: extracted.vendor,
+          category: extracted.category,
+          amount: Number(extracted.amount),
+          description: extracted.description,
+          receipt_url: result.data?.receipt_url || ''
+        }
+      };
+
+      const createResponse = await apiPost('/api/expenses', payload);
+      if (!createResponse.success) {
+        throw new Error(createResponse.error || 'Failed to create expense from receipt');
+      }
+
+      await loadExpenses();
+      toast.success('Receipt uploaded and expense created');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to upload receipt');
+    } finally {
+      setIsUploadingReceipt(false);
+    }
+  };
+
   const handleEditExpense = (expense: Expense) => {
     setActiveItem({ editing: expense, viewing: null });
     updateUiState({ showCreateForm: true });
@@ -234,8 +285,8 @@ export const ExpenseManagement: React.FC = () => {
   };
 
   const handleCloseForm = () => {
-    setShowCreateForm(false);
-    setEditingExpense(null);
+    updateUiState({ showCreateForm: false });
+    setActiveItem({ editing: null, viewing: null });
   };
 
   const renderPanelView = () => (
@@ -330,6 +381,17 @@ export const ExpenseManagement: React.FC = () => {
             <p className={themeClasses.sectionSubtitle}>Track and manage company expenses</p>
           </div>
           <div className="flex space-x-3">
+            <label className={getButtonClasses('primary')}>
+              <Upload className={themeClasses.iconButton} />
+              {isUploadingReceipt ? 'Uploading...' : 'Upload Receipt'}
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={handleReceiptUpload}
+                disabled={isUploadingReceipt}
+                className="hidden"
+              />
+            </label>
             <button
               onClick={() => updateUiState({ showImportExport: true })}
               className={getButtonClasses('secondary')}

@@ -442,6 +442,17 @@ export interface ExpenseRequest {
   is_billable: boolean | undefined;
   client_id: number | undefined;
   project?: string;
+  status?: 'pending' | 'approved' | 'reimbursed';
+}
+
+export interface ReceiptOCRResult {
+  vendor?: string;
+  amount?: number;
+  date?: string;
+  category?: string;
+  description?: string;
+  confidence: number;
+  raw_text: string;
 }
 
 // Express Request extensions

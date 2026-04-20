@@ -22,7 +22,7 @@ export const exportToXLSX = async (
   XLSX.writeFile(workbook, filename);
 };
 
-const parseXLSX = async (file: File): Promise<Array<Record<string, string>>> => {
+export const parseXLSX = async (file: File): Promise<Array<Record<string, string>>> => {
   const XLSX = await import('xlsx');
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });

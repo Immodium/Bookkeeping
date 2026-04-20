@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { Upload, Download, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { authenticatedFetch } from '@/utils/api';
-import { exportToCSV, exportToXLSX, parseCSV, parseXLSX, validateExpenseData } from '@/utils/data';
+import { exportToCSV, exportToXLSX, parseSpreadsheetFile, validateExpenseData } from '@/utils/data';
 import { toast } from 'sonner';
 import { themeClasses, getIconColorClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { FieldMapping, ImportExportProps, EXPENSE_FIELDS } from '@/types/shared/import.types';
@@ -65,7 +65,7 @@ export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
 
     try {
       const isXlsxFile = file.name.toLowerCase().endsWith('.xlsx');
-      const parsedData = isXlsxFile ? await parseXLSX(file) : parseCSV(await file.text());
+      const parsedData = await parseSpreadsheetFile(file);
 
       if (parsedData.length === 0) {
         toast.error(`${isXlsxFile ? 'XLSX' : 'CSV'} file is empty or invalid`);

@@ -117,11 +117,14 @@ export interface Expense extends BaseEntity {
 export interface Payment extends BaseEntity {
   date: string;
   client_name: string;
+  client_id?: number;
   invoice_id?: number;
   amount: number;
   method: string;
   reference?: string;
   description?: string;
+  transaction_id?: string;
+  notes?: string;
   status: string;
 }
 

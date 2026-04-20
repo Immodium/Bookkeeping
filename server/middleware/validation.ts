@@ -286,7 +286,23 @@ export const validationSets = {
   
   createPayment: [
     body('paymentData.date').isISO8601().withMessage('Date must be in ISO 8601 format'),
-    body('paymentData.client_name').trim().isLength({ min: 1, max: 100 }).withMessage('Client name is required and must be less than 100 characters').escape(),
+    body('paymentData.client_name')
+      .optional()
+      .trim()
+      .isLength({ min: 1, max: 100 })
+      .withMessage('Client name must be between 1 and 100 characters')
+      .escape(),
+    body('paymentData.client_id')
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage('Client ID must be a positive integer'),
+    body('paymentData')
+      .custom((paymentData) => {
+        if (!paymentData || (!paymentData.client_name && !paymentData.client_id)) {
+          throw new Error('Either client_name or client_id is required');
+        }
+        return true;
+      }),
     body('paymentData.amount').isFloat({ min: 0.01 }).withMessage('Amount must be a positive number'),
     body('paymentData.method').isIn(['cash', 'check', 'bank_transfer', 'credit_card', 'paypal', 'other']).withMessage('Invalid payment method'),
     body('paymentData.invoice_id').optional().isInt({ min: 1 }).withMessage('Invoice ID must be a positive integer'),
@@ -299,6 +315,7 @@ export const validationSets = {
     validationRules.id,
     body('paymentData.date').optional().isISO8601(),
     body('paymentData.client_name').optional().trim().isLength({ min: 1, max: 100 }).escape(),
+    body('paymentData.client_id').optional().isInt({ min: 1 }),
     body('paymentData.amount').optional().isFloat({ min: 0.01 }),
     body('paymentData.method').optional().isIn(['cash', 'check', 'bank_transfer', 'credit_card', 'paypal', 'other']),
     body('paymentData.invoice_id').optional().isInt({ min: 1 }),

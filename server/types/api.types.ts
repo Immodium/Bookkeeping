@@ -159,11 +159,11 @@ export interface UpdateExpenseRequest {
 
 // Payment API types
 export interface CreatePaymentRequest {
-  paymentData: Omit<Payment, 'id' | 'created_at' | 'updated_at'>;
+  paymentData: PaymentRequest;
 }
 
 export interface UpdatePaymentRequest {
-  paymentData: Partial<Omit<Payment, 'id' | 'created_at' | 'updated_at'>>;
+  paymentData: Partial<PaymentRequest>;
 }
 
 // Settings API types
@@ -420,6 +420,7 @@ export interface InvoiceRequest {
 export interface PaymentRequest {
   date: string;
   client_name: string;
+  client_id?: number;
   invoice_id?: number;
   amount: number;
   method: PaymentMethod;

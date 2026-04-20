@@ -9,7 +9,8 @@ import {
   updatePayment,
   deletePayment,
   getPaymentStats,
-  bulkDeletePayments
+  bulkDeletePayments,
+  searchPayments
 } from '../controllers/index.js';
 import {
   requireAuth,
@@ -27,6 +28,9 @@ router.get('/', getAllPayments);
 
 // GET /api/payments/stats - Get payment statistics
 router.get('/stats', getPaymentStats);
+
+// GET /api/payments/search - Search payments
+router.get('/search', searchPayments);
 
 // POST /api/payments - Create a new payment
 router.post('/',

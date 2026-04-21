@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Download, TrendingUp, TrendingDown, Save, Calendar } from 'lucide-react';
+import { ArrowLeft, Download, TrendingUp, TrendingDown, Save, Calendar, Clock3 } from 'lucide-react';
 import { authenticatedFetch } from '@/utils/api';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { formatDateRangeSync } from '@/utils/formatting';
@@ -8,7 +8,7 @@ import { FormattedCurrency, useCurrencyFormatter } from '@/components/ui/Formatt
 import { pdfService } from '@/services/pdf.svc';
 import { ProfitLossReportProps, ProfitLossReportData, ReportDateRange, AccountingMethod, BreakdownPeriod } from '@/types';
 
-export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSave }) => {
+export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSave, onSchedule }) => {
   const [reportData, setReportData] = useState<ProfitLossReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
@@ -115,6 +115,14 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
     }
   };
 
+  const handleSchedule = () => {
+    onSchedule('profit-loss', dateRange, {
+      accountingMethod,
+      preset: dateRange.preset,
+      breakdownPeriod
+    });
+  };
+
   const handleExportPDF = async () => {
     setIsExportingPDF(true);
     try {
@@ -174,6 +182,13 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
             >
               <Save className={themeClasses.iconButton} />
               Save Report
+            </button>
+            <button
+              onClick={handleSchedule}
+              className={getButtonClasses('secondary')}
+            >
+              <Calendar className={themeClasses.iconButton} />
+              Schedule Report
             </button>
             <button
               onClick={handleExportPDF}

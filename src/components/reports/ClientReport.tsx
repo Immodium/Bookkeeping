@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Download, Save, Calendar } from 'lucide-react';
+import { ArrowLeft, Download, Save, Calendar, Clock3 } from 'lucide-react';
 import { authenticatedFetch } from '@/utils/api';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { formatDateRangeSync } from '@/utils/formatting';
 import { FormattedCurrency } from '@/components/ui/FormattedCurrency';
 import { ClientReportData, ClientReportProps, ReportDateRange } from '@/types';
 
-export const ClientReport: React.FC<ClientReportProps> = ({ onBack, onSave }) => {
+export const ClientReport: React.FC<ClientReportProps> = ({ onBack, onSave, onSchedule }) => {
   const [reportData, setReportData] = useState<ClientReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState<ReportDateRange>({
@@ -102,6 +102,15 @@ export const ClientReport: React.FC<ClientReportProps> = ({ onBack, onSave }) =>
     }
   };
 
+  const handleSchedule = () => {
+    if (!reportData) {
+      return;
+    }
+    onSchedule('client', dateRange, {
+      clientCount: reportData.totalClients
+    });
+  };
+
   if (loading) {
     return (
       <div className="p-6 space-y-6">
@@ -145,6 +154,10 @@ export const ClientReport: React.FC<ClientReportProps> = ({ onBack, onSave }) =>
             >
               <Save className={themeClasses.iconButton} />
               Save Report
+            </button>
+            <button onClick={handleSchedule} className={getButtonClasses('secondary')}>
+              <Clock3 className={themeClasses.iconButton} />
+              Schedule Report
             </button>
             <button className={getButtonClasses('secondary')}>
               <Download className={themeClasses.iconButton} />

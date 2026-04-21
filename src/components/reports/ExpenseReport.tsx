@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Download, Save, Calendar } from 'lucide-react';
+import { ArrowLeft, Download, Save, Calendar, Clock3 } from 'lucide-react';
 import { authenticatedFetch } from '@/utils/api';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { formatDateSync, formatDateRangeSync } from '@/utils/formatting';
@@ -8,7 +8,7 @@ import { FormattedCurrency, useCurrencyFormatter } from '@/components/ui/Formatt
 import { Expense } from '@/types';
 import { ExpenseReportData, ExpenseReportProps, ReportDateRange } from '@/types';
 
-export const ExpenseReport: React.FC<ExpenseReportProps> = ({ onBack, onSave }) => {
+export const ExpenseReport: React.FC<ExpenseReportProps> = ({ onBack, onSave, onSchedule }) => {
   const [reportData, setReportData] = useState<ExpenseReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState<ReportDateRange>({
@@ -105,6 +105,15 @@ export const ExpenseReport: React.FC<ExpenseReportProps> = ({ onBack, onSave }) 
     }
   };
 
+  const handleSchedule = () => {
+    if (!reportData) {
+      return;
+    }
+    onSchedule('expense', dateRange, {
+      categoryBreakdown: reportData.expensesByCategory
+    });
+  };
+
   if (loading) {
     return (
       <div className={themeClasses.page}>
@@ -144,6 +153,13 @@ export const ExpenseReport: React.FC<ExpenseReportProps> = ({ onBack, onSave }) 
             </div>
           </div>
           <div className="flex space-x-3">
+            <button
+              onClick={handleSchedule}
+              className={getButtonClasses('secondary')}
+            >
+              <Clock3 className={themeClasses.iconButton} />
+              Schedule Report
+            </button>
             <button
               onClick={handleSave}
               className={getButtonClasses('primary')}

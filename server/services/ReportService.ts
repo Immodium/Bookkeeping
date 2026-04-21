@@ -11,6 +11,21 @@ export interface ReportData {
   data?: any;
 }
 
+export type ReportScheduleFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly';
+
+export interface ReportScheduleData {
+  name: string;
+  report_type: string;
+  frequency: ReportScheduleFrequency;
+  start_date: string;
+  time_of_day: string;
+  timezone?: string;
+  date_range_start?: string;
+  date_range_end?: string;
+  config?: Record<string, unknown>;
+  is_active?: boolean;
+}
+
 export interface DatabaseReport {
   id: number;
   name: string;
@@ -21,11 +36,104 @@ export interface DatabaseReport {
   created_at: string;
 }
 
+export interface DatabaseReportSchedule {
+  id: number;
+  name: string;
+  report_type: string;
+  frequency: ReportScheduleFrequency;
+  start_date: string;
+  time_of_day: string;
+  timezone: string;
+  date_range_start: string | null;
+  date_range_end: string | null;
+  config: string | null;
+  is_active: number;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportSchedule extends Omit<DatabaseReportSchedule, 'config'> {
+  config: Record<string, unknown> | null;
+}
+
 /**
  * Report Management Service
  * Handles report lifecycle management, data processing, and CRUD operations
  */
 export class ReportService {
+  private readonly tableColumnCache = new Map<string, Set<string>>();
+
+  private getTableColumns(tableName: string): Set<string> {
+    const cached = this.tableColumnCache.get(tableName);
+    if (cached) {
+      return cached;
+    }
+
+    const rows = databaseService.getMany<{ name: string }>(`PRAGMA table_info(${tableName})`);
+    const columns = new Set(rows.map((row) => row.name));
+    this.tableColumnCache.set(tableName, columns);
+    return columns;
+  }
+
+  private tableHasColumn(tableName: string, columnName: string): boolean {
+    return this.getTableColumns(tableName).has(columnName);
+  }
+
+  private normalizeScheduleFrequency(frequency: string): ReportScheduleFrequency {
+    const normalized = String(frequency || '').trim().toLowerCase();
+    if (normalized === 'daily' || normalized === 'weekly' || normalized === 'monthly' || normalized === 'quarterly') {
+      return normalized;
+    }
+    throw new Error('Invalid schedule frequency');
+  }
+
+  private normalizeReportType(type: string): string {
+    const normalized = String(type || '').trim();
+    const validTypes = new Set(['profit-loss', 'expense', 'invoice', 'client']);
+    if (!validTypes.has(normalized)) {
+      throw new Error('Invalid report type');
+    }
+    return normalized;
+  }
+
+  private calculateNextRunAt(
+    frequency: ReportScheduleFrequency,
+    startDate: string,
+    timeOfDay: string
+  ): string {
+    const [hours, minutes] = timeOfDay.split(':').map((value) => Number(value));
+    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) {
+      throw new Error('Invalid schedule time');
+    }
+
+    const runAt = new Date(`${startDate}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`);
+    if (Number.isNaN(runAt.getTime())) {
+      throw new Error('Invalid schedule start date');
+    }
+
+    const now = new Date();
+    while (runAt <= now) {
+      switch (frequency) {
+        case 'daily':
+          runAt.setDate(runAt.getDate() + 1);
+          break;
+        case 'weekly':
+          runAt.setDate(runAt.getDate() + 7);
+          break;
+        case 'monthly':
+          runAt.setMonth(runAt.getMonth() + 1);
+          break;
+        case 'quarterly':
+          runAt.setMonth(runAt.getMonth() + 3);
+          break;
+      }
+    }
+
+    return runAt.toISOString();
+  }
+
   /**
    * Get all reports ordered by creation date
    */
@@ -135,6 +243,124 @@ export class ReportService {
     };
   }
 
+  async createReportSchedule(scheduleData: ReportScheduleData): Promise<{ id: number; changes: number }> {
+    if (!scheduleData || !scheduleData.name || !scheduleData.report_type) {
+      throw new Error('Schedule name and report type are required');
+    }
+
+    const reportType = this.normalizeReportType(scheduleData.report_type);
+    const frequency = this.normalizeScheduleFrequency(scheduleData.frequency);
+    const timezone = scheduleData.timezone || 'UTC';
+    const timeOfDay = scheduleData.time_of_day || '09:00';
+    const nextRunAt = this.calculateNextRunAt(frequency, scheduleData.start_date, timeOfDay);
+
+    const result = databaseService.executeQuery(
+      `
+        INSERT INTO report_schedules (
+          name,
+          report_type,
+          frequency,
+          start_date,
+          time_of_day,
+          timezone,
+          date_range_start,
+          date_range_end,
+          config,
+          is_active,
+          next_run_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      `,
+      [
+        scheduleData.name,
+        reportType,
+        frequency,
+        scheduleData.start_date,
+        timeOfDay,
+        timezone,
+        scheduleData.date_range_start || null,
+        scheduleData.date_range_end || null,
+        scheduleData.config ? JSON.stringify(scheduleData.config) : null,
+        scheduleData.is_active === false ? 0 : 1,
+        nextRunAt
+      ]
+    );
+
+    return {
+      id: result.lastInsertRowid,
+      changes: result.changes
+    };
+  }
+
+  async getReportSchedules(reportType?: string): Promise<ReportSchedule[]> {
+    const params: unknown[] = [];
+    const whereClause = reportType ? 'WHERE report_type = ?' : '';
+    if (reportType) {
+      params.push(this.normalizeReportType(reportType));
+    }
+
+    const schedules = databaseService.getMany<DatabaseReportSchedule>(
+      `
+        SELECT
+          id,
+          name,
+          report_type,
+          frequency,
+          start_date,
+          time_of_day,
+          timezone,
+          date_range_start,
+          date_range_end,
+          config,
+          is_active,
+          last_run_at,
+          next_run_at,
+          created_at,
+          updated_at
+        FROM report_schedules
+        ${whereClause}
+        ORDER BY created_at DESC
+      `,
+      params
+    );
+
+    return schedules.map((schedule) => {
+      if (!schedule.config) {
+        return { ...schedule, config: null };
+      }
+      try {
+        return {
+          ...schedule,
+          config: JSON.parse(schedule.config) as Record<string, unknown>
+        };
+      } catch {
+        return { ...schedule, config: null };
+      }
+    });
+  }
+
+  async deleteReportSchedule(id: number): Promise<{ id: number; changes: number }> {
+    if (!id || typeof id !== 'number') {
+      throw new Error('Valid schedule ID is required');
+    }
+
+    const result = databaseService.executeQuery(
+      'DELETE FROM report_schedules WHERE id = ?',
+      [id]
+    );
+
+    if (result.changes === 0) {
+      throw new Error('Report schedule not found');
+    }
+
+    return {
+      id,
+      changes: result.changes
+    };
+  }
+
   /**
    * Delete report by ID
    */
@@ -233,13 +459,22 @@ export class ReportService {
     preset?: string,
     breakdownPeriod: 'monthly' | 'quarterly' = 'quarterly'
   ): Promise<any> {
+    const invoicesWhere = ['i.created_at >= ?', 'i.created_at <= ?'];
+    if (this.tableHasColumn('invoices', 'deleted_at')) {
+      invoicesWhere.push('i.deleted_at IS NULL');
+    }
+
+    const expensesWhere = ['date >= ?', 'date <= ?'];
+    if (this.tableHasColumn('expenses', 'deleted_at')) {
+      expensesWhere.push('deleted_at IS NULL');
+    }
+
     // Get invoices in date range
     const invoices = databaseService.getMany<any>(`
       SELECT i.*, c.name as client_name
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
-      WHERE i.created_at >= ? AND i.created_at <= ?
-      AND i.deleted_at IS NULL
+      WHERE ${invoicesWhere.join(' AND ')}
       ORDER BY i.created_at DESC
     `, [startDate, endDate + 'T23:59:59.999Z']);
 
@@ -247,8 +482,7 @@ export class ReportService {
     const expenses = databaseService.getMany<any>(`
       SELECT *
       FROM expenses
-      WHERE date >= ? AND date <= ?
-      AND deleted_at IS NULL
+      WHERE ${expensesWhere.join(' AND ')}
       ORDER BY date DESC
     `, [startDate, endDate]);
 
@@ -309,11 +543,15 @@ export class ReportService {
    * Generate Expense Report Data
    */
   async generateExpenseData(startDate: string, endDate: string): Promise<any> {
+    const expensesWhere = ['date >= ?', 'date <= ?'];
+    if (this.tableHasColumn('expenses', 'deleted_at')) {
+      expensesWhere.push('deleted_at IS NULL');
+    }
+
     const expenses = databaseService.getMany<any>(`
       SELECT *
       FROM expenses
-      WHERE date >= ? AND date <= ?
-      AND deleted_at IS NULL
+      WHERE ${expensesWhere.join(' AND ')}
       ORDER BY date DESC
     `, [startDate, endDate]);
 
@@ -328,12 +566,18 @@ export class ReportService {
       acc[category] = (acc[category] || 0) + toNumber(exp.amount);
       return acc;
     }, {});
+    const expensesByStatus = expenses.reduce((acc: Record<string, number>, exp: any) => {
+      const status = exp.status || 'pending';
+      acc[status] = (acc[status] || 0) + toNumber(exp.amount);
+      return acc;
+    }, {});
 
     const totalAmount = expenses.reduce((sum: number, exp: any) => sum + toNumber(exp.amount), 0);
 
     return {
       expenses,
       expensesByCategory,
+      expensesByStatus,
       totalAmount,
       totalCount: expenses.length
     };
@@ -343,12 +587,16 @@ export class ReportService {
    * Generate Invoice Report Data
    */
   async generateInvoiceData(startDate: string, endDate: string): Promise<any> {
+    const invoicesWhere = ['i.created_at >= ?', 'i.created_at <= ?'];
+    if (this.tableHasColumn('invoices', 'deleted_at')) {
+      invoicesWhere.push('i.deleted_at IS NULL');
+    }
+
     const invoices = databaseService.getMany<any>(`
       SELECT i.*, c.name as client_name
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
-      WHERE i.created_at >= ? AND i.created_at <= ?
-      AND i.deleted_at IS NULL
+      WHERE ${invoicesWhere.join(' AND ')}
       ORDER BY i.created_at DESC
     `, [startDate, endDate + 'T23:59:59.999Z']);
 
@@ -397,28 +645,37 @@ export class ReportService {
    * Generate Client Report Data
    */
   async generateClientData(startDate?: string, endDate?: string): Promise<any> {
+    const clientsWhere = this.tableHasColumn('clients', 'deleted_at')
+      ? 'WHERE deleted_at IS NULL'
+      : '';
+
     const clients = databaseService.getMany<any>(`
       SELECT *
       FROM clients
-      WHERE deleted_at IS NULL
+      ${clientsWhere}
       ORDER BY name ASC
     `);
 
-    let invoiceFilter = '';
+    const invoiceFilters: string[] = [];
     const params: string[] = [];
 
     if (startDate && endDate) {
-      invoiceFilter = 'WHERE i.created_at >= ? AND i.created_at <= ? AND i.deleted_at IS NULL';
+      invoiceFilters.push('i.created_at >= ?', 'i.created_at <= ?');
       params.push(startDate, endDate + 'T23:59:59.999Z');
-    } else {
-      invoiceFilter = 'WHERE i.deleted_at IS NULL';
     }
+    if (this.tableHasColumn('invoices', 'deleted_at')) {
+      invoiceFilters.push('i.deleted_at IS NULL');
+    }
+
+    const invoiceFilterClause = invoiceFilters.length > 0
+      ? `WHERE ${invoiceFilters.join(' AND ')}`
+      : '';
 
     const invoices = databaseService.getMany<any>(`
       SELECT i.*, c.name as client_name
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
-      ${invoiceFilter}
+      ${invoiceFilterClause}
       ORDER BY i.created_at DESC
     `, params);
 

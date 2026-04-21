@@ -40,6 +40,37 @@ export const initializeDatabase = async (includeSampleData = false): Promise<voi
     runMigrations(db);
     console.log('✓ Database migrations completed');
 
+    // Ensure report scheduling table exists for recurring report generation.
+    db.executeQuery(`
+      CREATE TABLE IF NOT EXISTS report_schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        report_type TEXT NOT NULL,
+        frequency TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        time_of_day TEXT NOT NULL DEFAULT '09:00',
+        timezone TEXT NOT NULL DEFAULT 'UTC',
+        date_range_start TEXT,
+        date_range_end TEXT,
+        config TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        last_run_at TEXT,
+        next_run_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_report_type ON report_schedules(report_type)');
+    db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_is_active ON report_schedules(is_active)');
+    db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_next_run_at ON report_schedules(next_run_at)');
+    db.executeQuery(`
+      CREATE TRIGGER IF NOT EXISTS update_report_schedules_updated_at
+      AFTER UPDATE ON report_schedules
+      BEGIN
+        UPDATE report_schedules SET updated_at = datetime('now') WHERE id = NEW.id;
+      END
+    `);
+
     // Initialize seed data
     await initializeAllSeeds(db, includeSampleData);
     console.log('✓ Database seed data initialized');

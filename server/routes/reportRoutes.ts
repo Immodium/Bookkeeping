@@ -3,7 +3,11 @@
 
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireRole } from '../middleware/index.js';
-import { reportService, ReportData } from '../services/ReportService.js';
+import {
+  reportService,
+  ReportData,
+  ReportScheduleData
+} from '../services/ReportService.js';
 
 const router: Router = Router();
 
@@ -25,6 +29,93 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({
       success: false,
       error: 'Failed to get reports'
+    });
+  }
+});
+
+// List report schedules
+router.get('/schedules', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const reportType = typeof req.query.reportType === 'string' ? req.query.reportType : undefined;
+    const data = await reportService.getReportSchedules(reportType);
+    res.json({
+      success: true,
+      data
+    });
+  } catch (error) {
+    console.error('Error getting report schedules:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to get report schedules'
+    });
+  }
+});
+
+// Create report schedule
+router.post('/schedules', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { scheduleData }: { scheduleData: ReportScheduleData } = req.body;
+    if (!scheduleData) {
+      res.status(400).json({
+        success: false,
+        error: 'Schedule data is required'
+      });
+      return;
+    }
+
+    const requiredFields: Array<keyof ReportScheduleData> = [
+      'name',
+      'report_type',
+      'frequency',
+      'start_date',
+      'time_of_day'
+    ];
+    const missingField = requiredFields.find((field) => !scheduleData[field]);
+    if (missingField) {
+      res.status(400).json({
+        success: false,
+        error: `Missing required schedule field: ${missingField}`
+      });
+      return;
+    }
+
+    const result = await reportService.createReportSchedule(scheduleData);
+    res.status(201).json({
+      success: true,
+      result
+    });
+  } catch (error) {
+    console.error('Error creating report schedule:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create report schedule'
+    });
+  }
+});
+
+// Delete report schedule
+router.delete('/schedules/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const scheduleId = parseInt(id || '', 10);
+    if (isNaN(scheduleId)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid schedule ID'
+      });
+      return;
+    }
+
+    const result = await reportService.deleteReportSchedule(scheduleId);
+    res.json({
+      success: true,
+      result
+    });
+  } catch (error) {
+    console.error('Error deleting report schedule:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to delete report schedule'
     });
   }
 });

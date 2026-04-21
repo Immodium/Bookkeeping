@@ -276,7 +276,7 @@ export const RetainerManagement: React.FC = () => {
     searchTerm: '',
     statusFilter: 'all',
     billingCycleFilter: 'all',
-    dateFilter: 'this-month' as TimePeriod,
+    dateFilter: 'all-time' as TimePeriod,
     customDateRange: undefined as DateRange | undefined
   });
 

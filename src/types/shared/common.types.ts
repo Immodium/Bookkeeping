@@ -80,6 +80,7 @@ export interface TableState<T> {
 
 // Time period types for reports
 export type TimePeriod = 
+  | 'all-time'
   | 'today' 
   | 'yesterday' 
   | 'last-7-days' 

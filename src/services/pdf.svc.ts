@@ -249,6 +249,57 @@ class PDFService {
   }
 
   /**
+   * Export an on-screen element using browser print-to-PDF.
+   * Users can choose "Save as PDF" in the print dialog.
+   */
+  async exportElementToPDF(selector: string, reportName: string): Promise<void> {
+    const sourceElement = document.querySelector(selector) as HTMLElement | null;
+    if (!sourceElement) {
+      throw new Error('Could not find report content to export.');
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      throw new Error('Please allow pop-ups to export PDF reports.');
+    }
+
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((styleNode) => styleNode.outerHTML)
+      .join('\n');
+
+    const safeTitle = reportName.replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'report';
+
+    printWindow.document.open();
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${safeTitle}</title>
+          ${styles}
+          <style>
+            @page { margin: 0.5in; }
+            body { background: white !important; margin: 0; padding: 0; }
+            [data-report-actions] { display: none !important; }
+          </style>
+        </head>
+        <body>
+          ${sourceElement.outerHTML}
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.focus();
+                window.print();
+              }, 250);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }
+
+  /**
    * Get PDF service status
    */
   async getServiceStatus(): Promise<{ status: string; message?: string }> {

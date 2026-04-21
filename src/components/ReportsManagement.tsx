@@ -424,6 +424,9 @@ export const ReportsManagement: React.FC = () => {
                 />
               </div>
             </div>
+            <p className={`text-xs ${themeClasses.mutedText}`}>
+              Scheduled reports are generated automatically and delivered in-app under Saved Reports for the selected report type.
+            </p>
           </div>
 
           <DialogFooter>

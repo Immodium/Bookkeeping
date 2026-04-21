@@ -126,11 +126,8 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
   const handleExportPDF = async () => {
     setIsExportingPDF(true);
     try {
-      // Create a URL for the current report view
-      const currentUrl = `${window.location.origin}/reports/profit-loss?start=${dateRange.start}&end=${dateRange.end}&method=${accountingMethod}`;
       const reportName = `Profit-Loss-Report-${getFormattedDateRange()}`;
-
-      await pdfService.downloadReportPDF(currentUrl, reportName);
+      await pdfService.exportElementToPDF('[data-report-export-root="profit-loss"]', reportName);
     } catch (error) {
       console.error('Error exporting PDF:', error);
       alert('Failed to export PDF. Please try again.');
@@ -159,7 +156,7 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
 
   return (
     <div className={themeClasses.page}>
-      <div className={themeClasses.pageContainer}>
+      <div className={themeClasses.pageContainer} data-report-export-root="profit-loss">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center">
@@ -175,7 +172,7 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
               <p className={themeClasses.pageSubtitle}>{getFormattedDateRange()}</p>
             </div>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex space-x-3" data-report-actions>
             <button
               onClick={handleSave}
               className={getButtonClasses('primary')}
@@ -185,7 +182,7 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
             </button>
             <button
               onClick={handleSchedule}
-              className={getButtonClasses('secondary')}
+              className={getButtonClasses('primary')}
             >
               <Calendar className={themeClasses.iconButton} />
               Schedule Report
@@ -193,10 +190,10 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
             <button
               onClick={handleExportPDF}
               disabled={isExportingPDF}
-              className={getButtonClasses('secondary')}
+              className={getButtonClasses('primary')}
             >
               <Download className={themeClasses.iconButton} />
-              {isExportingPDF ? 'Generating...' : 'Export PDF'}
+              {isExportingPDF ? 'Preparing PDF...' : 'Export PDF'}
             </button>
           </div>
         </div>

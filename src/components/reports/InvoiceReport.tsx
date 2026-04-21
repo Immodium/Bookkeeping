@@ -6,10 +6,12 @@ import { authenticatedFetch } from '@/utils/api';
 import { formatDateSync, formatDateRangeSync } from '@/utils/formatting';
 import { FormattedCurrency, useCurrencyFormatter } from '@/components/ui/FormattedCurrency';
 import { InvoiceReportData, InvoiceReportProps, ReportDateRange } from '@/types';
+import { pdfService } from '@/services/pdf.svc';
 
 export const InvoiceReport: React.FC<InvoiceReportProps> = ({ onBack, onSave, onSchedule }) => {
   const [reportData, setReportData] = useState<InvoiceReportData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [dateRange, setDateRange] = useState<ReportDateRange>({
     start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0],
@@ -113,6 +115,19 @@ export const InvoiceReport: React.FC<InvoiceReportProps> = ({ onBack, onSave, on
     });
   };
 
+  const handleExportPDF = async () => {
+    setIsExportingPDF(true);
+    try {
+      const reportName = `Invoice-Report-${getFormattedDateRange()}`;
+      await pdfService.exportElementToPDF('[data-report-export-root="invoice"]', reportName);
+    } catch (error) {
+      console.error('Error exporting invoice report PDF:', error);
+      alert('Failed to export PDF. Please try again.');
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className={themeClasses.page}>
@@ -135,7 +150,7 @@ export const InvoiceReport: React.FC<InvoiceReportProps> = ({ onBack, onSave, on
 
   return (
     <div className={themeClasses.page}>
-      <div className={themeClasses.pageContainer}>
+      <div className={themeClasses.pageContainer} data-report-export-root="invoice">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center">
@@ -151,10 +166,10 @@ export const InvoiceReport: React.FC<InvoiceReportProps> = ({ onBack, onSave, on
               <p className={themeClasses.pageSubtitle}>{getFormattedDateRange()}</p>
             </div>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex space-x-3" data-report-actions>
             <button
               onClick={handleSchedule}
-              className={getButtonClasses('secondary')}
+              className={getButtonClasses('primary')}
             >
               <Clock3 className={themeClasses.iconButton} />
               Schedule Report
@@ -166,9 +181,13 @@ export const InvoiceReport: React.FC<InvoiceReportProps> = ({ onBack, onSave, on
               <Save className={themeClasses.iconButton} />
               Save Report
             </button>
-            <button className={getButtonClasses('secondary')}>
+            <button
+              onClick={handleExportPDF}
+              disabled={isExportingPDF}
+              className={getButtonClasses('primary')}
+            >
               <Download className={themeClasses.iconButton} />
-              Export PDF
+              {isExportingPDF ? 'Preparing PDF...' : 'Export PDF'}
             </button>
           </div>
         </div>

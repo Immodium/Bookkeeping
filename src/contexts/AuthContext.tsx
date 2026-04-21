@@ -346,6 +346,7 @@ export const usePermissions = () => {
   const canManageClients = canAccessEverything || userRoles.includes('client_manager') || userRoles.includes('project_manager');
   const canViewReports = canAccessEverything || userRoles.includes('client_manager') || userRoles.includes('project_manager');
   const canManageProjects = canAccessEverything || userRoles.includes('project_manager');
+  const canManageRetainers = canAccessEverything || userRoles.includes('client_manager') || userRoles.includes('project_manager');
   const canManageUsers = canAccessEverything || userRoles.includes('user_manager');
 
   return {
@@ -358,6 +359,7 @@ export const usePermissions = () => {
     canCreateInvoices: !!user && canAccessEverything,
     canManageClients: !!user && canManageClients,
     canManageProjects: !!user && canManageProjects,
-    canManageExpenses: !!user && canAccessEverything
+    canManageExpenses: !!user && canAccessEverything,
+    canManageRetainers: !!user && canManageRetainers
   };
 };

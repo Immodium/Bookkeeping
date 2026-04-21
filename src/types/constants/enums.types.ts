@@ -25,6 +25,27 @@ export type PaymentMethod = typeof PaymentMethod[keyof typeof PaymentMethod];
 export const PAYMENT_METHODS: PaymentMethod[] = Object.values(PaymentMethod);
 export const PAYMENT_STATUSES: PaymentStatus[] = Object.values(PaymentStatus);
 
+// Retainer related enums
+export const RetainerStatus = {
+  ACTIVE: 'active',
+  PAUSED: 'paused',
+  ENDED: 'ended'
+} as const;
+
+export type RetainerStatus = typeof RetainerStatus[keyof typeof RetainerStatus];
+
+export const RetainerBillingCycle = {
+  WEEKLY: 'weekly',
+  MONTHLY: 'monthly',
+  QUARTERLY: 'quarterly',
+  YEARLY: 'yearly'
+} as const;
+
+export type RetainerBillingCycle = typeof RetainerBillingCycle[keyof typeof RetainerBillingCycle];
+
+export const RETAINER_STATUSES: RetainerStatus[] = Object.values(RetainerStatus);
+export const RETAINER_BILLING_CYCLES: RetainerBillingCycle[] = Object.values(RetainerBillingCycle);
+
 // Expense status enum and arrays
 export const ExpenseStatus = {
   PENDING: 'pending',

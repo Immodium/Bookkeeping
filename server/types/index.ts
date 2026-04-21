@@ -8,6 +8,8 @@ export * from './api.types.js';
 export type PaymentStatus = 'received' | 'pending' | 'failed' | 'refunded';
 export type PaymentMethod = 'cash' | 'check' | 'bank_transfer' | 'credit_card' | 'paypal' | 'stripe' | 'other';
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+export type RetainerStatus = 'active' | 'paused' | 'ended';
+export type RetainerBillingCycle = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 export type UserRole = 'admin' | 'client_manager' | 'project_manager' | 'user_manager' | 'user' | 'viewer';
 export const USER_ROLE_VALUES: UserRole[] = [
   'admin',
@@ -135,6 +137,23 @@ export interface Payment extends BaseEntity {
   transaction_id?: string;
   notes?: string;
   status: string;
+}
+
+export interface Retainer extends BaseEntity {
+  client_id: number;
+  client_name?: string;
+  name: string;
+  description?: string;
+  amount: number;
+  currency?: string;
+  billing_cycle: RetainerBillingCycle;
+  start_date: string;
+  next_invoice_date: string;
+  end_date?: string;
+  status: RetainerStatus;
+  auto_renew: number;
+  notes?: string;
+  deleted_at?: string | null;
 }
 
 // Additional server-specific database types

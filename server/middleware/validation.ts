@@ -369,6 +369,70 @@ export const validationSets = {
     body('payment_ids').isArray({ min: 1 }).withMessage('Payment IDs array is required'),
     body('payment_ids.*').isInt({ min: 1 }).withMessage('All payment IDs must be positive integers')
   ] as ValidationChain[],
+
+  // Retainer validation sets
+  getRetainers: [
+    query('status').optional().isIn(['active', 'paused', 'ended']),
+    query('billing_cycle').optional().isIn(['weekly', 'monthly', 'quarterly', 'yearly']),
+    query('client_id').optional().isInt({ min: 1 }),
+    query('search').optional().trim().isLength({ max: 100 }),
+    query('limit').optional().isInt({ min: 1, max: 100 }),
+    query('offset').optional().isInt({ min: 0 })
+  ] as ValidationChain[],
+
+  getRetainerById: [
+    validationRules.id
+  ] as ValidationChain[],
+
+  createRetainer: [
+    body('retainerData.client_id').isInt({ min: 1 }).withMessage('Client ID must be a positive integer'),
+    body('retainerData.name')
+      .trim()
+      .isLength({ min: 1, max: 120 })
+      .withMessage('Retainer name must be between 1 and 120 characters')
+      .escape(),
+    body('retainerData.amount').isFloat({ min: 0.01 }).withMessage('Amount must be a positive number'),
+    body('retainerData.currency')
+      .optional()
+      .trim()
+      .isLength({ min: 3, max: 3 })
+      .withMessage('Currency must be a 3-letter code')
+      .toUpperCase(),
+    body('retainerData.billing_cycle')
+      .optional()
+      .isIn(['weekly', 'monthly', 'quarterly', 'yearly'])
+      .withMessage('Billing cycle must be weekly, monthly, quarterly, or yearly'),
+    body('retainerData.start_date').isISO8601().withMessage('Start date must be in ISO 8601 format'),
+    body('retainerData.next_invoice_date').isISO8601().withMessage('Next invoice date must be in ISO 8601 format'),
+    body('retainerData.end_date').optional().isISO8601().withMessage('End date must be in ISO 8601 format'),
+    body('retainerData.status')
+      .optional()
+      .isIn(['active', 'paused', 'ended'])
+      .withMessage('Status must be active, paused, or ended'),
+    body('retainerData.auto_renew').optional().isBoolean().withMessage('Auto renew must be boolean'),
+    body('retainerData.description').optional().trim().isLength({ max: 1000 }).escape(),
+    body('retainerData.notes').optional().trim().isLength({ max: 2000 }).escape()
+  ] as ValidationChain[],
+
+  updateRetainer: [
+    validationRules.id,
+    body('retainerData.client_id').optional().isInt({ min: 1 }),
+    body('retainerData.name').optional().trim().isLength({ min: 1, max: 120 }).escape(),
+    body('retainerData.amount').optional().isFloat({ min: 0.01 }),
+    body('retainerData.currency').optional().trim().isLength({ min: 3, max: 3 }).toUpperCase(),
+    body('retainerData.billing_cycle').optional().isIn(['weekly', 'monthly', 'quarterly', 'yearly']),
+    body('retainerData.start_date').optional().isISO8601(),
+    body('retainerData.next_invoice_date').optional().isISO8601(),
+    body('retainerData.end_date').optional().isISO8601(),
+    body('retainerData.status').optional().isIn(['active', 'paused', 'ended']),
+    body('retainerData.auto_renew').optional().isBoolean(),
+    body('retainerData.description').optional().trim().isLength({ max: 1000 }).escape(),
+    body('retainerData.notes').optional().trim().isLength({ max: 2000 }).escape()
+  ] as ValidationChain[],
+
+  deleteRetainer: [
+    validationRules.id
+  ] as ValidationChain[],
   
   // Authentication validation sets
   login: [

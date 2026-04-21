@@ -12,6 +12,7 @@ const VALID_TABLES = new Set([
   'recurring_invoice_templates',
   'expenses',
   'payments',
+  'retainers',
   'settings',
   'project_settings',
   'reports',

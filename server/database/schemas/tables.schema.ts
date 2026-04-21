@@ -185,6 +185,34 @@ const expensesSchema: TableSchema = {
 };
 
 /**
+ * Client retainer agreements table
+ */
+const retainersSchema: TableSchema = {
+  name: 'retainers',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'client_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'description', type: 'TEXT' },
+    { name: 'amount', type: 'REAL', constraints: ['NOT NULL'] },
+    { name: 'currency', type: 'TEXT', constraints: ['DEFAULT \'USD\''] },
+    { name: 'billing_cycle', type: 'TEXT', constraints: ['NOT NULL DEFAULT \'monthly\''] },
+    { name: 'start_date', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'next_invoice_date', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'end_date', type: 'TEXT' },
+    { name: 'status', type: 'TEXT', constraints: ['NOT NULL DEFAULT \'active\''] },
+    { name: 'auto_renew', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
+    { name: 'notes', type: 'TEXT' },
+    { name: 'deleted_at', type: 'TEXT' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (client_id) REFERENCES clients (id) ON DELETE CASCADE'
+  ]
+};
+
+/**
  * Invoice design templates table - for invoice layout/design templates
  */
 const invoiceDesignTemplatesSchema: TableSchema = {
@@ -301,6 +329,7 @@ export const tableSchemas: TableSchema[] = [
   invoiceItemsSchema,
   paymentsSchema,
   expensesSchema,
+  retainersSchema,
   reportsSchema,
   settingsSchema,
   projectSettingsSchema,

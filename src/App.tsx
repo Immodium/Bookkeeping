@@ -21,6 +21,7 @@ const EditInvoicePage = lazy(() => import('./components/invoices/EditInvoicePage
 const CreateRecurringInvoicePage = lazy(() => import('./components/invoices/CreateRecurringInvoicePage').then(m => ({ default: m.CreateRecurringInvoicePage })));
 const ExpenseManagement = lazy(() => import('./components/ExpenseManagement').then(m => ({ default: m.ExpenseManagement })));
 const PaymentManagement = lazy(() => import('./components/PaymentManagement').then(m => ({ default: m.PaymentManagement })));
+const RetainerManagement = lazy(() => import('./components/RetainerManagement').then(m => ({ default: m.RetainerManagement })));
 const ReportsManagement = lazy(() => import('./components/ReportsManagement').then(m => ({ default: m.ReportsManagement })));
 const ResponsiveSettings = lazy(() => import('./components/ResponsiveSettings').then(m => ({ default: m.ResponsiveSettings })));
 const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -190,6 +191,14 @@ const App = () => {
               <ProtectedRoute>
                 <ResponsiveLayout>
                   <PaymentManagement />
+                </ResponsiveLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/retainers" element={
+              <ProtectedRoute requiredRoles={['admin', 'client_manager', 'project_manager']}>
+                <ResponsiveLayout>
+                  <RetainerManagement />
                 </ResponsiveLayout>
               </ProtectedRoute>
             } />

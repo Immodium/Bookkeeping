@@ -9,7 +9,8 @@ import {
   LogOut,
   Receipt,
   BarChart,
-  Banknote
+  Banknote,
+  Repeat
 } from 'lucide-react';
 import { cn } from '@/utils/themeUtils.util';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,6 +30,7 @@ const navigation = [
     path: '/invoices#invoices'
   },
   { id: 'expenses', name: 'Expenses', icon: Receipt, path: '/expenses' },
+  { id: 'retainers', name: 'Retainers', icon: Repeat, path: '/retainers' },
   { id: 'payments', name: 'Payments', icon: Banknote, path: '/payments' },
   { id: 'reports', name: 'Reports', icon: BarChart, path: '/reports' },
   { 
@@ -64,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
   const filteredNavigation = navigation
     .filter((item) => {
       if (item.id === 'clients') return canManageClients;
+      if (item.id === 'retainers') return canManageClients;
       if (item.id === 'reports') return canViewReports;
       if (item.id === 'settings') return canManageSettings || canManageProjects;
       return true;

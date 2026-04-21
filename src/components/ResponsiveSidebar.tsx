@@ -9,6 +9,7 @@ import {
   Receipt,
   BarChart,
   Banknote,
+  Repeat,
   Menu,
   X,
   ChevronLeft,
@@ -43,6 +44,7 @@ export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigati
     { id: 'invoices', name: 'Invoices', icon: FileText, path: '/invoices#invoices' },
     { id: 'expenses', name: 'Expenses', icon: Receipt, path: '/expenses' },
     { id: 'payments', name: 'Payments', icon: Banknote, path: '/payments' },
+    { id: 'retainers', name: 'Retainers', icon: Repeat, path: '/retainers' },
     ...(canViewReports ? [{ id: 'reports', name: 'Reports', icon: BarChart, path: '/reports' }] : []),
     ...(canManageSettings || canManageUsers ? [{ id: 'settings', name: 'Settings', icon: SettingsIcon, path: '/settings' }] : [])
   ];

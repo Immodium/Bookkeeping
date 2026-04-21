@@ -11,8 +11,11 @@ import {
   Template, 
   Expense, 
   Payment, 
+  Retainer,
   LineItem,
   InvoiceStatus, 
+  RetainerBillingCycle,
+  RetainerStatus,
   PaymentMethod, 
   PaymentStatus 
 } from './index.js';
@@ -166,6 +169,15 @@ export interface CreatePaymentRequest {
 
 export interface UpdatePaymentRequest {
   paymentData: Partial<PaymentRequest>;
+}
+
+// Retainer API types
+export interface CreateRetainerRequest {
+  retainerData: RetainerRequest;
+}
+
+export interface UpdateRetainerRequest {
+  retainerData: Partial<RetainerRequest>;
 }
 
 // Settings API types
@@ -429,6 +441,24 @@ export interface PaymentRequest {
   reference?: string;
   description?: string;
   status?: PaymentStatus;
+}
+
+/**
+ * Retainer data request interface
+ */
+export interface RetainerRequest {
+  client_id: number;
+  name: string;
+  description?: string;
+  amount: number;
+  currency?: string;
+  billing_cycle?: RetainerBillingCycle;
+  start_date: string;
+  next_invoice_date: string;
+  end_date?: string;
+  status?: RetainerStatus;
+  auto_renew?: boolean | number;
+  notes?: string;
 }
 
 /**

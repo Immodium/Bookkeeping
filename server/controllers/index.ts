@@ -91,6 +91,16 @@ export {
   searchPayments
 } from './paymentController.js';
 
+// Retainer controller
+export {
+  getAllRetainers,
+  getRetainerById,
+  createRetainer,
+  updateRetainer,
+  deleteRetainer,
+  getRetainerStats
+} from './retainerController.js';
+
 // Authentication controller
 export {
   login,

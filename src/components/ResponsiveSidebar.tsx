@@ -4,7 +4,6 @@ import {
   Users, 
   FileText, 
   Settings as SettingsIcon,
-  CreditCard,
   LogOut,
   Receipt,
   BarChart,
@@ -20,6 +19,7 @@ import { useAuth, usePermissions } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
+import slimbooksLogo from '@/assets/slimbooks_logo.png';
 
 interface NavItem {
   id: string;
@@ -148,9 +148,8 @@ export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigati
       {/* Mobile Header */}
       {isMobile && (
         <div className="flex h-16 items-center justify-between border-b border-border px-4 lg:hidden">
-          <div className="flex items-center space-x-2">
-            <CreditCard className="h-6 w-6 text-primary" />
-            <h1 className="text-lg font-bold text-card-foreground">{companySettings.companyName || 'Slimbooks'}</h1>
+          <div className="flex items-center">
+            <img src={slimbooksLogo} alt={companySettings.companyName || 'Slimbooks'} className="h-6 w-auto" />
           </div>
           <button
             onClick={() => setIsMobileMenuOpen(false)}
@@ -164,9 +163,12 @@ export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigati
       {/* Desktop Header */}
       {!isMobile && (
         <div className="flex h-16 items-center justify-between border-b border-border px-6">
-          <div className="flex items-center space-x-2">
-            <CreditCard className={cn("h-8 w-8 text-primary", isCollapsed && "h-6 w-6")} />
-            {!isCollapsed && <h1 className="text-xl font-bold text-card-foreground">{companySettings.companyName || 'Slimbooks'}</h1>}
+          <div className="flex items-center">
+            <img
+              src={slimbooksLogo}
+              alt={companySettings.companyName || 'Slimbooks'}
+              className={cn('w-auto', isCollapsed ? 'h-6' : 'h-8')}
+            />
           </div>
           {/* Collapse Button */}
           <button

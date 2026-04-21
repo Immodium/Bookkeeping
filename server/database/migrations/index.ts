@@ -9,7 +9,6 @@ import { up as migration004 } from './004_fix_expenses_table_schema.js';
 import { up as migration005 } from './005_add_name_columns_to_clients.js';
 import { up as migration006 } from './006_add_user_roles.js';
 import { up as migration007 } from './007_add_roles_json_to_users.js';
-import { up as migration008 } from './008_add_report_schedules.js';
 
 interface Migration {
   id: string;
@@ -55,11 +54,6 @@ const migrations: Migration[] = [
     id: '007',
     name: 'add_roles_json_to_users',
     up: migration007
-  },
-  {
-    id: '008',
-    name: 'add_report_schedules',
-    up: migration008
   }
 ];
 

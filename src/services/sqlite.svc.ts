@@ -15,8 +15,7 @@ import {
 } from '@/types';
 import type { ApiResponse } from '@/types/shared/common.types';
 import { parseProjectSettingsWithDefaults, validateProjectSettings } from '@/utils/settingsValidation';
-import { getToken } from '@/utils/api';
-import { envConfig } from '@/lib/env-config';
+import { getToken } from '@/utils/api/auth.util';
 class SQLiteService {
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
@@ -27,9 +26,9 @@ class SQLiteService {
   private readonly SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
   private getApiBaseUrl(): string {
-    // Prefer configured API URL, but keep browser same-origin fallback for cloud deployments.
-    if (envConfig.API_URL) {
-      return `${envConfig.API_URL}/api`;
+    const configuredApiUrl = import.meta.env?.VITE_API_URL;
+    if (configuredApiUrl) {
+      return `${configuredApiUrl.replace(/\/$/, '')}/api`;
     }
     if (typeof window !== 'undefined') {
       return `${window.location.origin}/api`;

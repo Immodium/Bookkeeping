@@ -20,6 +20,10 @@ export interface ServerConfig {
   nodeEnv: string;
   isDevelopment: boolean;
   isProduction: boolean;
+  enableHttps: boolean;
+  sslKeyPath: string;
+  sslCertPath: string;
+  enforceHttpsRedirect: boolean;
   corsOrigin: string;
   corsCredentials: boolean;
   maxFileSize: number;
@@ -188,6 +192,10 @@ export const serverConfig: ServerConfig = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isDevelopment: process.env.NODE_ENV === 'development',
   isProduction: process.env.NODE_ENV === 'production',
+  enableHttps: process.env.ENABLE_HTTPS === 'true',
+  sslKeyPath: process.env.SSL_KEY_PATH || 'certs/server.key',
+  sslCertPath: process.env.SSL_CERT_PATH || 'certs/server.crt',
+  enforceHttpsRedirect: process.env.ENFORCE_HTTPS_REDIRECT === 'true',
 
   // CORS configuration
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:8080',
@@ -413,6 +421,15 @@ export const validateConfig = (): void => {
       requiredVars.push('JWT_SECRET');
     } else {
       warnings.push('JWT_SECRET is using default value - change in production');
+    }
+  }
+
+  if (serverConfig.enableHttps) {
+    if (!serverConfig.sslKeyPath.trim()) {
+      throw new Error('ENABLE_HTTPS=true requires a non-empty SSL_KEY_PATH');
+    }
+    if (!serverConfig.sslCertPath.trim()) {
+      throw new Error('ENABLE_HTTPS=true requires a non-empty SSL_CERT_PATH');
     }
   }
 

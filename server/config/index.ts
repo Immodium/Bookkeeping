@@ -38,8 +38,19 @@ export interface ServerConfig {
  * Database configuration interface
  */
 export interface DatabaseConfig {
+  engine: 'sqlite' | 'postgres';
   dbPath: string;
   backupPath: string;
+  postgres: {
+    host: string;
+    port: number;
+    database: string;
+    user: string;
+    password: string;
+    connectionString: string | undefined;
+    ssl: boolean;
+    maxConnections: number;
+  };
   timeout: number;
   verbose: ((message: string) => void) | null;
   pragmas: {
@@ -165,11 +176,31 @@ export interface ValidationConfig {
 }
 
 /**
+ * Object storage configuration interface
+ */
+export interface StorageConfig {
+  provider: 'local' | 's3';
+  local: {
+    basePath: string;
+    publicBaseUrl: string;
+  };
+  s3: {
+    bucketName: string;
+    region: string;
+    endpoint: string | undefined;
+    accessKeyId: string | undefined;
+    secretAccessKey: string | undefined;
+    forcePathStyle: boolean;
+  };
+}
+
+/**
  * Complete application configuration interface
  */
 export interface AppConfigComplete {
   server: ServerConfig;
   database: DatabaseConfig;
+  storage: StorageConfig;
   auth: AuthConfig;
   email: EmailConfig;
   stripe: StripeConfig;
@@ -214,9 +245,20 @@ export const serverConfig: ServerConfig = {
  * Database configuration
  */
 export const databaseConfig: DatabaseConfig = {
+  engine: process.env.DB_ENGINE === 'postgres' ? 'postgres' : 'sqlite',
   // Database file path (relative to project root)
   dbPath: process.env.DB_PATH || 'data/slimbooks.db',
   backupPath: process.env.DB_BACKUP_PATH || 'data/backups',
+  postgres: {
+    host: process.env.PG_HOST || 'localhost',
+    port: parseInt(process.env.PG_PORT || '5432'),
+    database: process.env.PG_DATABASE || 'slimbooks',
+    user: process.env.PG_USER || 'postgres',
+    password: process.env.PG_PASSWORD || '',
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.PG_SSL === 'true',
+    maxConnections: parseInt(process.env.PG_MAX_CONNECTIONS || '20')
+  },
 
   // Connection settings
   timeout: 5000,
@@ -226,6 +268,25 @@ export const databaseConfig: DatabaseConfig = {
   pragmas: {
     foreign_keys: 'ON',
     journal_mode: 'WAL'
+  }
+};
+
+/**
+ * Object storage configuration
+ */
+export const storageConfig: StorageConfig = {
+  provider: process.env.STORAGE_PROVIDER === 's3' ? 's3' : 'local',
+  local: {
+    basePath: process.env.STORAGE_LOCAL_BASE_PATH || 'public/uploads',
+    publicBaseUrl: process.env.STORAGE_PUBLIC_BASE_URL || '/uploads'
+  },
+  s3: {
+    bucketName: process.env.S3_BUCKET_NAME || '',
+    region: process.env.S3_REGION || '',
+    endpoint: process.env.S3_ENDPOINT,
+    accessKeyId: process.env.S3_ACCESS_KEY_ID,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true'
   }
 };
 
@@ -390,6 +451,7 @@ export const validationConfig: ValidationConfig = {
 export const getAllConfig = (): AppConfigComplete => ({
   server: serverConfig,
   database: databaseConfig,
+  storage: storageConfig,
   auth: authConfig,
   email: emailConfig,
   stripe: stripeConfig,
@@ -413,6 +475,30 @@ export const validateConfig = (): void => {
       requiredVars.push('JWT_SECRET');
     } else {
       warnings.push('JWT_SECRET is using default value - change in production');
+    }
+  }
+
+  if (storageConfig.provider === 's3') {
+    if (!storageConfig.s3.bucketName) {
+      requiredVars.push('S3_BUCKET_NAME');
+    }
+    if (!storageConfig.s3.region) {
+      requiredVars.push('S3_REGION');
+    }
+  }
+
+  if (databaseConfig.engine === 'postgres' && !databaseConfig.postgres.connectionString) {
+    if (!databaseConfig.postgres.host) {
+      requiredVars.push('PG_HOST');
+    }
+    if (!databaseConfig.postgres.database) {
+      requiredVars.push('PG_DATABASE');
+    }
+    if (!databaseConfig.postgres.user) {
+      requiredVars.push('PG_USER');
+    }
+    if (!databaseConfig.postgres.password) {
+      requiredVars.push('PG_PASSWORD');
     }
   }
 
@@ -442,6 +528,7 @@ export const validateConfig = (): void => {
 const config: AppConfigComplete = {
   server: serverConfig,
   database: databaseConfig,
+  storage: storageConfig,
   auth: authConfig,
   email: emailConfig,
   stripe: stripeConfig,

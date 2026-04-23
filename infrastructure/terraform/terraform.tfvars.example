@@ -1,0 +1,16 @@
+aws_region          = "us-east-1"
+name_prefix         = "slimbooks-prod"
+vpc_cidr            = "10.20.0.0/16"
+container_image     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/slimbooks:latest"
+container_port      = 3002
+acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/replace-me"
+
+db_name     = "slimbooks"
+db_username = "slimbooks_admin"
+db_password = "replace-with-secret"
+
+app_secrets = {
+  JWT_SECRET         = "replace-me"
+  JWT_REFRESH_SECRET = "replace-me"
+  SESSION_SECRET     = "replace-me"
+}

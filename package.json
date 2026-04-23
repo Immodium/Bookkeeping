@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "concurrently --kill-others --raw \"tsx watch server/index.ts\" vite",
     "build": "tsc -p server/tsconfig.json && vite build",
-    "start": "concurrently \"node server/dist/index.js\" \"vite preview --host\"",
+    "start": "node server/dist/index.js",
+    "start:legacy": "concurrently \"node server/dist/index.js\" \"vite preview --host\"",
     "lint": "eslint . && tsc --noEmit -p server/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",

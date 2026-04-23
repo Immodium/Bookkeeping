@@ -1,22 +1,25 @@
 // Database Module - Main entry point for all database operations
 // Provides unified database access and initialization
 
-import { database, SQLiteDatabase } from './SQLiteDatabase.js';
+import { SQLiteDatabase } from './SQLiteDatabase.js';
 import { createTables } from './schemas/tables.schema.js';
 import { initializeAllSeeds } from './seeds/initial.seed.js';
-import { getDatabaseConfig } from './config/sqlite.config.js';
 import { runMigrations } from './migrations/index.js';
 import type { IDatabase } from '../types/database.types.js';
+import { createConfiguredDatabase, getRuntimeDatabaseConfig } from './factories/databaseFactory.js';
 
 /**
  * Main database instance (singleton)
  */
-export const db: IDatabase = database;
+export const db: IDatabase = createConfiguredDatabase();
 
 /**
  * Get a fresh database instance (for testing or specific use cases)
  */
 export const createDatabase = (): SQLiteDatabase => {
+  if (db instanceof SQLiteDatabase) {
+    return db;
+  }
   return new SQLiteDatabase();
 };
 
@@ -29,7 +32,7 @@ export const initializeDatabase = async (includeSampleData = false): Promise<voi
     // Ensure database is connected before proceeding
     if (!db.isConnected()) {
       console.log('Database not connected, attempting to connect...');
-      await db.connect(getDatabaseConfig());
+      await db.connect(getRuntimeDatabaseConfig());
     }
 
     // Create all tables
@@ -114,7 +117,7 @@ export const optimizeDatabase = (): void => {
 export type { IDatabase } from '../types/database.types.js';
 export { createTables } from './schemas/tables.schema.js';
 export { initializeAllSeeds } from './seeds/initial.seed.js';
-export { getDatabaseConfig } from './config/sqlite.config.js';
+export { getDatabaseConfig, getSQLiteDatabaseConfig } from './config/sqlite.config.js';
 
 // Re-export the SQLite implementation for advanced usage
 export { SQLiteDatabase } from './SQLiteDatabase.js';

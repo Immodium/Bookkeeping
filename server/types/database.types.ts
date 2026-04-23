@@ -7,6 +7,11 @@
 export interface DatabaseConfig {
   path: string;
   options?: DatabaseOptions;
+  engine?: 'sqlite' | 'postgres';
+  postgres?: {
+    connectionString: string;
+    ssl?: boolean;
+  };
 }
 
 export interface DatabaseOptions {

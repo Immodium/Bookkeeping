@@ -10,9 +10,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
- * Get the database configuration based on environment
+ * Get the SQLite database configuration based on environment.
  */
-export const getDatabaseConfig = (): DatabaseConfig => {
+export const getSQLiteDatabaseConfig = (): DatabaseConfig => {
   const projectRoot = join(__dirname, '..', '..', '..');
   const dbPath = process.env.DB_PATH 
     ? resolve(projectRoot, process.env.DB_PATH)
@@ -36,6 +36,11 @@ export const getDatabaseConfig = (): DatabaseConfig => {
     options
   };
 };
+
+/**
+ * Backward-compatible alias used by existing imports.
+ */
+export const getDatabaseConfig = (): DatabaseConfig => getSQLiteDatabaseConfig();
 
 /**
  * SQLite pragma settings for optimal performance

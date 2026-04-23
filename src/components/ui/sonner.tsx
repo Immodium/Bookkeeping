@@ -15,15 +15,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
         classNames: {
           toast:
             [
-              "group toast group-[.toaster]:shadow-lg",
-              "group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border",
+              "group toast shadow-lg bg-background text-foreground border-border",
               "data-[type=success]:bg-[hsl(var(--status-success-background))] data-[type=success]:text-[hsl(var(--status-success-foreground))] data-[type=success]:border-[hsl(var(--status-success))]",
               "data-[type=error]:bg-[hsl(var(--status-error-background))] data-[type=error]:text-[hsl(var(--status-error-foreground))] data-[type=error]:border-[hsl(var(--status-error))]",
               "data-[type=warning]:bg-[hsl(var(--status-warning-background))] data-[type=warning]:text-[hsl(var(--status-warning-foreground))] data-[type=warning]:border-[hsl(var(--status-warning))]",
               "data-[type=info]:bg-[hsl(var(--status-info-background))] data-[type=info]:text-[hsl(var(--status-info-foreground))] data-[type=info]:border-[hsl(var(--status-info))]",
             ].join(" "),
           title: "font-semibold",
-          description: "group-[.toast]:text-muted-foreground",
+          description: "group-[.toast]:text-foreground/80",
           actionButton:
             "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
           cancelButton:

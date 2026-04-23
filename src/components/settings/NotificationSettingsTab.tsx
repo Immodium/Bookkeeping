@@ -224,42 +224,23 @@ export const NotificationSettingsTab = forwardRef<SettingsTabRef>((props, ref) =
           </div>
 
           {/* Display Settings */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">
-                Toast Duration (milliseconds)
-              </label>
-              <input
-                type="number"
-                min="1000"
-                max="10000"
-                step="500"
-                value={settings.toastDuration}
-                onChange={(e) => handleSettingChange('toastDuration', parseInt(e.target.value) || 4000)}
-                disabled={!settings.showToastNotifications}
-                className={themeClasses.input}
-              />
-              <p className="text-xs text-muted-foreground mt-1">How long notifications stay visible (1-10 seconds)</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">
-                Toast Position
-              </label>
-              <select
-                value={settings.toastPosition}
-                onChange={(e) => handleSettingChange('toastPosition', e.target.value)}
-                disabled={!settings.showToastNotifications}
-                className={themeClasses.select}
-              >
-                <option value="top-left">Top Left</option>
-                <option value="top-center">Top Center</option>
-                <option value="top-right">Top Right</option>
-                <option value="bottom-left">Bottom Left</option>
-                <option value="bottom-center">Bottom Center</option>
-                <option value="bottom-right">Bottom Right</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
+              Toast Duration (milliseconds)
+            </label>
+            <input
+              type="number"
+              min="1000"
+              max="10000"
+              step="500"
+              value={settings.toastDuration}
+              onChange={(e) => handleSettingChange('toastDuration', parseInt(e.target.value) || 4000)}
+              disabled={!settings.showToastNotifications}
+              className={themeClasses.input}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Notifications always appear in the bottom-right corner.
+            </p>
           </div>
         </div>
       </div>

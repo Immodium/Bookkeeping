@@ -5,9 +5,30 @@ container_image     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/slimbooks:la
 container_port      = 3002
 acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/replace-me"
 
+cors_origin = "https://app.example.com"
+client_url  = "https://app.example.com"
+
+enable_nat_gateway  = true
+enable_s3_public_read = true
+s3_allowed_cors_origins = ["https://app.example.com"]
+
 db_name     = "slimbooks"
 db_username = "slimbooks_admin"
 db_password = "replace-with-secret"
+
+db_instance_class             = "db.t4g.micro"
+db_allocated_storage          = 20
+db_engine_version             = "15.8"
+db_multi_az                   = false
+db_backup_retention_days      = 7
+db_enable_deletion_protection = true
+db_enable_performance_insights = false
+db_apply_immediately          = false
+
+ecs_task_cpu             = "512"
+ecs_task_memory          = "1024"
+ecs_log_retention_days   = 30
+runtime_storage_provider = "s3"
 
 app_secrets = {
   JWT_SECRET         = "replace-me"

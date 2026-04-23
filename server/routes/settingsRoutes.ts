@@ -3,10 +3,9 @@
 
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import { fileURLToPath } from 'url';
-import { dirname, resolve, extname } from 'path';
+import { extname } from 'path';
 import { randomUUID } from 'crypto';
-import fs from 'fs/promises';
+import { getStorageProvider } from '../storage/index.js';
 import {
   getAllSettings,
   getSettingByKey,
@@ -18,28 +17,25 @@ import { emailProviderService } from '../services/EmailProviderService.js';
 
 const router: Router = Router();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const LOGO_STORAGE_PREFIX = 'logos';
 
-// Configure multer for image uploads
-const imageStorage = multer.diskStorage({
-  destination: async (req, file, cb) => {
-    const uploadDir = resolve(__dirname, '../../public/uploads/logos');
-    try {
-      await fs.mkdir(uploadDir, { recursive: true });
-      cb(null, uploadDir);
-    } catch (error) {
-      cb(error as Error, uploadDir);
-    }
-  },
-  filename: (req, file, cb) => {
-    const uniqueName = `logo-${randomUUID()}${extname(file.originalname)}`;
-    cb(null, uniqueName);
+const extractStorageKeyFromPublicUrl = (url: string | undefined): string | null => {
+  if (!url) return null;
+  if (url.startsWith('/uploads/')) {
+    return url.slice('/uploads/'.length);
   }
-});
+  const bucketPattern = /\.s3[.-][^/]+\.amazonaws\.com\//;
+  if (bucketPattern.test(url)) {
+    return url.replace(/^https?:\/\/[^/]+\//, '');
+  }
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return null;
+  }
+  return url.replace(/^\/+/, '');
+};
 
 const uploadImage = multer({
-  storage: imageStorage,
+  storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB limit for images
     files: 1
@@ -129,7 +125,14 @@ router.post('/company/logo', requireAuth, uploadImage.single('logo'), async (req
     }
 
     const { settingsService } = await import('../services/SettingsService.js');
-    const logoPath = `/uploads/logos/${req.file.filename}`;
+    const storageProvider = getStorageProvider();
+    const logoObjectKey = `${LOGO_STORAGE_PREFIX}/${randomUUID()}${extname(req.file.originalname) || '.png'}`;
+    const uploadResult = await storageProvider.uploadObject({
+      key: logoObjectKey,
+      body: req.file.buffer,
+      contentType: req.file.mimetype || 'application/octet-stream'
+    });
+    const logoPath = uploadResult.url;
 
     // Get existing company settings
     const existingSettings = (await settingsService.getSettingByKey('company.company_settings') as Record<string, string>) || {
@@ -144,16 +147,13 @@ router.post('/company/logo', requireAuth, uploadImage.single('logo'), async (req
       brandingImage: ''
     };
 
-    // Delete old logo file if it exists
-    if (existingSettings.brandingImage && existingSettings.brandingImage.startsWith('/uploads/logos/')) {
-      const oldFilename = existingSettings.brandingImage.split('/').pop();
-      if (oldFilename && oldFilename.startsWith('logo-')) {
-        const oldFilePath = resolve(__dirname, '../../public/uploads/logos', oldFilename);
-        try {
-          await fs.unlink(oldFilePath);
-        } catch (deleteError) {
-          console.warn('Could not delete old logo file:', deleteError);
-        }
+    // Delete old logo object if it exists
+    const previousLogoKey = extractStorageKeyFromPublicUrl(existingSettings.brandingImage);
+    if (previousLogoKey && previousLogoKey.startsWith(`${LOGO_STORAGE_PREFIX}/`)) {
+      try {
+        await storageProvider.deleteObject({ key: previousLogoKey });
+      } catch (deleteError) {
+        console.warn('Could not delete old logo object:', deleteError);
       }
     }
 
@@ -181,6 +181,7 @@ router.post('/company/logo', requireAuth, uploadImage.single('logo'), async (req
 router.delete('/company/logo', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { settingsService } = await import('../services/SettingsService.js');
+    const storageProvider = getStorageProvider();
 
     // Get existing company settings
     const existingSettings = (await settingsService.getSettingByKey('company.company_settings') as Record<string, string>) || {
@@ -195,17 +196,14 @@ router.delete('/company/logo', requireAuth, async (req: Request, res: Response):
       brandingImage: ''
     };
 
-    // Delete logo file if it exists
-    if (existingSettings.brandingImage && existingSettings.brandingImage.startsWith('/uploads/logos/')) {
-      const filename = existingSettings.brandingImage.split('/').pop();
-      if (filename && filename.startsWith('logo-')) {
-        const filePath = resolve(__dirname, '../../public/uploads/logos', filename);
-        try {
-          await fs.unlink(filePath);
-        } catch (deleteError) {
-          console.warn('Could not delete logo file:', deleteError);
-          // Don't fail if file doesn't exist
-        }
+    // Delete logo object if it exists
+    const storageKey = extractStorageKeyFromPublicUrl(existingSettings.brandingImage);
+    if (storageKey && storageKey.startsWith(`${LOGO_STORAGE_PREFIX}/`)) {
+      try {
+        await storageProvider.deleteObject({ key: storageKey });
+      } catch (deleteError) {
+        console.warn('Could not delete logo object:', deleteError);
+        // Don't fail request when cleanup fails
       }
     }
 

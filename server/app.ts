@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
+import { existsSync } from 'fs';
 
 // Import configuration
 import { serverConfig, validateConfig } from './config/index.js';
@@ -99,9 +100,12 @@ export const createApp = async () => {
     });
   });
 
-  // Serve static files from uploads directory
+  // Serve static files from uploads directory for local storage mode.
+  // In S3 mode, public URLs point directly to object storage.
   const uploadsPath = join(__dirname, '..', 'public', 'uploads');
-  app.use('/uploads', express.static(uploadsPath));
+  if (existsSync(uploadsPath)) {
+    app.use('/uploads', express.static(uploadsPath));
+  }
 
   // Serve static files from dist directory (built frontend)
   const distPath = join(__dirname, '..', 'dist');

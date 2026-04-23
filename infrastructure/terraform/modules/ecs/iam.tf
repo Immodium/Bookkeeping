@@ -11,7 +11,10 @@ resource "aws_iam_role_policy" "task_runtime" {
           "secretsmanager:GetSecretValue",
           "kms:Decrypt"
         ]
-        Resource = [var.secrets_manager_arn]
+        Resource = [
+          var.secrets_manager_arn,
+          "${var.secrets_manager_arn}:*"
+        ]
       },
       {
         Effect = "Allow"

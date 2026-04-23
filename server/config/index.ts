@@ -4,12 +4,14 @@
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { applySecretBundleToEnv } from '../utils/awsSecretBundle.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Load environment variables from project root
 dotenv.config({ path: join(__dirname, '..', '..', '.env') });
+applySecretBundleToEnv();
 
 /**
  * Server configuration interface
@@ -53,6 +55,7 @@ export interface DatabaseConfig {
   };
   timeout: number;
   verbose: ((message: string) => void) | null;
+  useUtcSqlFunctions: boolean;
   pragmas: {
     foreign_keys: string;
     journal_mode: string;
@@ -263,6 +266,7 @@ export const databaseConfig: DatabaseConfig = {
   // Connection settings
   timeout: 5000,
   verbose: serverConfig.isDevelopment ? console.log : null,
+  useUtcSqlFunctions: process.env.DB_ENGINE === 'postgres',
 
   // SQLite pragmas
   pragmas: {
@@ -498,7 +502,7 @@ export const validateConfig = (): void => {
       requiredVars.push('PG_USER');
     }
     if (!databaseConfig.postgres.password) {
-      requiredVars.push('PG_PASSWORD');
+      requiredVars.push('PG_PASSWORD (or APP_SECRETS_BUNDLE.PG_PASSWORD)');
     }
   }
 

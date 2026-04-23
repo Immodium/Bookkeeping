@@ -29,3 +29,4 @@ variable "health_check_path" {
   type        = string
   default     = "/api/health"
 }
+

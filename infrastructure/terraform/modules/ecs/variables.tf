@@ -40,11 +40,6 @@ variable "desired_count" {
   default     = 1
 }
 
-variable "rds_endpoint" {
-  description = "RDS endpoint hostname"
-  type        = string
-}
-
 variable "s3_bucket_name" {
   description = "S3 bucket name for object storage"
   type        = string
@@ -67,8 +62,29 @@ variable "task_memory" {
   default     = "1024"
 }
 
-variable "allowed_ingress_cidrs" {
-  description = "CIDR blocks allowed to call ECS service directly"
-  type        = list(string)
-  default     = ["10.0.0.0/8"]
+variable "alb_security_group_id" {
+  description = "ALB security group that can reach ECS tasks"
+  type        = string
+}
+
+variable "cors_origin" {
+  description = "CORS origin value for backend runtime"
+  type        = string
+}
+
+variable "client_url" {
+  description = "Client URL value for backend runtime"
+  type        = string
+}
+
+variable "log_retention_days" {
+  description = "CloudWatch log group retention in days"
+  type        = number
+  default     = 30
+}
+
+variable "storage_provider" {
+  description = "Storage backend used by Slimbooks runtime"
+  type        = string
+  default     = "s3"
 }

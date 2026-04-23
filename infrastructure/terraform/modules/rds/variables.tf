@@ -47,8 +47,37 @@ variable "engine_version" {
   default     = "15.8"
 }
 
-variable "allowed_cidr_blocks" {
-  description = "CIDR blocks allowed to reach PostgreSQL"
-  type        = list(string)
-  default     = ["10.0.0.0/8"]
+variable "app_security_group_id" {
+  description = "Application security group ID allowed to connect to RDS"
+  type        = string
+}
+
+variable "enable_deletion_protection" {
+  description = "Enable RDS deletion protection and require final snapshot"
+  type        = bool
+  default     = true
+}
+
+variable "backup_retention_days" {
+  description = "RDS backup retention period in days"
+  type        = number
+  default     = 7
+}
+
+variable "multi_az" {
+  description = "Enable Multi-AZ deployment"
+  type        = bool
+  default     = false
+}
+
+variable "enable_performance_insights" {
+  description = "Enable RDS Performance Insights"
+  type        = bool
+  default     = false
+}
+
+variable "apply_immediately" {
+  description = "Whether RDS changes should apply immediately"
+  type        = bool
+  default     = false
 }

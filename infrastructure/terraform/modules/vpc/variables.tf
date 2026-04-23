@@ -12,3 +12,9 @@ variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
 }
+
+variable "enable_nat_gateway" {
+  description = "Whether to create a NAT gateway for private subnet egress"
+  type        = bool
+  default     = true
+}

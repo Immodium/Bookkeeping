@@ -3,13 +3,6 @@ resource "aws_security_group" "ecs_tasks" {
   description = "Security group for Slimbooks ECS tasks"
   vpc_id      = var.vpc_id
 
-  ingress {
-    from_port   = var.container_port
-    to_port     = var.container_port
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_ingress_cidrs
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -18,8 +11,76 @@ resource "aws_security_group" "ecs_tasks" {
   }
 }
 
+resource "aws_security_group_rule" "alb_to_app" {
+  type                     = "ingress"
+  from_port                = var.container_port
+  to_port                  = var.container_port
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.ecs_tasks.id
+  source_security_group_id = var.alb_security_group_id
+}
+
 resource "aws_ecs_cluster" "this" {
   name = "${var.name_prefix}-cluster"
+}
+
+resource "aws_efs_file_system" "app_data" {
+  creation_token = "${var.name_prefix}-app-data"
+  encrypted      = true
+
+  lifecycle_policy {
+    transition_to_ia = "AFTER_30_DAYS"
+  }
+}
+
+resource "aws_efs_access_point" "app_data" {
+  file_system_id = aws_efs_file_system.app_data.id
+
+  root_directory {
+    path = "/slimbooks"
+    creation_info {
+      owner_gid   = 1001
+      owner_uid   = 1001
+      permissions = "0755"
+    }
+  }
+
+  posix_user {
+    gid = 1001
+    uid = 1001
+  }
+}
+
+resource "aws_security_group" "efs" {
+  name        = "${var.name_prefix}-efs-sg"
+  description = "Security group for Slimbooks EFS"
+  vpc_id      = var.vpc_id
+}
+
+resource "aws_security_group_rule" "ecs_to_efs" {
+  type                     = "egress"
+  from_port                = 2049
+  to_port                  = 2049
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.ecs_tasks.id
+  source_security_group_id = aws_security_group.efs.id
+}
+
+resource "aws_security_group_rule" "efs_from_ecs" {
+  type                     = "ingress"
+  from_port                = 2049
+  to_port                  = 2049
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.efs.id
+  source_security_group_id = aws_security_group.ecs_tasks.id
+}
+
+resource "aws_efs_mount_target" "app_data" {
+  count = length(var.private_subnet_ids)
+
+  file_system_id  = aws_efs_file_system.app_data.id
+  subnet_id       = var.private_subnet_ids[count.index]
+  security_groups = [aws_security_group.efs.id]
 }
 
 resource "aws_iam_role" "task_execution" {
@@ -40,6 +101,11 @@ resource "aws_iam_role" "task_execution" {
 resource "aws_iam_role_policy_attachment" "task_execution_managed" {
   role       = aws_iam_role.task_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_cloudwatch_log_group" "ecs" {
+  name              = "/ecs/${var.name_prefix}"
+  retention_in_days = var.log_retention_days
 }
 
 resource "aws_ecs_task_definition" "app" {
@@ -68,18 +134,34 @@ resource "aws_ecs_task_definition" "app" {
 
       environment = [
         { name = "NODE_ENV", value = "production" },
-        { name = "DB_ENGINE", value = "postgres" },
-        { name = "PG_HOST", value = var.rds_endpoint },
-        { name = "PG_PORT", value = "5432" },
-        { name = "STORAGE_PROVIDER", value = "s3" },
+        { name = "PORT", value = tostring(var.container_port) },
+        { name = "DB_ENGINE", value = "sqlite" },
+        { name = "DB_PATH", value = "/mnt/app-data/data/slimbooks.db" },
+        { name = "DB_BACKUP_PATH", value = "/mnt/app-data/data/backups" },
+        { name = "UPLOAD_PATH", value = "/mnt/app-data/uploads" },
+        { name = "STORAGE_PROVIDER", value = var.storage_provider },
         { name = "S3_BUCKET_NAME", value = var.s3_bucket_name },
-        { name = "S3_REGION", value = var.aws_region }
+        { name = "S3_REGION", value = var.aws_region },
+        { name = "CORS_ORIGIN", value = var.cors_origin },
+        { name = "CLIENT_URL", value = var.client_url },
+        { name = "ENABLE_SAMPLE_DATA", value = "false" },
+        { name = "ENABLE_DEBUG_ENDPOINTS", value = "false" },
+        { name = "S3_FORCE_PATH_STYLE", value = "false" },
+        { name = "STORAGE_PUBLIC_BASE_URL", value = "https://${var.s3_bucket_name}.s3.${var.aws_region}.amazonaws.com" }
       ]
 
       secrets = [
         {
-          name      = "APP_SECRETS_BUNDLE"
-          valueFrom = var.secrets_manager_arn
+          name      = "JWT_SECRET"
+          valueFrom = "${var.secrets_manager_arn}:JWT_SECRET::"
+        },
+        {
+          name      = "JWT_REFRESH_SECRET"
+          valueFrom = "${var.secrets_manager_arn}:JWT_REFRESH_SECRET::"
+        },
+        {
+          name      = "SESSION_SECRET"
+          valueFrom = "${var.secrets_manager_arn}:SESSION_SECRET::"
         }
       ]
 
@@ -87,12 +169,32 @@ resource "aws_ecs_task_definition" "app" {
         logDriver = "awslogs"
         options = {
           awslogs-region        = var.aws_region
-          awslogs-group         = "/ecs/${var.name_prefix}"
+          awslogs-group         = aws_cloudwatch_log_group.ecs.name
           awslogs-stream-prefix = "app"
         }
-      }
+      },
+      mountPoints = [
+        {
+          sourceVolume  = "app_data"
+          containerPath = "/mnt/app-data"
+          readOnly      = false
+        }
+      ]
     }
   ])
+
+  volume {
+    name = "app_data"
+
+    efs_volume_configuration {
+      file_system_id          = aws_efs_file_system.app_data.id
+      transit_encryption      = "ENABLED"
+      authorization_config {
+        access_point_id = aws_efs_access_point.app_data.id
+        iam             = "DISABLED"
+      }
+    }
+  }
 }
 
 resource "aws_ecs_service" "app" {
@@ -113,4 +215,11 @@ resource "aws_ecs_service" "app" {
     container_name   = "slimbooks"
     container_port   = var.container_port
   }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.task_execution_managed,
+    aws_iam_role_policy.task_runtime,
+    aws_cloudwatch_log_group.ecs,
+    aws_efs_mount_target.app_data
+  ]
 }

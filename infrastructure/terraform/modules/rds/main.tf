@@ -1,13 +1,17 @@
+locals {
+  rds_security_group_id = aws_security_group.rds.id
+}
+
 resource "aws_security_group" "rds" {
   name        = "${var.name_prefix}-rds-sg"
   description = "Security group for PostgreSQL"
   vpc_id      = var.vpc_id
 
   ingress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [var.app_security_group_id]
   }
 
   egress {
@@ -34,7 +38,13 @@ resource "aws_db_instance" "this" {
   password               = var.db_password
   db_subnet_group_name   = aws_db_subnet_group.this.name
   vpc_security_group_ids = [aws_security_group.rds.id]
-  skip_final_snapshot    = true
+  skip_final_snapshot    = !var.enable_deletion_protection
+  final_snapshot_identifier = var.enable_deletion_protection ? "${var.name_prefix}-db-final" : null
   publicly_accessible    = false
-  multi_az               = false
+  multi_az               = var.multi_az
+  storage_encrypted      = true
+  deletion_protection    = var.enable_deletion_protection
+  backup_retention_period = var.backup_retention_days
+  performance_insights_enabled = var.enable_performance_insights
+  apply_immediately      = var.apply_immediately
 }

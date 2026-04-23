@@ -13,6 +13,11 @@ output "ecs_cluster_name" {
   value       = module.ecs.cluster_name
 }
 
+output "ecs_service_name" {
+  description = "ECS service name"
+  value       = module.ecs.service_name
+}
+
 output "rds_endpoint" {
   description = "RDS endpoint hostname"
   value       = module.rds.endpoint

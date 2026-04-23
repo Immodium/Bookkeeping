@@ -2,6 +2,7 @@ export interface UploadRequest {
   key: string;
   body: Buffer;
   contentType: string;
+  contentDisposition?: string;
   metadata?: Record<string, string>;
 }
 

@@ -1,24 +1,39 @@
-## Terraform Skeleton (AWS Readiness)
+## Terraform Deployment Stack (AWS)
 
-This directory provides a foundational Terraform layout for deploying Slimbooks on AWS:
+This directory now defines a deployable AWS stack for Slimbooks:
 
-- VPC/networking
-- Application Load Balancer (HTTPS-ready)
-- ECS/Fargate service
-- RDS PostgreSQL
-- S3 bucket(s) for object storage
-- Secrets Manager for app/runtime secrets
+- VPC with public/private subnets and optional NAT
+- ALB with HTTP -> HTTPS redirect + ACM TLS listener
+- ECS Fargate service
+- EFS-backed persistent app data mount for runtime database/files
+- S3 bucket for object storage assets
+- Secrets Manager for runtime secret values
+- RDS PostgreSQL (provisioned for next-phase DB cutover)
 
-### Structure
+### Module layout
 
-- `main.tf` root module wiring
-- `variables.tf` shared input variables
-- `outputs.tf` key environment outputs
-- `terraform.tfvars.example` sample values
-- `modules/*` placeholder modules for each subsystem
+- `main.tf` root module composition
+- `variables.tf` deploy-time inputs
+- `outputs.tf` deploy outputs
+- `terraform.tfvars.example` starter values
+- `modules/vpc`
+- `modules/alb`
+- `modules/ecs`
+- `modules/rds`
+- `modules/s3`
+- `modules/secrets`
 
-### Notes
+### Usage
 
-- This is a scaffold, not a production-complete stack yet.
-- TLS certificates should be provisioned via ACM and attached to ALB listener in the ALB module implementation.
-- State backend (S3 + DynamoDB lock) should be configured before collaborative usage.
+1. Copy `terraform.tfvars.example` to `terraform.tfvars` and set real values.
+2. Run:
+   - `terraform init`
+   - `terraform plan`
+   - `terraform apply`
+3. Use `alb_dns_name` output as your app endpoint (or bind Route53 DNS to ALB).
+
+### Important
+
+- Configure a remote Terraform state backend (S3 + DynamoDB lock table) for team usage.
+- Ensure `acm_certificate_arn` is for the same region as ALB.
+- The runtime default is SQLite on EFS for compatibility, with S3 for object storage.

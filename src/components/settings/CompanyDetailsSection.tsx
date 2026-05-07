@@ -2,6 +2,7 @@
 import React from 'react';
 import { themeClasses } from '@/utils/themeUtils.util';
 import { CompanySettings } from '@/types';
+import { formatUsPhoneNumber } from '@/utils/formatting';
 
 interface CompanyDetailsSectionProps {
   settings: CompanySettings;
@@ -52,8 +53,8 @@ export const CompanyDetailsSection: React.FC<CompanyDetailsSectionProps> = ({
           <label className="block text-sm font-medium text-muted-foreground mb-2">Phone</label>
           <input
             type="tel"
-            value={settings.phone}
-            onChange={(e) => onInputChange('phone', e.target.value)}
+            value={formatUsPhoneNumber(settings.phone)}
+            onChange={(e) => onInputChange('phone', formatUsPhoneNumber(e.target.value))}
             className={themeClasses.input}
           />
         </div>

@@ -84,6 +84,11 @@ const getStoredTheme = (): ThemeType | null => {
   return normalizeTheme(localStorage.getItem(LOCAL_STORAGE_THEME_KEY));
 };
 
+const getStoredAccent = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  return normalizeHexColor(localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY));
+};
+
 const hslToCssValue = ({ h, s, l }: { h: number; s: number; l: number }): string => `${h} ${s}% ${l}%`;
 
 const applyAccentColor = (accentColor: string): void => {
@@ -195,7 +200,7 @@ export const useTheme = () => {
             log('useTheme: No auth token found, using localStorage fallback');
             // Use localStorage immediately if not authenticated
             const localTheme = getStoredTheme() || 'system';
-            const localAccent = normalizeHexColor(localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY));
+            const localAccent = getStoredAccent();
             log('useTheme: LocalStorage theme:', localTheme);
             
             globalTheme = localTheme;
@@ -216,14 +221,19 @@ export const useTheme = () => {
           const dbTheme = normalizeTheme(settings?.theme as string);
           const localTheme = getStoredTheme();
           const preferredTheme = localTheme || dbTheme || 'system';
+          const localAccent = getStoredAccent();
           const dbAccent = normalizeHexColor((settings?.accent_color as string) || '');
+          const preferredAccent = localAccent || dbAccent || DEFAULT_ACCENT;
           
           globalTheme = preferredTheme;
           setTheme(preferredTheme);
           applyTheme(preferredTheme);
-          applyAccentColor(dbAccent || DEFAULT_ACCENT);
+          applyAccentColor(preferredAccent);
           if (!localTheme && dbTheme) {
             localStorage.setItem(LOCAL_STORAGE_THEME_KEY, dbTheme);
+          }
+          if (!localAccent && dbAccent) {
+            localStorage.setItem(LOCAL_STORAGE_ACCENT_KEY, dbAccent);
           }
           isThemeInitialized = true;
           isUserSetTheme = false; // This is a database load, not user action
@@ -239,7 +249,7 @@ export const useTheme = () => {
           // Fallback to localStorage for migration
           log('useTheme: Falling back to localStorage...');
           const localTheme = getStoredTheme() || 'system';
-          const localAccent = normalizeHexColor(localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY));
+          const localAccent = getStoredAccent();
           log('useTheme: LocalStorage theme:', localTheme);
           
           globalTheme = localTheme;

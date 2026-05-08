@@ -5,13 +5,17 @@
 import { 
   User, 
   UserPublic, 
+  UserRole,
   Client, 
   Invoice, 
   Template, 
   Expense, 
   Payment, 
+  Retainer,
   LineItem,
   InvoiceStatus, 
+  RetainerBillingCycle,
+  RetainerStatus,
   PaymentMethod, 
   PaymentStatus 
 } from './index.js';
@@ -66,7 +70,8 @@ export interface CreateUserRequest {
     email: string;
     username?: string;
     password_hash?: string;
-    role?: 'user' | 'admin';
+    role?: UserRole;
+    roles?: UserRole[];
     email_verified?: boolean;
     google_id?: string;
     last_login?: string;
@@ -76,7 +81,7 @@ export interface CreateUserRequest {
 }
 
 export interface UpdateUserRequest {
-  userData: Partial<Pick<User, 'name' | 'email' | 'username' | 'role' | 'email_verified' | 'google_id' | 'password_hash'>>;
+  userData: Partial<Pick<User, 'name' | 'email' | 'username' | 'role' | 'roles' | 'email_verified' | 'google_id' | 'password_hash'>>;
 }
 
 export interface UpdateUserResponse {
@@ -159,11 +164,20 @@ export interface UpdateExpenseRequest {
 
 // Payment API types
 export interface CreatePaymentRequest {
-  paymentData: Omit<Payment, 'id' | 'created_at' | 'updated_at'>;
+  paymentData: PaymentRequest;
 }
 
 export interface UpdatePaymentRequest {
-  paymentData: Partial<Omit<Payment, 'id' | 'created_at' | 'updated_at'>>;
+  paymentData: Partial<PaymentRequest>;
+}
+
+// Retainer API types
+export interface CreateRetainerRequest {
+  retainerData: RetainerRequest;
+}
+
+export interface UpdateRetainerRequest {
+  retainerData: Partial<RetainerRequest>;
 }
 
 // Settings API types
@@ -420,12 +434,31 @@ export interface InvoiceRequest {
 export interface PaymentRequest {
   date: string;
   client_name: string;
+  client_id?: number;
   invoice_id?: number;
   amount: number;
   method: PaymentMethod;
   reference?: string;
   description?: string;
   status?: PaymentStatus;
+}
+
+/**
+ * Retainer data request interface
+ */
+export interface RetainerRequest {
+  client_id: number;
+  name: string;
+  description?: string;
+  amount: number;
+  currency?: string;
+  billing_cycle?: RetainerBillingCycle;
+  start_date: string;
+  next_invoice_date: string;
+  end_date?: string;
+  status?: RetainerStatus;
+  auto_renew?: boolean | number;
+  notes?: string;
 }
 
 /**
@@ -442,6 +475,17 @@ export interface ExpenseRequest {
   is_billable: boolean | undefined;
   client_id: number | undefined;
   project?: string;
+  status?: 'pending' | 'approved' | 'reimbursed';
+}
+
+export interface ReceiptOCRResult {
+  vendor?: string;
+  amount?: number;
+  date?: string;
+  category?: string;
+  description?: string;
+  confidence: number;
+  raw_text: string;
 }
 
 // Express Request extensions

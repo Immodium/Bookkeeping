@@ -6,13 +6,14 @@
 // Database operations should be done via backend API, not direct DB access
 import { AuthUtils } from '@/utils/api';
 import { envConfig } from '@/lib/env-config';
-import { 
+import {
   User, 
   LoginCredentials, 
   RegisterData, 
   AuthResponse, 
   DEFAULT_SECURITY_SETTINGS 
 } from '@/types';
+import { getUserRoles } from '@/auth/roles';
 
 export class AuthService {
   private static instance: AuthService;
@@ -195,7 +196,10 @@ export class AuthService {
 
   // Check if user has specific role
   hasRole(role: string): boolean {
-    return this.currentUser?.role === role;
+    if (!this.currentUser) {
+      return false;
+    }
+    return getUserRoles(this.currentUser).includes(role as any);
   }
 
   // Check if user is admin

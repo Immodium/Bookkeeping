@@ -14,7 +14,9 @@ import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { toast } from 'sonner';
 import { useProjectSettings } from '@/hooks/useProjectSettings';
 import { cn } from '@/utils/themeUtils.util';
-import type { SettingsTabRef } from '@/types';
+import type { SettingsTabRef } from '@/types/components/settings.types';
+import { UserManagementTab } from './settings/UserManagementTab';
+import { usePermissions } from '@/contexts/AuthContext';
 
 interface SettingsTab {
   id: string;
@@ -30,6 +32,7 @@ export const ResponsiveSettings = () => {
   const navigate = useNavigate();
   const projectSettingsRef = useRef<ProjectSettingsRef>(null);
   const { settings: projectSettings } = useProjectSettings();
+  const { canManageUsers, canManageSettings, canManageProjects } = usePermissions();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Refs for all settings tabs
@@ -40,6 +43,7 @@ export const ResponsiveSettings = () => {
   const stripeSettingsRef = useRef<SettingsTabRef>(null);
   const notificationSettingsRef = useRef<SettingsTabRef>(null);
   const appearanceSettingsRef = useRef<SettingsTabRef>(null);
+  const userManagementRef = useRef<SettingsTabRef>(null);
 
   const baseTabs: SettingsTab[] = [
     { id: 'company', name: 'Company' },
@@ -48,7 +52,8 @@ export const ResponsiveSettings = () => {
     { id: 'shipping', name: 'Shipping' },
     { id: 'notifications', name: 'Notifications' },
     { id: 'appearance', name: 'Appearance' },
-    { id: 'project', name: 'Integration Settings' },
+    ...(canManageUsers ? [{ id: 'user-management', name: 'User Management' }] : []),
+    ...(canManageProjects ? [{ id: 'project', name: 'Integration Settings' }] : []),
     { id: 'backup', name: 'Backup & Restore' }
   ];
 
@@ -105,6 +110,9 @@ export const ResponsiveSettings = () => {
         case 'appearance':
           settingsRef = appearanceSettingsRef.current;
           break;
+        case 'user-management':
+          settingsRef = userManagementRef.current;
+          break;
         case 'project':
           settingsRef = projectSettingsRef.current;
           break;
@@ -141,6 +149,7 @@ export const ResponsiveSettings = () => {
       case 'stripe': return projectSettings?.stripe?.enabled ? <StripeSettingsTab ref={stripeSettingsRef} /> : null;
       case 'notifications': return <NotificationSettingsTab ref={notificationSettingsRef} />;
       case 'appearance': return <AppearanceSettingsTab ref={appearanceSettingsRef} />;
+      case 'user-management': return canManageUsers ? <UserManagementTab ref={userManagementRef} /> : null;
       case 'project': return <ProjectSettingsTab ref={projectSettingsRef} />;
       case 'backup': return <DatabaseBackupSection />;
       default: return <CompanySettings ref={companySettingsRef} />;

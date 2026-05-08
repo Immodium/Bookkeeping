@@ -13,6 +13,7 @@ import {
 } from '../controllers/index.js';
 import {
   requireAuth,
+  requireRole,
   validateRequest,
   validationSets
 } from '../middleware/index.js';
@@ -21,6 +22,7 @@ const router: Router = Router();
 
 // All client routes require authentication
 router.use(requireAuth);
+router.use(requireRole(['admin', 'client_manager', 'project_manager']));
 
 // Get all clients
 router.get('/', getAllClients);

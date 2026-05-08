@@ -80,10 +80,11 @@ export const createPayment = asyncHandler(async (req: Request<object, object, { 
 
   try {
     const paymentId = await paymentService.createPayment(paymentData);
+    const createdPayment = await paymentService.getPaymentById(paymentId);
     
     res.status(201).json({ 
       success: true, 
-      data: { id: paymentId },
+      data: createdPayment || { id: paymentId },
       message: 'Payment created successfully'
     });
   } catch (error) {
@@ -98,6 +99,8 @@ export const createPayment = asyncHandler(async (req: Request<object, object, { 
       throw new ValidationError('Valid payment date is required');
     } else if (errorMessage.includes('Invalid date format')) {
       throw new ValidationError('Invalid date format');
+    } else if (errorMessage.includes('Client') && errorMessage.includes('not found')) {
+      throw new ValidationError(errorMessage);
     } else if (errorMessage.includes('does not exist')) {
       throw new ValidationError('Specified invoice does not exist');
     }
@@ -123,10 +126,11 @@ export const updatePayment = asyncHandler(async (req: Request<{ id: string }, Re
 
   try {
     const changes = await paymentService.updatePayment(paymentId, paymentData);
+    const updatedPayment = await paymentService.getPaymentById(paymentId);
     
     res.json({ 
       success: true, 
-      data: { changes },
+      data: updatedPayment || { changes },
       message: 'Payment updated successfully'
     });
   } catch (error) {
@@ -139,6 +143,8 @@ export const updatePayment = asyncHandler(async (req: Request<{ id: string }, Re
       throw new ValidationError('Amount must be a positive number');
     } else if (errorMessage.includes('Invalid date format')) {
       throw new ValidationError('Invalid date format');
+    } else if (errorMessage.includes('Client') && errorMessage.includes('not found')) {
+      throw new ValidationError(errorMessage);
     } else if (errorMessage.includes('does not exist')) {
       throw new ValidationError('Specified invoice does not exist');
     }

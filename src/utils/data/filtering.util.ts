@@ -34,11 +34,15 @@ export const getDateRangeForPeriod = (period: TimePeriod): DateRange => {
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
+  const allTimeStart = startOfDay(new Date(1970, 0, 1));
+  const allTimeEnd = endOfDay(new Date(9999, 11, 31));
 
   const thisMonthStart = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
   const thisMonthEnd = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
   switch (period) {
+    case 'all-time':
+      return { start: allTimeStart, end: allTimeEnd };
     case 'today':
       return { start: todayStart, end: todayEnd };
     case 'yesterday': {
@@ -126,6 +130,7 @@ export const formatDateRangeLabel = (range: DateRange): string => {
 };
 
 export const dateRangeFilterOptions: Array<{ value: TimePeriod; label: string }> = [
+  { value: 'all-time', label: 'All Time' },
   { value: 'today', label: 'Today' },
   { value: 'yesterday', label: 'Yesterday' },
   { value: 'last-7-days', label: 'Last 7 Days' },

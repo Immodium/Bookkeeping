@@ -15,11 +15,14 @@ interface ConnectionState {
 }
 
 export const useConnectionMonitor = (options: ConnectionMonitorOptions = {}) => {
+  const defaultBaseUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/api`
+    : 'http://localhost:3002/api';
   const {
     checkInterval = 60000, // Check every minute when connected
     retryInterval = 20000, // Retry every 20 seconds when disconnected
     maxRetries = 30, // Max 30 retries (10 minutes at 20s intervals)
-    baseUrl = 'http://localhost:3002/api'
+    baseUrl = defaultBaseUrl
   } = options;
 
   const [connectionState, setConnectionState] = useState<ConnectionState>({

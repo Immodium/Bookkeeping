@@ -7,6 +7,8 @@ import { up as migration002 } from './002_add_category_to_settings.js';
 import { up as migration003 } from './003_separate_template_tables.js';
 import { up as migration004 } from './004_fix_expenses_table_schema.js';
 import { up as migration005 } from './005_add_name_columns_to_clients.js';
+import { up as migration006 } from './006_add_user_roles.js';
+import { up as migration007 } from './007_add_roles_json_to_users.js';
 
 interface Migration {
   id: string;
@@ -42,6 +44,16 @@ const migrations: Migration[] = [
     id: '005',
     name: 'add_name_columns_to_clients',
     up: migration005
+  },
+  {
+    id: '006',
+    name: 'add_user_roles',
+    up: migration006
+  },
+  {
+    id: '007',
+    name: 'add_roles_json_to_users',
+    up: migration007
   }
 ];
 

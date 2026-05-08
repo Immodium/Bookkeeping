@@ -6,7 +6,10 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
-import { dirname, join, resolve } from 'path';
+import { dirname, isAbsolute, join, resolve } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import https from 'https';
+import http from 'http';
 
 // Import configuration
 import { serverConfig, validateConfig } from './config/index.js';
@@ -33,6 +36,13 @@ import routes from './routes/index.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const resolveConfigPath = (configPath: string): string => {
+  if (isAbsolute(configPath)) {
+    return configPath;
+  }
+  return resolve(join(__dirname, '..'), configPath);
+};
+
 /**
  * Create and configure Express application
  */
@@ -46,6 +56,25 @@ export const createApp = async () => {
 
   // Create Express app
   const app = express();
+  app.set('trust proxy', 1);
+
+  if (serverConfig.enforceHttpsRedirect) {
+    app.use((req, res, next) => {
+      const forwardedProto = req.get('x-forwarded-proto');
+      const isSecureRequest = req.secure || forwardedProto === 'https';
+      if (isSecureRequest) {
+        return next();
+      }
+
+      const host = req.get('host');
+      if (!host) {
+        return next();
+      }
+
+      const statusCode = req.method === 'GET' || req.method === 'HEAD' ? 308 : 307;
+      return res.redirect(statusCode, `https://${host}${req.originalUrl}`);
+    });
+  }
 
   // Security middleware
   app.use(createSecurityHeaders(serverConfig.corsOrigin));
@@ -134,19 +163,66 @@ export const createApp = async () => {
 export const startServer = async () => {
   try {
     const app = await createApp();
-    
-    // HTTP Server
-    const server = app.listen(serverConfig.port, serverConfig.host, () => {
-      console.log(`🚀 Slimbooks server running on http://${serverConfig.host}:${serverConfig.port}`);
-      console.log(`📊 Environment: ${serverConfig.nodeEnv} | CORS: ${serverConfig.corsOrigin} | Rate limit: ${serverConfig.rateLimiting.maxRequests}/${serverConfig.rateLimiting.windowMs / 1000}s`);
 
-      const features = [];
-      if (serverConfig.enableDebugEndpoints) features.push('Debug');
-      if (serverConfig.enableSampleData || serverConfig.isDevelopment) features.push('Sample data');
-      if (features.length > 0) {
-        console.log(`🔧 Features: ${features.join(', ')}`);
+    const protocol = serverConfig.enableHttps ? 'https' : 'http';
+
+    let server: https.Server | http.Server;
+    if (serverConfig.enableHttps) {
+      const keyPath = resolveConfigPath(serverConfig.sslKeyPath);
+      const certPath = resolveConfigPath(serverConfig.sslCertPath);
+
+      if (!existsSync(keyPath) || !existsSync(certPath)) {
+        throw new Error(
+          `HTTPS is enabled but certificate files are missing (key: ${keyPath}, cert: ${certPath})`
+        );
       }
+
+      server = https.createServer(
+        {
+          key: readFileSync(keyPath),
+          cert: readFileSync(certPath)
+        },
+        app
+      );
+      server.listen(serverConfig.port, serverConfig.host, () => {
+        console.log(`🚀 Slimbooks server running on ${protocol}://${serverConfig.host}:${serverConfig.port}`);
+        console.log(`🔐 TLS certificate loaded from ${certPath}`);
+        console.log(`📊 Environment: ${serverConfig.nodeEnv} | CORS: ${serverConfig.corsOrigin} | Rate limit: ${serverConfig.rateLimiting.maxRequests}/${serverConfig.rateLimiting.windowMs / 1000}s`);
+
+        const features = [];
+        if (serverConfig.enforceHttpsRedirect) features.push('HTTPS redirect');
+        if (serverConfig.enableDebugEndpoints) features.push('Debug');
+        if (serverConfig.enableSampleData || serverConfig.isDevelopment) features.push('Sample data');
+        if (features.length > 0) {
+          console.log(`🔧 Features: ${features.join(', ')}`);
+        }
+      });
+    } else {
+      server = app.listen(serverConfig.port, serverConfig.host, () => {
+        console.log(`🚀 Slimbooks server running on ${protocol}://${serverConfig.host}:${serverConfig.port}`);
+        console.log(`📊 Environment: ${serverConfig.nodeEnv} | CORS: ${serverConfig.corsOrigin} | Rate limit: ${serverConfig.rateLimiting.maxRequests}/${serverConfig.rateLimiting.windowMs / 1000}s`);
+
+        const features = [];
+        if (serverConfig.enforceHttpsRedirect) features.push('HTTPS redirect');
+        if (serverConfig.enableDebugEndpoints) features.push('Debug');
+        if (serverConfig.enableSampleData || serverConfig.isDevelopment) features.push('Sample data');
+        if (features.length > 0) {
+          console.log(`🔧 Features: ${features.join(', ')}`);
+        }
+      });
+    }
+
+    server.on('error', (error) => {
+      console.error('❌ Server startup error:', error);
     });
+
+    if (!serverConfig.enableHttps) {
+      console.log('⚠️ HTTPS is disabled (set ENABLE_HTTPS=true to enable TLS)');
+    }
+
+    if (serverConfig.enforceHttpsRedirect && !serverConfig.enableHttps) {
+      console.log('⚠️ HTTPS redirect is enabled while app server is HTTP-only (expect TLS termination at proxy/load balancer)');
+    }
 
     // Initialize health logging
     healthLogger();

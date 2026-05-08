@@ -10,15 +10,41 @@ import {
   deleteExpense,
   getExpenseStats,
   getExpenseCategories,
-  getExpensesByDateRange
+  getExpensesByDateRange,
+  uploadReceiptAndExtractExpenseData,
+  uploadReceiptFile
 } from '../controllers/index.js';
 import {
   requireAuth,
   validateRequest,
-  validationSets
+  validationSets,
+  validateFileUpload
 } from '../middleware/index.js';
+import multer from 'multer';
+import { resolve } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { mkdirSync } from 'fs';
 
 const router: Router = Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const uploadsDir = resolve(__dirname, '../../public/uploads/receipts');
+mkdirSync(uploadsDir, { recursive: true });
+const uploadReceipt = multer({
+  dest: uploadsDir,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB max
+  },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') {
+      cb(null, true);
+      return;
+    }
+
+    cb(new Error('Only image or PDF files are allowed for receipt OCR'));
+  }
+});
 
 // All expense routes require authentication
 router.use(requireAuth);
@@ -34,6 +60,22 @@ router.get('/categories', getExpenseCategories);
 
 // Get expenses by date range
 router.get('/date-range', getExpensesByDateRange);
+
+// Upload receipt image and extract expense data via OCR
+router.post(
+  '/receipt-ocr',
+  uploadReceipt.single('receipt'),
+  validateFileUpload(10 * 1024 * 1024, ['image/*', 'application/pdf']),
+  uploadReceiptAndExtractExpenseData
+);
+
+// Upload receipt/document without OCR parsing
+router.post(
+  '/receipt-upload',
+  uploadReceipt.single('receipt'),
+  validateFileUpload(10 * 1024 * 1024, ['image/*', 'application/pdf']),
+  uploadReceiptFile
+);
 
 // Get expense by ID
 router.get('/:id', 

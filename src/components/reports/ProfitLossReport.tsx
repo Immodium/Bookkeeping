@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Download, TrendingUp, TrendingDown, Save, Calendar } from 'lucide-react';
+import { ArrowLeft, Download, TrendingUp, TrendingDown, Save, Calendar, Clock3 } from 'lucide-react';
 import { authenticatedFetch } from '@/utils/api';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { formatDateRangeSync } from '@/utils/formatting';
@@ -8,7 +8,7 @@ import { FormattedCurrency, useCurrencyFormatter } from '@/components/ui/Formatt
 import { pdfService } from '@/services/pdf.svc';
 import { ProfitLossReportProps, ProfitLossReportData, ReportDateRange, AccountingMethod, BreakdownPeriod } from '@/types';
 
-export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSave }) => {
+export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSave, onSchedule }) => {
   const [reportData, setReportData] = useState<ProfitLossReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
@@ -115,14 +115,19 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
     }
   };
 
+  const handleSchedule = () => {
+    onSchedule('profit-loss', dateRange, {
+      accountingMethod,
+      preset: dateRange.preset,
+      breakdownPeriod
+    });
+  };
+
   const handleExportPDF = async () => {
     setIsExportingPDF(true);
     try {
-      // Create a URL for the current report view
-      const currentUrl = `${window.location.origin}/reports/profit-loss?start=${dateRange.start}&end=${dateRange.end}&method=${accountingMethod}`;
       const reportName = `Profit-Loss-Report-${getFormattedDateRange()}`;
-
-      await pdfService.downloadReportPDF(currentUrl, reportName);
+      await pdfService.exportElementToPDF('[data-report-export-root="profit-loss"]', reportName);
     } catch (error) {
       console.error('Error exporting PDF:', error);
       alert('Failed to export PDF. Please try again.');
@@ -135,15 +140,15 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center">
-          <button onClick={onBack} className="flex items-center text-gray-600 hover:text-gray-900 mr-4">
+          <button onClick={onBack} className="flex items-center text-muted-foreground hover:text-foreground mr-4">
             <ArrowLeft className="h-5 w-5 mr-1" />
             Back to Reports
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">Generating Report...</h1>
+          <h1 className="text-2xl font-bold text-foreground">Generating Report...</h1>
         </div>
         <div className="bg-card rounded-lg shadow-sm border border-border p-12 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Please wait while we generate your report...</p>
+          <p className="mt-4 text-muted-foreground">Please wait while we generate your report...</p>
         </div>
       </div>
     );
@@ -151,7 +156,7 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
 
   return (
     <div className={themeClasses.page}>
-      <div className={themeClasses.pageContainer}>
+      <div className={themeClasses.pageContainer} data-report-export-root="profit-loss">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center">
@@ -167,7 +172,7 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
               <p className={themeClasses.pageSubtitle}>{getFormattedDateRange()}</p>
             </div>
           </div>
-          <div className="flex space-x-3">
+          <div className="flex space-x-3" data-report-actions>
             <button
               onClick={handleSave}
               className={getButtonClasses('primary')}
@@ -176,12 +181,19 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
               Save Report
             </button>
             <button
+              onClick={handleSchedule}
+              className={getButtonClasses('primary')}
+            >
+              <Calendar className={themeClasses.iconButton} />
+              Schedule Report
+            </button>
+            <button
               onClick={handleExportPDF}
               disabled={isExportingPDF}
-              className={getButtonClasses('secondary')}
+              className={getButtonClasses('primary')}
             >
               <Download className={themeClasses.iconButton} />
-              {isExportingPDF ? 'Generating...' : 'Export PDF'}
+              {isExportingPDF ? 'Preparing PDF...' : 'Export PDF'}
             </button>
           </div>
         </div>

@@ -1,18 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Receipt, 
-  DollarSign, 
-  Calendar, 
-  FileText, 
-  Upload, 
-  LayoutGrid, 
-  Table, 
-  Eye, 
-  Edit, 
-  Trash2 
+import {
+  Plus,
+  Search,
+  Receipt,
+  DollarSign,
+  Calendar,
+  FileText,
+  Upload,
+  LayoutGrid,
+  Table,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { ExpenseForm } from './expenses/ExpenseForm';
 import { ExpensesList } from './expenses/ExpensesList';
@@ -36,6 +35,7 @@ import { Expense } from '@/types';
 import { TimePeriod, DateRange } from '@/types';
 
 export const ExpenseManagement: React.FC = () => {
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const [uiState, setUiState] = useState({
     showCreateForm: false,
     showImportExport: false,
@@ -142,6 +142,56 @@ export const ExpenseManagement: React.FC = () => {
     updateUiState({ showCreateForm: true });
   };
 
+  const handleReceiptUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      setIsUploadingReceipt(true);
+      const formData = new FormData();
+      formData.append('receipt', file);
+
+      const response = await authenticatedFetch('/api/expenses/receipt-ocr', {
+        method: 'POST',
+        body: formData,
+        headers: {}
+      });
+      const result = await response.json();
+      if (!result?.success) {
+        throw new Error(result?.error || 'Failed to process receipt');
+      }
+
+      const extracted = result.data;
+      if (!extracted) {
+        throw new Error('Receipt OCR did not return expense data');
+      }
+
+      const payload = {
+        expenseData: {
+          date: extracted.date,
+          vendor: extracted.vendor,
+          category: extracted.category,
+          amount: Number(extracted.amount),
+          description: extracted.description,
+          receipt_url: result.data?.receipt_url || ''
+        }
+      };
+
+      const createResponse = await apiPost('/api/expenses', payload);
+      if (!createResponse.success) {
+        throw new Error(createResponse.error || 'Failed to create expense from receipt');
+      }
+
+      await loadExpenses();
+      toast.success('Receipt uploaded and expense created');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to upload receipt');
+    } finally {
+      setIsUploadingReceipt(false);
+    }
+  };
+
   const handleEditExpense = (expense: Expense) => {
     setActiveItem({ editing: expense, viewing: null });
     updateUiState({ showCreateForm: true });
@@ -234,14 +284,26 @@ export const ExpenseManagement: React.FC = () => {
   };
 
   const handleCloseForm = () => {
-    setShowCreateForm(false);
-    setEditingExpense(null);
+    updateUiState({ showCreateForm: false });
+    setActiveItem({ editing: null, viewing: null });
   };
 
   const renderPanelView = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {pagination.paginatedData.map((expense) => (
-        <div key={expense.id} className="bg-card rounded-lg shadow-sm border border-border p-6">
+        <div
+          key={expense.id}
+          className="bg-card rounded-lg shadow-sm border border-border p-6 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => handleViewExpense(expense)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              handleViewExpense(expense);
+            }
+          }}
+        >
           <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className="font-semibold text-foreground">{expense.merchant}</h3>
@@ -249,21 +311,20 @@ export const ExpenseManagement: React.FC = () => {
             </div>
             <div className="flex space-x-2">
               <button
-                onClick={() => handleViewExpense(expense)}
-                className="p-1 text-muted-foreground hover:text-white"
-                title="View Expense"
-              >
-                <Eye className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleEditExpense(expense)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleEditExpense(expense);
+                }}
                 className="p-1 text-muted-foreground hover:text-blue-600"
                 title="Edit Expense"
               >
                 <Edit className="h-4 w-4" />
               </button>
               <button
-                onClick={() => handleDeleteExpense(expense.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleDeleteExpense(expense.id);
+                }}
                 className="p-1 text-muted-foreground hover:text-red-600"
                 title="Delete Expense"
               >
@@ -331,18 +392,29 @@ export const ExpenseManagement: React.FC = () => {
           </div>
           <div className="flex space-x-3">
             <button
-              onClick={() => updateUiState({ showImportExport: true })}
-              className={getButtonClasses('secondary')}
-            >
-              <Upload className={themeClasses.iconButton} />
-              Import/Export
-            </button>
-            <button
               onClick={handleCreateExpense}
               className={getButtonClasses('primary')}
             >
               <Plus className={themeClasses.iconButton} />
               Add Expense
+            </button>
+            <label className={getButtonClasses('primary')}>
+              <Upload className={themeClasses.iconButton} />
+              {isUploadingReceipt ? 'Uploading...' : 'Upload Receipt'}
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={handleReceiptUpload}
+                disabled={isUploadingReceipt}
+                className="hidden"
+              />
+            </label>
+            <button
+              onClick={() => updateUiState({ showImportExport: true })}
+              className={getButtonClasses('primary')}
+            >
+              <Upload className={themeClasses.iconButton} />
+              Import/Export
             </button>
           </div>
         </div>

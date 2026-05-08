@@ -1,6 +1,49 @@
 type CSVValue = string | number | boolean | null | undefined;
 type CSVRow = Record<string, CSVValue>;
 
+const XLSX_MIME_TYPES = new Set([
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel'
+]);
+
+export const exportToXLSX = async (
+  rows: CSVRow[],
+  filename = 'export.xlsx',
+  sheetName = 'Sheet1'
+): Promise<void> => {
+  if (!rows.length) {
+    return;
+  }
+
+  const XLSX = await import('xlsx');
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  XLSX.writeFile(workbook, filename);
+};
+
+export const parseXLSX = async (file: File): Promise<Array<Record<string, string>>> => {
+  const XLSX = await import('xlsx');
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: 'array' });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) {
+    return [];
+  }
+
+  const sheet = workbook.Sheets[firstSheetName];
+  if (!sheet) {
+    return [];
+  }
+
+  const rows = XLSX.utils.sheet_to_json<Record<string, CSVValue>>(sheet, { defval: '' });
+  return rows.map(row =>
+    Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [key, value == null ? '' : String(value)])
+    )
+  );
+};
+
 const escapeCsvCell = (value: CSVValue): string => {
   const raw = value == null ? '' : String(value);
   if (/[",\n]/.test(raw)) {
@@ -102,4 +145,19 @@ export const parseCSV = (csvText: string): Array<Record<string, string>> => {
 
     return row;
   });
+};
+
+export const parseSpreadsheetFile = async (file: File): Promise<Array<Record<string, string>>> => {
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  const isXlsx =
+    extension === 'xlsx' ||
+    extension === 'xls' ||
+    XLSX_MIME_TYPES.has(file.type);
+
+  if (isXlsx) {
+    return parseXLSX(file);
+  }
+
+  const csvText = await file.text();
+  return parseCSV(csvText);
 };

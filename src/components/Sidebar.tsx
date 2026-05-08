@@ -9,13 +9,18 @@ import {
   LogOut,
   Receipt,
   BarChart,
-  Banknote
+  Banknote,
+  Repeat
 } from 'lucide-react';
 import { cn } from '@/utils/themeUtils.util';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
+import { usePermissions } from '@/contexts/AuthContext';
+import { getRoleDisplayName } from '@/auth/roles';
+import slimbooksLogo from '@/assets/slimbooks_logo.png';
+import { ThemeModeToggle } from '@/components/ui/ThemeModeToggle';
 
 const navigation = [
   { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
@@ -27,6 +32,7 @@ const navigation = [
     path: '/invoices#invoices'
   },
   { id: 'expenses', name: 'Expenses', icon: Receipt, path: '/expenses' },
+  { id: 'retainers', name: 'Retainers', icon: Repeat, path: '/retainers' },
   { id: 'payments', name: 'Payments', icon: Banknote, path: '/payments' },
   { id: 'reports', name: 'Reports', icon: BarChart, path: '/reports' },
   { 
@@ -43,6 +49,7 @@ const navigation = [
       { id: 'notifications', name: 'Notifications', path: '/settings#notifications' },
       { id: 'appearance', name: 'Appearance', path: '/settings#appearance' },
       { id: 'project', name: 'Integration Settings', path: '/settings#project' },
+      { id: 'user-management', name: 'User Management', path: '/settings#user-management' },
       { id: 'backup', name: 'Backup & Restore', path: '/settings#backup' }
     ]
   },
@@ -54,9 +61,38 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
   const { logout, user } = useAuth();
+  const { canManageClients, canViewReports, canManageSettings, canManageProjects, roles } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
   const { settings: companySettings, isLoading: companySettingsLoading } = useCompanySettings();
+  const filteredNavigation = navigation
+    .filter((item) => {
+      if (item.id === 'clients') return canManageClients;
+      if (item.id === 'retainers') return canManageClients;
+      if (item.id === 'reports') return canViewReports;
+      if (item.id === 'settings') return canManageSettings || canManageProjects;
+      return true;
+    })
+    .map((item) => {
+      if (item.id !== 'settings' || !item.subItems) {
+        return item;
+      }
+
+      const subItems = item.subItems.filter((subItem) => {
+        if (subItem.id === 'project') {
+          return canManageProjects;
+        }
+        if (subItem.id === 'user-management') {
+          return canManageSettings;
+        }
+        return canManageSettings;
+      });
+
+      return {
+        ...item,
+        subItems
+      };
+    });
   
   const isOnFormPage = location.pathname.includes('/new') || location.pathname.includes('/edit') || 
                        location.pathname.includes('/create');
@@ -135,15 +171,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
       <div className="flex h-full flex-col">
         {/* Logo/Header */}
         <div className="flex h-16 items-center border-b border-border px-6">
-          <div className="flex items-center space-x-2">
-            <CreditCard className="h-8 w-8 text-primary" />
-            <h1 className="text-xl font-bold text-card-foreground">{companySettings.companyName || 'Slimbooks'}</h1>
+          <div className="flex items-center">
+            <img src={slimbooksLogo} alt={companySettings.companyName || 'Slimbooks'} className="h-8 w-auto" />
           </div>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 px-4 py-6">
-          {navigation.map((item) => {
+          {filteredNavigation.map((item) => {
             const Icon = item.icon;
             const parentActive = isParentActive(item.path);
             return (
@@ -197,10 +232,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
 
         {/* User Section */}
         <div className="border-t border-border p-4">
+          <div className="mb-3">
+            <ThemeModeToggle />
+          </div>
           <div className="flex items-center mb-3">
             <div className="flex-1">
-              <p className="text-sm font-medium text-card-foreground">Welcome, {user?.username}</p>
-              <p className="text-xs text-muted-foreground">Administrator</p>
+              <p className="text-sm font-medium text-card-foreground">Welcome, {user?.username || user?.name || 'User'}</p>
+              <p className="text-xs text-muted-foreground">
+                {roles.length > 0
+                  ? roles.map((role) => getRoleDisplayName(role)).join(', ')
+                  : 'No role assigned'}
+              </p>
             </div>
           </div>
           <button 

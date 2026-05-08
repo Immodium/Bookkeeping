@@ -9,6 +9,81 @@ import { Payment, ServiceOptions, PaymentStatus, PaymentMethod } from '../types/
  * Manages payment-related operations with proper validation and security
  */
 export class PaymentService {
+  private getInvoiceClientId(invoiceId?: number): number | null {
+    if (!invoiceId) {
+      return null;
+    }
+
+    const invoice = databaseService.getOne<{ client_id: number }>(
+      'SELECT client_id FROM invoices WHERE id = ? LIMIT 1',
+      [invoiceId]
+    );
+    return invoice?.client_id || null;
+  }
+
+  private mapClientNameToId(clientName?: string): number | null {
+    if (!clientName || typeof clientName !== 'string') {
+      return null;
+    }
+
+    const exactMatch = databaseService.getOne<{ id: number }>(
+      'SELECT id FROM clients WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL LIMIT 1',
+      [clientName.trim()]
+    );
+
+    if (exactMatch?.id) {
+      return exactMatch.id;
+    }
+
+    const fuzzyMatch = databaseService.getOne<{ id: number }>(
+      'SELECT id FROM clients WHERE LOWER(name) LIKE LOWER(?) AND deleted_at IS NULL ORDER BY id ASC LIMIT 1',
+      [`%${clientName.trim()}%`]
+    );
+
+    return fuzzyMatch?.id || null;
+  }
+
+  private getClientNameById(clientId?: number): string {
+    if (!clientId) {
+      return 'Unknown Client';
+    }
+
+    const client = databaseService.getOne<{ name: string }>(
+      'SELECT name FROM clients WHERE id = ? LIMIT 1',
+      [clientId]
+    );
+
+    return client?.name || 'Unknown Client';
+  }
+
+  private enrichPaymentRows<T extends Payment>(payments: T[]): T[] {
+    return payments.map((payment) => ({
+      ...payment,
+      reference: payment.reference || payment.transaction_id,
+      description: payment.description || payment.notes
+    }));
+  }
+
+  private getPaymentSelectClause(): string {
+    return `
+      SELECT 
+        p.id,
+        p.date,
+        COALESCE(c.name, 'Unknown Client') AS client_name,
+        p.client_id,
+        p.invoice_id,
+        p.amount,
+        p.method,
+        p.status,
+        p.transaction_id AS reference,
+        p.notes AS description,
+        p.created_at,
+        p.updated_at
+      FROM payments p
+      LEFT JOIN clients c ON p.client_id = c.id
+    `;
+  }
+
   /**
    * Get all payments with filtering and pagination
    */
@@ -29,27 +104,27 @@ export class PaymentService {
     const { limit = 50, offset = 0 } = options;
     const { status, method, date_from, date_to } = filters;
     
-    let query = 'SELECT * FROM payments';
+    let query = this.getPaymentSelectClause();
     const conditions: string[] = [];
     const params: (string | number | null | boolean)[] = [];
     
     if (status) {
-      conditions.push('status = ?');
+      conditions.push('p.status = ?');
       params.push(status);
     }
     
     if (method) {
-      conditions.push('method = ?');
+      conditions.push('p.method = ?');
       params.push(method);
     }
     
     if (date_from) {
-      conditions.push('date >= ?');
+      conditions.push('p.date >= ?');
       params.push(date_from);
     }
     
     if (date_to) {
-      conditions.push('date <= ?');
+      conditions.push('p.date <= ?');
       params.push(date_to);
     }
     
@@ -57,13 +132,13 @@ export class PaymentService {
       query += ' WHERE ' + conditions.join(' AND ');
     }
     
-    query += ' ORDER BY date DESC, created_at DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY p.date DESC, p.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
     
-    const payments = databaseService.getMany<Payment>(query, params);
+    const payments = this.enrichPaymentRows(databaseService.getMany<Payment>(query, params));
     
     // Get total count for pagination
-    let countQuery = 'SELECT COUNT(*) as count FROM payments';
+    let countQuery = 'SELECT COUNT(*) as count FROM payments p';
     if (conditions.length > 0) {
       countQuery += ' WHERE ' + conditions.join(' AND ');
     }
@@ -90,7 +165,11 @@ export class PaymentService {
       throw new Error('Valid payment ID is required');
     }
 
-    return databaseService.getOne<Payment>('SELECT * FROM payments WHERE id = ?', [id]);
+    return databaseService.getOne<Payment>(`
+      ${this.getPaymentSelectClause()}
+      WHERE p.id = ?
+      LIMIT 1
+    `, [id]);
   }
 
   /**
@@ -98,7 +177,8 @@ export class PaymentService {
    */
   async createPayment(paymentData: {
     date: string;
-    client_name: string;
+    client_name?: string;
+    client_id?: number;
     invoice_id?: number;
     amount: number;
     method: PaymentMethod;
@@ -106,7 +186,7 @@ export class PaymentService {
     description?: string;
     status?: PaymentStatus;
   }): Promise<number> {
-    if (!paymentData || !paymentData.date || !paymentData.client_name || !paymentData.amount || !paymentData.method) {
+    if (!paymentData || !paymentData.date || !paymentData.amount || !paymentData.method) {
       throw new Error('Invalid payment data - date, client_name, amount, and method are required');
     }
 
@@ -115,8 +195,8 @@ export class PaymentService {
       throw new Error('Amount must be a positive number');
     }
 
-    if (!paymentData.client_name || typeof paymentData.client_name !== 'string') {
-      throw new Error('Valid client name is required');
+    if ((!paymentData.client_name || typeof paymentData.client_name !== 'string') && !paymentData.client_id) {
+      throw new Error('Valid client name or client ID is required');
     }
 
     if (!paymentData.date || typeof paymentData.date !== 'string') {
@@ -133,6 +213,27 @@ export class PaymentService {
       throw new Error('Specified invoice does not exist');
     }
 
+    let resolvedClientId: number | null = null;
+    if (paymentData.client_id) {
+      if (!databaseService.exists('clients', 'id', paymentData.client_id)) {
+        throw new Error(`Client ID "${paymentData.client_id}" was not found`);
+      }
+      resolvedClientId = paymentData.client_id;
+    } else {
+      resolvedClientId = this.mapClientNameToId(paymentData.client_name);
+    }
+
+    if (!resolvedClientId && paymentData.invoice_id) {
+      resolvedClientId = this.getInvoiceClientId(paymentData.invoice_id);
+    }
+
+    if (!resolvedClientId) {
+      if (paymentData.client_name) {
+        throw new Error(`Client "${paymentData.client_name}" was not found`);
+      }
+      throw new Error('Unable to resolve client for payment');
+    }
+
     // Get next payment ID
     const nextId = databaseService.getNextId('payments');
     
@@ -141,12 +242,12 @@ export class PaymentService {
     const paymentRecord = {
       id: nextId,
       date: paymentData.date,
-      client_name: paymentData.client_name,
+      client_id: resolvedClientId,
       invoice_id: paymentData.invoice_id || null,
       amount: paymentData.amount,
       method: paymentData.method,
-      reference: paymentData.reference || null,
-      description: paymentData.description || '',
+      transaction_id: paymentData.reference || null,
+      notes: paymentData.description || '',
       status: paymentData.status || 'received',
       created_at: now,
       updated_at: now
@@ -155,13 +256,13 @@ export class PaymentService {
     // Create payment
     databaseService.executeQuery(`
       INSERT INTO payments (
-        id, date, client_name, invoice_id, amount, method, reference, 
-        description, status, created_at, updated_at
+        id, date, client_id, invoice_id, amount, method, transaction_id, 
+        notes, status, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      paymentRecord.id, paymentRecord.date, paymentRecord.client_name,
+      paymentRecord.id, paymentRecord.date, paymentRecord.client_id,
       paymentRecord.invoice_id, paymentRecord.amount, paymentRecord.method,
-      paymentRecord.reference, paymentRecord.description, paymentRecord.status,
+      paymentRecord.transaction_id, paymentRecord.notes, paymentRecord.status,
       paymentRecord.created_at, paymentRecord.updated_at
     ]);
 
@@ -174,6 +275,7 @@ export class PaymentService {
   async updatePayment(id: number, paymentData: Partial<{
     date: string;
     client_name: string;
+    client_id: number;
     invoice_id: number;
     amount: number;
     method: PaymentMethod;
@@ -211,18 +313,31 @@ export class PaymentService {
       throw new Error('Specified invoice does not exist');
     }
 
+    if (paymentData.client_id !== undefined && !databaseService.exists('clients', 'id', paymentData.client_id)) {
+      throw new Error(`Client ID "${paymentData.client_id}" was not found`);
+    }
+
     // Filter allowed fields
-    const allowedFields = [
-      'date', 'client_name', 'invoice_id', 'amount', 'method', 
-      'reference', 'description', 'status'
-    ];
-    
     const updateData: Record<string, any> = {};
-    allowedFields.forEach(field => {
-      if (paymentData[field as keyof typeof paymentData] !== undefined) {
-        updateData[field] = paymentData[field as keyof typeof paymentData];
+    if (paymentData.date !== undefined) updateData.date = paymentData.date;
+    if (paymentData.invoice_id !== undefined) updateData.invoice_id = paymentData.invoice_id;
+    if (paymentData.amount !== undefined) updateData.amount = paymentData.amount;
+    if (paymentData.method !== undefined) updateData.method = paymentData.method;
+    if (paymentData.reference !== undefined) updateData.transaction_id = paymentData.reference;
+    if (paymentData.description !== undefined) updateData.notes = paymentData.description;
+    if (paymentData.status !== undefined) updateData.status = paymentData.status;
+
+    if (paymentData.client_name !== undefined) {
+      const resolvedClientId = this.mapClientNameToId(paymentData.client_name);
+      if (!resolvedClientId) {
+        throw new Error(`Client "${paymentData.client_name}" was not found`);
       }
-    });
+      updateData.client_id = resolvedClientId;
+    }
+
+    if (paymentData.client_id !== undefined) {
+      updateData.client_id = paymentData.client_id;
+    }
 
     if (Object.keys(updateData).length === 0) {
       throw new Error('No valid fields to update');
@@ -418,12 +533,12 @@ export class PaymentService {
 
     const { limit = 100, offset = 0 } = options;
 
-    return databaseService.getMany<Payment>(`
-      SELECT * FROM payments 
-      WHERE invoice_id = ? 
-      ORDER BY date DESC 
+    return this.enrichPaymentRows(databaseService.getMany<Payment>(`
+      ${this.getPaymentSelectClause()}
+      WHERE p.invoice_id = ? 
+      ORDER BY p.date DESC 
       LIMIT ? OFFSET ?
-    `, [invoiceId, limit, offset]);
+    `, [invoiceId, limit, offset]));
   }
 
   /**
@@ -436,12 +551,12 @@ export class PaymentService {
 
     const { limit = 100, offset = 0 } = options;
 
-    return databaseService.getMany<Payment>(`
-      SELECT * FROM payments 
-      WHERE client_name LIKE ? 
-      ORDER BY date DESC 
+    return this.enrichPaymentRows(databaseService.getMany<Payment>(`
+      ${this.getPaymentSelectClause()}
+      WHERE LOWER(COALESCE(c.name, '')) LIKE LOWER(?) 
+      ORDER BY p.date DESC 
       LIMIT ? OFFSET ?
-    `, [`%${clientName}%`, limit, offset]);
+    `, [`%${clientName}%`, limit, offset]));
   }
 
   /**
@@ -469,12 +584,12 @@ export class PaymentService {
 
     const { limit = 100, offset = 0 } = options;
 
-    const payments = databaseService.getMany<Payment>(`
-      SELECT * FROM payments
-      WHERE date BETWEEN ? AND ?
-      ORDER BY date DESC, created_at DESC
+    const payments = this.enrichPaymentRows(databaseService.getMany<Payment>(`
+      ${this.getPaymentSelectClause()}
+      WHERE p.date BETWEEN ? AND ?
+      ORDER BY p.date DESC, p.created_at DESC
       LIMIT ? OFFSET ?
-    `, [startDate, endDate, limit, offset]);
+    `, [startDate, endDate, limit, offset]));
 
     const summaryResult = databaseService.getOne<{
       count: number;
@@ -485,8 +600,8 @@ export class PaymentService {
         COUNT(*) as count,
         SUM(amount) as total_amount,
         AVG(amount) as average_amount
-      FROM payments
-      WHERE date BETWEEN ? AND ?
+      FROM payments p
+      WHERE p.date BETWEEN ? AND ?
     `, [startDate, endDate]);
 
     const summary = summaryResult || {
@@ -509,11 +624,11 @@ export class PaymentService {
       limit = 10;
     }
 
-    return databaseService.getMany<Payment>(`
-      SELECT * FROM payments
-      ORDER BY date DESC, created_at DESC
+    return this.enrichPaymentRows(databaseService.getMany<Payment>(`
+      ${this.getPaymentSelectClause()}
+      ORDER BY p.date DESC, p.created_at DESC
       LIMIT ?
-    `, [limit]);
+    `, [limit]));
   }
 
   /**
@@ -527,27 +642,27 @@ export class PaymentService {
   } = {}): Promise<number> {
     const { status, method, date_from, date_to } = filters;
     
-    let query = 'SELECT SUM(amount) as total FROM payments';
+    let query = 'SELECT SUM(p.amount) as total FROM payments p';
     const conditions: string[] = [];
     const params: (string | number | null | boolean)[] = [];
     
     if (status) {
-      conditions.push('status = ?');
+      conditions.push('p.status = ?');
       params.push(status);
     }
     
     if (method) {
-      conditions.push('method = ?');
+      conditions.push('p.method = ?');
       params.push(method);
     }
     
     if (date_from) {
-      conditions.push('date >= ?');
+      conditions.push('p.date >= ?');
       params.push(date_from);
     }
     
     if (date_to) {
-      conditions.push('date <= ?');
+      conditions.push('p.date <= ?');
       params.push(date_to);
     }
     
@@ -605,13 +720,13 @@ export class PaymentService {
       last_used: string;
     }>(`
       SELECT 
-        method,
+        p.method,
         COUNT(*) as count,
-        SUM(amount) as total_amount,
-        AVG(amount) as average_amount,
-        MAX(date) as last_used
-      FROM payments
-      GROUP BY method
+        SUM(p.amount) as total_amount,
+        AVG(p.amount) as average_amount,
+        MAX(p.date) as last_used
+      FROM payments p
+      GROUP BY p.method
       ORDER BY count DESC
     `);
   }
@@ -643,26 +758,34 @@ export class PaymentService {
     const { limit = 50, offset = 0 } = options;
     const searchPattern = `%${searchTerm.trim()}%`;
 
-    const payments = databaseService.getMany<Payment>(`
-      SELECT * FROM payments 
-      WHERE (reference LIKE ? OR description LIKE ? OR client_name LIKE ?)
+    const payments = this.enrichPaymentRows(databaseService.getMany<Payment>(`
+      ${this.getPaymentSelectClause()}
+      WHERE (
+        COALESCE(p.transaction_id, '') LIKE ? 
+        OR COALESCE(p.notes, '') LIKE ? 
+        OR COALESCE(c.name, '') LIKE ?
+      )
       ORDER BY 
         CASE 
-          WHEN reference = ? THEN 1
-          WHEN client_name = ? THEN 2
+          WHEN p.transaction_id = ? THEN 1
+          WHEN c.name = ? THEN 2
           ELSE 3
         END,
-        date DESC
+        p.date DESC
       LIMIT ? OFFSET ?
     `, [
       searchPattern, searchPattern, searchPattern,
       searchTerm, searchTerm,
       limit, offset
-    ]);
+    ]));
 
     const totalResult = databaseService.getOne<{count: number}>(`
-      SELECT COUNT(*) as count FROM payments 
-      WHERE reference LIKE ? OR description LIKE ? OR client_name LIKE ?
+      SELECT COUNT(*) as count 
+      FROM payments p
+      LEFT JOIN clients c ON p.client_id = c.id
+      WHERE COALESCE(p.transaction_id, '') LIKE ? 
+        OR COALESCE(p.notes, '') LIKE ? 
+        OR COALESCE(c.name, '') LIKE ?
     `, [searchPattern, searchPattern, searchPattern]);
 
     const total = totalResult?.count || 0;

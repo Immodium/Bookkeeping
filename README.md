@@ -1,169 +1,136 @@
 # Slimbooks
 
-A secure, self-hosted billing and invoice management application built with React, TypeScript, and SQLite. Perfect for small businesses and freelancers who want complete control over their financial data.
+Slimbooks is a self-hosted invoicing and bookkeeping app built with React, TypeScript, Express, and SQLite.
+It is designed for small teams that want full control of business data without relying on a hosted SaaS billing platform.
 
-🔒 **Security-First** • 🐳 **Docker Ready** • 🥧 **Raspberry Pi Optimized**
+## What is in the current app
 
-## ✨ Key Features
+### Core modules
+- Dashboard with business KPIs and charts
+- Client management (create/edit/search/import/export)
+- Invoices (draft/sent/paid flows)
+- Recurring invoice templates + cron processing
+- Expenses with receipt workflows
+- Payments
+- Retainers
+- Reports (Profit & Loss, Expense, Invoice, Client)
+- Settings (company, tax, shipping, notifications, appearance, integrations, users, backup/restore)
 
-### 💼 Business Management
-- **📊 Dashboard**: Real-time financial overview with interactive charts
-- **👥 Client Management**: Complete client profiles with contact details and history
-- **🧾 Professional Invoices**: Customizable templates with line items, taxes, and shipping
-- **🔄 Recurring Invoices**: Automated recurring billing with customizable schedules (weekly, monthly, quarterly, yearly)
-- **💰 Expense Tracking**: Categorized expense management with receipt uploads
-- **📈 Financial Reports**: Revenue and expense analytics with detailed monthly/quarterly columns for yearly reports
+### Expense receipt workflows
+- Upload with OCR (`Upload & OCR`) to auto-fill expense fields
+- Manual attach (`Attach File Only`) for receipts/documents without OCR
+- Replace/remove attachment in edit mode
+- View attached receipt from the expense record details
 
-### 🔒 Security & Privacy
-- **🛡️ Enterprise Security**: Rate limiting, input validation, and security headers
-- **🔐 JWT Authentication**: Secure token-based authentication with 2FA support
-- **🏠 Self-Hosted**: Complete data ownership - no third-party data sharing
-- **🔒 Encrypted Storage**: Secure SQLite database with encrypted sensitive data
+### Auth and access control
+- JWT auth with refresh tokens
+- Register, login, forgot/reset password, email verification endpoints
+- Role-based route protection (admin, user manager, project manager, client manager, viewer-style access controls)
 
-### 🚀 Deployment
-- **🐳 Docker Ready**: One-command deployment with Docker Compose
-- **🥧 Raspberry Pi**: Optimized for ARM devices and low-power systems
-- **⚡ Fast Setup**: Automated scripts for quick deployment
-- **📦 Portable**: SQLite database - easy backup and migration
+### Data and deployment
+- SQLite database (single file)
+- In-app backup/export and import/restore support
+- Docker + docker-compose deployment
+- Raspberry Pi-friendly scripts
 
-## 🛠️ Tech Stack
+## Tech stack
 
-**Frontend**: React 18 + TypeScript + Vite
-**UI**: shadcn/ui + Tailwind CSS + Lucide Icons
-**Backend**: Node.js + Express + SQLite
-**Security**: Helmet + Rate Limiting + JWT + bcrypt
-**Deployment**: Docker + Docker Compose
-**Charts**: Recharts for analytics visualization
+- Frontend: React 18, TypeScript, Vite, Tailwind, shadcn/radix UI
+- Backend: Express (ESM), TypeScript, SQLite (`better-sqlite3`)
+- Security: Helmet, express-rate-limit, express-validator, JWT, bcrypt
+- OCR/PDF: `tesseract.js`, `pdf-lib`, Puppeteer-based PDF routes
 
-## 🚀 Quick Start
+## Quick start (development)
 
-### 🐳 Docker Deployment (Recommended)
-
+### 1) Install
 ```bash
-# Clone the repository
-git clone <your-repository-url>
-cd slimbooks
-
-# Generate secure secrets
-./scripts/generate-secrets.sh
-
-# Deploy with Docker
-./scripts/deploy.sh
-```
-
-Access your app at `http://localhost:8080`
-
-### 🥧 Raspberry Pi Setup
-
-```bash
-# Prepare your Raspberry Pi
-curl -fsSL https://raw.githubusercontent.com/rbenzing/slimbooks/main/scripts/setup-raspberry-pi.sh | bash
-
-# Deploy the application
-./scripts/deploy.sh
-```
-
-### 💻 Development Setup
-
-```bash
-# Install dependencies
 npm install
+```
 
-# Start development servers
+### 2) Configure env
+Create `.env` from `.env.example` and adjust values for your environment.
+
+At minimum for local development:
+- `PORT=3002`
+- `CLIENT_URL=http://localhost:8080`
+- `CORS_ORIGIN=http://localhost:8080`
+- `JWT_SECRET`, `JWT_REFRESH_SECRET`, `SESSION_SECRET`
+
+### 3) Run the app
+```bash
 npm run dev
 ```
 
-Frontend: `http://localhost:8080` • Backend: `http://localhost:3002`
+- Frontend: `http://localhost:8080`
+- Backend/API: `http://localhost:3002`
 
-## ⚙️ Configuration
+### Seeded dev login
+- Email: `admin@slimbooks.app`
+- Password: `password`
 
-### Environment Variables
+## Scripts
 
-The application uses environment variables for secure configuration:
+| Task | Command |
+|---|---|
+| Dev server (frontend + backend) | `npm run dev` |
+| Build | `npm run build` |
+| Lint | `npm run lint` |
+| Tests | `npm run test` |
+| Test watch | `npm run test:watch` |
+| Coverage | `npm run test:coverage` |
 
-```env
-# Security (REQUIRED - change in production)
-JWT_SECRET=your-secure-64-character-secret
-JWT_REFRESH_SECRET=your-secure-refresh-secret
-SESSION_SECRET=your-secure-session-secret
-
-# Network
-CORS_ORIGIN=http://localhost:8080
-PORT=3002
-
-# Features
-ENABLE_DEBUG_ENDPOINTS=false
-```
-
-Use `./scripts/generate-secrets.sh` to create secure secrets automatically.
-
-### Database
-
-- **SQLite**: Lightweight, serverless database perfect for self-hosting
-- **Automatic Backups**: Daily automated backups with rotation
-- **Data Portability**: Single file database for easy migration
-- **No External Dependencies**: Everything runs locally
-
-## 🔄 Recurring Invoice System
-
-Slimbooks includes a powerful recurring invoice system for automated billing:
-
-### Features
-- **📅 Flexible Scheduling**: Weekly, monthly, quarterly, yearly, or custom frequencies
-- **🤖 Automated Processing**: Cron job integration for hands-off billing
-- **👥 Client-Specific Templates**: Create recurring templates for each client
-- **💰 Dynamic Pricing**: Support for line items, taxes, and shipping
-- **📊 Processing Statistics**: Monitor template performance and processing status
-- **⚡ Manual Triggers**: Process individual templates or all due templates on-demand
-
-### API Endpoints
-```
-/api/recurring-templates/*    - Template CRUD operations
-/api/cron/recurring-invoices  - Automated processing endpoint
-```
-
-### Template Management
-- Create recurring templates with client association
-- Set payment terms and due date calculations
-- Activate/deactivate templates as needed
-- Track next invoice dates automatically
-- Monitor processing history and errors
-
-## 🔒 Security Features
-
-- **🛡️ Rate Limiting**: Protection against brute force attacks (100 req/15min)
-- **🔐 JWT Authentication**: Secure token-based auth with configurable expiration
-- **🚫 Input Validation**: Server-side validation prevents injection attacks
-- **🔒 Security Headers**: Comprehensive protection with Helmet.js
-- **👤 Account Lockout**: Automatic lockout after failed login attempts
-- **🔑 2FA Support**: Two-factor authentication for enhanced security
-- **📝 Audit Logging**: Request/response logging for security monitoring
-
-## 📚 Documentation
-
-- **[Deployment Guide](./documentation/DEPLOYMENT.md)**: Complete deployment instructions
-- **[Theme System](./THEME_SYSTEM.md)**: Customization and theming guide
-- **[Contributing](./CONTRIBUTING.md)**: Development and contribution guidelines
-
-## 🔧 Management Commands
+## Docker deployment
 
 ```bash
-# Update deployment
-./scripts/deploy.sh
-
-# Generate new secrets
+# Generate production secrets and .env
 ./scripts/generate-secrets.sh
 
-# Generate new certs for ssl
-./scripts/generate-ssl-certs.sh
+# Build + deploy
+./scripts/deploy.sh
 ```
 
-## 📄 License
+The provided `docker-compose.yml` runs Slimbooks as `slimbooks-app` with persisted:
+- `./data`
+- `./uploads`
+- `./logs`
 
-MIT License - see [LICENSE](./LICENSE) for details.
+## Key API groups
 
----
+- `/api/auth` - login/register/verification/password flows
+- `/api/users` - user/role management
+- `/api/clients`
+- `/api/invoices`
+- `/api/recurring-templates`
+- `/api/expenses` (includes `/receipt-ocr` and `/receipt-upload`)
+- `/api/payments`
+- `/api/retainers`
+- `/api/reports` and `/api/reports/schedules`
+- `/api/settings` + `/api/project-settings`
+- `/api/db` (database export/import)
+- `/api/cron` (recurring invoice processing)
+- `/api/health`
 
-**🏠 Self-hosted • 🔒 Secure • 🚀 Production-ready**
+## Optional integrations
 
-Perfect for small businesses, freelancers, and anyone who values data privacy and control.
+Configured via env + project settings:
+- SMTP or SendGrid email
+- Stripe
+- Google OAuth
+
+The app is fully usable without these integrations enabled.
+
+## Security notes
+
+- Uses secure headers, request validation, and rate limits
+- Login attempts are rate-limited and account lockout rules are configurable
+- For production, always set strong secrets and TLS (`ENABLE_HTTPS=true` when applicable)
+
+## Additional docs
+
+- `documentation/DEPLOYMENT.md`
+- `documentation/THEME_SYSTEM.md`
+- `scripts/setup-cron.md`
+
+## License
+
+MIT License - see `LICENSE`.

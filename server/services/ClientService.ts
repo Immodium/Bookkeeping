@@ -15,6 +15,14 @@ export class ClientService {
     if (resolvedZip !== undefined) {
       normalized.zipCode = resolvedZip;
     }
+
+    if (!normalized.first_name && normalized.name) {
+      const [firstName, ...lastNameParts] = normalized.name.split(' ');
+      normalized.first_name = firstName || '';
+      normalized.last_name = lastNameParts.join(' ');
+    } else if (normalized.last_name === undefined) {
+      normalized.last_name = '';
+    }
     return normalized;
   }
 
@@ -54,6 +62,8 @@ export class ClientService {
    */
   async createClient(clientData: {
     name: string;
+    first_name?: string;
+    last_name?: string;
     email?: string;
     phone?: string;
     address?: string;
@@ -70,8 +80,13 @@ export class ClientService {
       throw new Error('Client data is required');
     }
 
+    const firstName = (clientData.first_name || '').trim();
+    const lastName = (clientData.last_name || '').trim();
+    const combinedName = `${firstName} ${lastName}`.trim();
+    const resolvedName = (clientData.name || '').trim() || combinedName;
+
     // Validate required fields
-    if (!clientData.name || typeof clientData.name !== 'string') {
+    if (!resolvedName) {
       throw new Error('Client name is required');
     }
 
@@ -99,7 +114,9 @@ export class ClientService {
     const zipValue = clientData.zipCode || clientData.zip || null;
     const clientRecord = {
       id: nextId,
-      name: clientData.name,
+      name: resolvedName,
+      first_name: firstName || null,
+      last_name: lastName || null,
       email: clientData.email || null,
       phone: clientData.phone || null,
       address: clientData.address || null,
@@ -118,11 +135,11 @@ export class ClientService {
     // Create client
     databaseService.executeQuery(`
       INSERT INTO clients (
-        id, name, email, phone, company, address, city, state,
+        id, name, first_name, last_name, email, phone, company, address, city, state,
         zip, country, tax_id, notes, is_active, stripe_customer_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      clientRecord.id, clientRecord.name,
+      clientRecord.id, clientRecord.name, clientRecord.first_name, clientRecord.last_name,
       clientRecord.email, clientRecord.phone, clientRecord.company, clientRecord.address,
       clientRecord.city, clientRecord.state, clientRecord.zip, clientRecord.country,
       clientRecord.tax_id, clientRecord.notes, clientRecord.is_active,
@@ -137,6 +154,8 @@ export class ClientService {
    */
   async updateClient(id: number, clientData: Partial<{
     name: string;
+    first_name: string;
+    last_name: string;
     email: string;
     phone: string;
     address: string;
@@ -184,7 +203,7 @@ export class ClientService {
 
     // Filter allowed fields
     const allowedFields = [
-      'name', 'email', 'phone', 'company', 'address', 'city', 'state',
+      'name', 'first_name', 'last_name', 'email', 'phone', 'company', 'address', 'city', 'state',
       'zip', 'country', 'tax_id', 'notes', 'is_active', 'stripe_customer_id'
     ];
     
@@ -202,6 +221,18 @@ export class ClientService {
         updateData[field] = clientData[field as keyof typeof clientData];
       }
     });
+
+    const hasNameParts = clientData.first_name !== undefined || clientData.last_name !== undefined;
+    if (hasNameParts) {
+      const resolvedFirstName = (clientData.first_name ?? existingClient.first_name ?? '').trim();
+      const resolvedLastName = (clientData.last_name ?? existingClient.last_name ?? '').trim();
+      updateData.first_name = resolvedFirstName || null;
+      updateData.last_name = resolvedLastName || null;
+
+      // Keep full-name column in sync with first/last name edits.
+      const combinedName = `${resolvedFirstName} ${resolvedLastName}`.trim();
+      updateData.name = combinedName || updateData.name || existingClient.name;
+    }
 
     if (Object.keys(updateData).length === 0) {
       throw new Error('No valid fields to update');

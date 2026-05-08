@@ -15,6 +15,22 @@ export interface ReportDateRange {
 // Base report props interface
 export interface BaseReportProps {
   onBack: () => void;
+  onSchedule: (
+    reportType: ReportType,
+    dateRange: ReportDateRange,
+    schedule: ReportScheduleInput,
+    config?: Record<string, unknown>
+  ) => Promise<void> | void;
+}
+
+export type ReportScheduleFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly';
+
+export interface ReportScheduleInput {
+  name: string;
+  frequency: ReportScheduleFrequency;
+  startDate: string;
+  timeOfDay: string;
+  timezone: string;
 }
 
 // Invoice Report Types

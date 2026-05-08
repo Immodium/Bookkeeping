@@ -8,7 +8,18 @@ import { ExpenseViewModalProps } from '@/types/components/expense.types';
 export const ExpenseViewModal: React.FC<ExpenseViewModalProps> = ({ expense, isOpen, onClose }) => {
   if (!isOpen || !expense) return null;
 
-  // Using imported formatDate and formatDateTime functions
+  // Use the browser's native file viewer for uploaded receipt files.
+  const handleViewReceipt = async () => {
+    if (!expense.receipt_url) {
+      return;
+    }
+
+    const receiptUrl = expense.receipt_url.startsWith('http')
+      ? expense.receipt_url
+      : `${window.location.origin}${expense.receipt_url}`;
+
+    window.open(receiptUrl, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
@@ -80,14 +91,13 @@ export const ExpenseViewModal: React.FC<ExpenseViewModalProps> = ({ expense, isO
                 <div>
                   <p className="text-sm text-muted-foreground">Receipt</p>
                   {expense.receipt_url ? (
-                    <a 
-                      href={expense.receipt_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={handleViewReceipt}
                       className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
                     >
                       View Receipt
-                    </a>
+                    </button>
                   ) : (
                     <p className="text-muted-foreground">No receipt attached</p>
                   )}

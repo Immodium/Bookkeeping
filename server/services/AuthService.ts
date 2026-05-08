@@ -4,12 +4,63 @@
 import { databaseService } from '../core/DatabaseService.js';
 import { settingsService } from './SettingsService.js';
 import { User, UserPublic } from '../types/index.js';
+import { getPrimaryRole, normalizeRoles } from '../auth/roles.js';
 
 /**
  * Authentication Service
  * Manages user authentication, login attempts, and account security
  */
 export class AuthService {
+  private buildUserPublicSelectClause(includeSensitive = false): string {
+    const baseFields = [
+      'u.id',
+      'u.name',
+      'u.email',
+      'u.username',
+      'u.role',
+      'COALESCE(u.roles, json_array(u.role)) as roles',
+      'u.email_verified',
+      'u.last_login',
+      'u.failed_login_attempts',
+      'u.account_locked_until'
+    ];
+
+    if (includeSensitive) {
+      baseFields.push('u.password_hash', 'u.google_id', 'u.created_at', 'u.updated_at');
+    }
+
+    return baseFields.join(', ');
+  }
+
+  private hydrateUserRoles<T extends { role?: string; roles?: string | string[] | null }>(row: T | null): T | null {
+    if (!row) {
+      return null;
+    }
+
+    let parsedRoles: string[] = [];
+    if (Array.isArray(row.roles)) {
+      parsedRoles = row.roles;
+    } else if (typeof row.roles === 'string') {
+      try {
+        const parsed = JSON.parse(row.roles);
+        if (Array.isArray(parsed)) {
+          parsedRoles = parsed;
+        }
+      } catch {
+        parsedRoles = [];
+      }
+    }
+
+    const normalized = normalizeRoles(parsedRoles.length ? parsedRoles : [row.role || 'user']);
+    const primary = getPrimaryRole(normalized, row.role || 'user');
+
+    return {
+      ...row,
+      role: primary,
+      roles: normalized
+    };
+  }
+
   /**
    * Get user by email
    */
@@ -17,7 +68,12 @@ export class AuthService {
     if (!email || typeof email !== 'string') {
       throw new Error('Valid email is required');
     }
-    return databaseService.getOne<User>('SELECT * FROM users WHERE email = ?', [email]);
+    const row = databaseService.getOne<User>(`
+      SELECT ${this.buildUserPublicSelectClause(true)}
+      FROM users u
+      WHERE u.email = ?
+    `, [email]);
+    return this.hydrateUserRoles(row);
   }
 
   /**
@@ -27,10 +83,12 @@ export class AuthService {
     if (!userId || typeof userId !== 'number') {
       throw new Error('Valid user ID is required');
     }
-    return databaseService.getOne<UserPublic>(
-      'SELECT id, name, email, username, role, email_verified FROM users WHERE id = ?', 
-      [userId]
-    );
+    const row = databaseService.getOne<UserPublic>(`
+      SELECT ${this.buildUserPublicSelectClause(false)}
+      FROM users u
+      WHERE u.id = ?
+    `, [userId]);
+    return this.hydrateUserRoles(row);
   }
 
   /**
@@ -41,10 +99,19 @@ export class AuthService {
     email: string;
     username?: string;
     password_hash: string;
-    role?: 'user' | 'admin';
+    role?: User['role'];
+    roles?: User['roles'];
     email_verified?: number;
   }): Promise<number> {
-    const { name, email, username, password_hash, role = 'user', email_verified = 0 } = userData;
+    const {
+      name,
+      email,
+      username,
+      password_hash,
+      role = 'user',
+      roles = [],
+      email_verified = 0
+    } = userData;
     
     if (!name || !email || !password_hash) {
       throw new Error('Name, email, and password hash are required');
@@ -58,14 +125,29 @@ export class AuthService {
     // Get next user ID from counter
     const nextId = databaseService.getNextId('users');
     
+    const normalizedRoles = normalizeRoles([...(roles || []), role]);
+    const primaryRole = normalizedRoles[0] || 'user';
+
     // Create user
     const now = new Date().toISOString();
     databaseService.executeQuery(`
       INSERT INTO users (
-        id, name, email, username, password_hash, role, email_verified,
+        id, name, email, username, password_hash, role, roles, email_verified,
         failed_login_attempts, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [nextId, name, email, username || email, password_hash, role, email_verified, 0, now, now]);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      nextId,
+      name,
+      email,
+      username || email,
+      password_hash,
+      primaryRole,
+      JSON.stringify(normalizedRoles),
+      email_verified,
+      0,
+      now,
+      now
+    ]);
 
     return nextId;
   }
@@ -224,13 +306,14 @@ export class AuthService {
   async getAllUsers(options: { limit?: number; offset?: number } = {}): Promise<UserPublic[]> {
     const { limit = 100, offset = 0 } = options;
     
-    return databaseService.getMany<UserPublic>(`
-      SELECT id, name, email, username, role, email_verified, 
-             failed_login_attempts, account_locked_until, created_at, last_login
-      FROM users 
-      ORDER BY created_at DESC 
+    const rows = databaseService.getMany<UserPublic>(`
+      SELECT ${this.buildUserPublicSelectClause(true)}
+      FROM users u
+      ORDER BY u.created_at DESC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
+
+    return rows.map((row) => this.hydrateUserRoles(row) as UserPublic);
   }
 
   /**
@@ -245,7 +328,9 @@ export class AuthService {
     const adminCount = databaseService.getOne<{count: number}>(
       "SELECT COUNT(*) as count FROM users WHERE role = 'admin'"
     );
-    const userToDelete = databaseService.getOne<UserPublic>('SELECT * FROM users WHERE id = ?', [userId]);
+    const userToDelete = this.hydrateUserRoles(
+      databaseService.getOne<UserPublic>('SELECT id, role, roles FROM users WHERE id = ?', [userId])
+    );
     
     if (userToDelete?.role === 'admin' && (adminCount?.count || 0) <= 1) {
       throw new Error('Cannot delete the last administrator');
@@ -262,7 +347,12 @@ export class AuthService {
     if (!username || typeof username !== 'string') {
       throw new Error('Valid username is required');
     }
-    return databaseService.getOne<User>('SELECT * FROM users WHERE username = ?', [username]);
+    const row = databaseService.getOne<User>(`
+      SELECT ${this.buildUserPublicSelectClause(true)}
+      FROM users u
+      WHERE u.username = ?
+    `, [username]);
+    return this.hydrateUserRoles(row);
   }
 
   /**

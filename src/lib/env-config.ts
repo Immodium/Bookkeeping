@@ -55,13 +55,20 @@ interface EnvironmentConfig {
   LOG_FILE: string;
 }
 
+const resolveDefaultApiUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+  return 'http://localhost:3002';
+};
+
 // Default secure configuration
 const DEFAULT_CONFIG: EnvironmentConfig = {
   NODE_ENV: 'production',
   PORT: 3002,
   HOST: '0.0.0.0',
   
-  API_URL: 'http://localhost:3002',
+  API_URL: resolveDefaultApiUrl(),
   APP_NAME: 'Slimbooks',
   
   // These should be overridden in production!
@@ -124,12 +131,15 @@ export const loadEnvironmentConfig = (): EnvironmentConfig => {
   // In browser, use Vite environment variables
   const env = isBrowser ? import.meta.env : process.env;
   
+  const resolvedDefaultApiUrl = resolveDefaultApiUrl();
+  const configuredApiUrl = env.VITE_API_URL || env.API_URL;
+
   const config: EnvironmentConfig = {
     NODE_ENV: parseString(env.NODE_ENV, DEFAULT_CONFIG.NODE_ENV),
     PORT: parseNumber(env.PORT, DEFAULT_CONFIG.PORT),
     HOST: parseString(env.HOST, DEFAULT_CONFIG.HOST),
     
-    API_URL: parseString(env.VITE_API_URL || env.API_URL, DEFAULT_CONFIG.API_URL),
+    API_URL: parseString(configuredApiUrl, resolvedDefaultApiUrl),
     APP_NAME: parseString(env.VITE_APP_NAME || env.APP_NAME, DEFAULT_CONFIG.APP_NAME),
     
     JWT_SECRET: parseString(env.JWT_SECRET, DEFAULT_CONFIG.JWT_SECRET),

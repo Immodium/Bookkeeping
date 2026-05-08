@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Upload, Download, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
-import { exportToCSV, parseCSV, validatePaymentData } from '@/utils/data';
-import { PaymentImportData, PaymentValidationResult, FieldMapping, ImportExportProps, PreviewDataItem, PAYMENT_FIELDS } from '@/types/shared/import.types';
+import { exportToCSV, exportToXLSX, parseSpreadsheetFile, validatePaymentData } from '@/utils/data';
+import { PaymentValidationResult, FieldMapping, ImportExportProps, PreviewDataItem, PAYMENT_FIELDS } from '@/types/shared/import.types';
 import { toast } from 'sonner';
 import { themeClasses, getIconColorClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { PaymentMethod, PaymentStatus, Payment } from '@/types';
@@ -10,6 +10,7 @@ import { authenticatedFetch } from '@/utils/api';
 
 export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onImportComplete }) => {
   const [mode, setMode] = useState<'select' | 'import' | 'export'>('select');
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('csv');
   const [csvData, setCsvData] = useState<Array<Record<string, string | number | boolean | null | undefined>>>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
@@ -44,8 +45,13 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
         status: payment.status
       }));
 
-      exportToCSV(exportData, `payments-${new Date().toISOString().split('T')[0]}.csv`);
-      toast.success('Payments exported successfully');
+      const exportDate = new Date().toISOString().split('T')[0];
+      if (exportFormat === 'xlsx') {
+        await exportToXLSX(exportData, `payments-${exportDate}.xlsx`, 'Payments');
+      } else {
+        exportToCSV(exportData, `payments-${exportDate}.csv`);
+      }
+      toast.success(`Payments exported successfully as ${exportFormat.toUpperCase()}`);
       onClose();
     } catch (error) {
       toast.error('Failed to export payments');
@@ -53,39 +59,35 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
     }
   };
 
-  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const csvText = e.target?.result as string;
-        const parsedData = parseCSV(csvText);
-        
-        if (parsedData.length === 0) {
-          toast.error('CSV file is empty or invalid');
-          return;
-        }
+    try {
+      const parsedData = await parseSpreadsheetFile(file);
 
-        setCsvData(parsedData);
-        setCsvHeaders(Object.keys(parsedData[0]));
-        
-        // Initialize field mappings
-        const initialMappings = PAYMENT_FIELDS.map(field => ({
-          csvField: '',
-          dbField: field.key
-        }));
-        setFieldMappings(initialMappings);
-        
-        setMode('import');
-      } catch (error) {
-        toast.error('Failed to parse CSV file');
-        console.error('CSV parsing error:', error);
+      if (parsedData.length === 0) {
+        toast.error('Spreadsheet file is empty or invalid');
+        return;
       }
-    };
-    
-    reader.readAsText(file);
+
+      setCsvData(parsedData);
+      setCsvHeaders(Object.keys(parsedData[0]));
+
+      // Initialize field mappings
+      const initialMappings = PAYMENT_FIELDS.map(field => ({
+        csvField: '',
+        dbField: field.key
+      }));
+      setFieldMappings(initialMappings);
+
+      setMode('import');
+    } catch (error) {
+      toast.error('Failed to parse spreadsheet file');
+      console.error('Spreadsheet parsing error:', error);
+    } finally {
+      event.target.value = '';
+    }
   }, []);
 
   const updateFieldMapping = (dbField: string, csvField: string) => {
@@ -295,7 +297,7 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
               <Download className={`${themeClasses.iconMedium} ${getIconColorClasses('blue')} mr-3`} />
               <div className="text-left">
                 <div className="font-medium text-foreground">Export Payments</div>
-                <div className="text-sm text-muted-foreground">Download all payments as CSV</div>
+                <div className="text-sm text-muted-foreground">Download all payments as CSV or XLSX</div>
               </div>
             </button>
 
@@ -306,14 +308,14 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
               <Upload className={`${themeClasses.iconMedium} ${getIconColorClasses('blue')} mr-3`} />
               <div className="text-left">
                 <div className="font-medium text-foreground">Import Payments</div>
-                <div className="text-sm text-muted-foreground">Upload CSV file to import</div>
+                <div className="text-sm text-muted-foreground">Upload CSV or XLSX file to import</div>
               </div>
             </button>
 
             <input
               id="payment-csv-upload"
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx"
               onChange={handleFileUpload}
               className="hidden"
             />
@@ -339,14 +341,29 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
 
           <div className="text-center py-6">
             <FileText className={`h-12 w-12 ${getIconColorClasses('blue')} mx-auto mb-4`} />
-            <p className="text-muted-foreground mb-6">Export all payments to a CSV file for backup or analysis.</p>
+            <p className="text-muted-foreground mb-6">Export all payments as CSV or XLSX for backup or analysis.</p>
+
+            <div className="mb-4">
+              <label htmlFor="payment-export-format" className="block text-sm font-medium text-foreground mb-2">
+                Export format
+              </label>
+              <select
+                id="payment-export-format"
+                value={exportFormat}
+                onChange={(event) => setExportFormat(event.target.value as 'csv' | 'xlsx')}
+                className={themeClasses.select}
+              >
+                <option value="csv">CSV (.csv)</option>
+                <option value="xlsx">Excel (.xlsx)</option>
+              </select>
+            </div>
 
             <div className="space-y-3">
               <button
                 onClick={handleExport}
                 className={getButtonClasses('primary')}
               >
-                Download CSV
+                {exportFormat === 'xlsx' ? 'Download XLSX' : 'Download CSV'}
               </button>
               <button
                 onClick={() => setMode('select')}
@@ -377,7 +394,7 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
         <div className="space-y-6">
           {/* Field Mapping */}
           <div>
-            <h3 className="text-lg font-medium text-foreground mb-4">Map CSV Fields</h3>
+            <h3 className="text-lg font-medium text-foreground mb-4">Map Spreadsheet Fields</h3>
             <div className="mb-4 p-3 bg-muted rounded-lg">
               <p className="text-sm text-muted-foreground">
                 <strong>Payment Method:</strong> Valid methods are: {PAYMENT_METHODS.join(', ')}. Common variations will be automatically mapped.

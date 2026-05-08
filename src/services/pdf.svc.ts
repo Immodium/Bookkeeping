@@ -161,6 +161,59 @@ class PDFService {
   }
 
   /**
+   * Generate invoice PDF and trigger browser print dialog.
+   */
+  async printInvoicePDF(invoiceId: number): Promise<void> {
+    let printWindow: Window | null = null;
+
+    try {
+      // Open a window immediately so browsers treat this as a user-initiated action.
+      printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        throw new Error('Please allow pop-ups to print invoices.');
+      }
+
+      printWindow.document.write('<html><body style="font-family: sans-serif; padding: 24px;">Preparing invoice for print...</body></html>');
+      printWindow.document.close();
+
+      const blob = await this.generateInvoicePDF(invoiceId);
+      const pdfUrl = window.URL.createObjectURL(blob);
+
+      printWindow.location.href = pdfUrl;
+
+      const cleanup = () => {
+        window.URL.revokeObjectURL(pdfUrl);
+      };
+
+      // Trigger print when PDF viewer window finishes loading.
+      printWindow.onload = () => {
+        printWindow?.focus();
+        printWindow?.print();
+      };
+
+      printWindow.onafterprint = () => {
+        cleanup();
+      };
+
+      // Fallback for browsers where onload doesn't fire reliably for PDFs.
+      window.setTimeout(() => {
+        try {
+          printWindow?.focus();
+          printWindow?.print();
+        } catch {
+          // Ignore and let user print manually if browser blocks scripted print.
+        }
+      }, 1500);
+    } catch (error) {
+      if (printWindow && !printWindow.closed) {
+        printWindow.close();
+      }
+      console.error('Error printing invoice PDF:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Generate and download public invoice PDF
    * If no token provided, generates a new secure token
    */
@@ -193,6 +246,57 @@ class PDFService {
       console.error('Error downloading report PDF:', error);
       throw error;
     }
+  }
+
+  /**
+   * Export an on-screen element using browser print-to-PDF.
+   * Users can choose "Save as PDF" in the print dialog.
+   */
+  async exportElementToPDF(selector: string, reportName: string): Promise<void> {
+    const sourceElement = document.querySelector(selector) as HTMLElement | null;
+    if (!sourceElement) {
+      throw new Error('Could not find report content to export.');
+    }
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      throw new Error('Please allow pop-ups to export PDF reports.');
+    }
+
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((styleNode) => styleNode.outerHTML)
+      .join('\n');
+
+    const safeTitle = reportName.replace(/[^a-zA-Z0-9-_ ]/g, '').trim() || 'report';
+
+    printWindow.document.open();
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${safeTitle}</title>
+          ${styles}
+          <style>
+            @page { margin: 0.5in; }
+            body { background: white !important; margin: 0; padding: 0; }
+            [data-report-actions] { display: none !important; }
+          </style>
+        </head>
+        <body>
+          ${sourceElement.outerHTML}
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.focus();
+                window.print();
+              }, 250);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
   }
 
   /**

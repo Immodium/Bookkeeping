@@ -9,7 +9,6 @@ import {
   XCircle, 
   LayoutGrid, 
   Table, 
-  Eye, 
   Edit, 
   Trash2,
   FileSpreadsheet 
@@ -270,7 +269,20 @@ export const PaymentManagement: React.FC = () => {
   const renderPanelView = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {pagination.paginatedData.map((payment) => (
-        <div key={payment.id} className="bg-card rounded-lg shadow-sm border border-border p-6">
+        <div
+          key={payment.id}
+          className="bg-card rounded-lg shadow-sm border border-border p-6 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => handleViewPayment(payment)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              handleViewPayment(payment);
+            }
+          }}
+          aria-label={`View payment from ${payment.client_name}`}
+        >
           <div className="flex justify-between items-start mb-4">
             <div>
               <h3 className="font-semibold text-foreground">{payment.client_name}</h3>
@@ -278,21 +290,20 @@ export const PaymentManagement: React.FC = () => {
             </div>
             <div className="flex space-x-2">
               <button
-                onClick={() => handleViewPayment(payment)}
-                className="p-1 text-muted-foreground hover:text-white"
-                title="View Payment"
-              >
-                <Eye className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleEditPayment(payment)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleEditPayment(payment);
+                }}
                 className="p-1 text-muted-foreground hover:text-blue-600"
                 title="Edit Payment"
               >
                 <Edit className="h-4 w-4" />
               </button>
               <button
-                onClick={() => handleDeletePayment(payment.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleDeletePayment(payment.id);
+                }}
                 className="p-1 text-muted-foreground hover:text-red-600"
                 title="Delete Payment"
               >
@@ -360,18 +371,18 @@ export const PaymentManagement: React.FC = () => {
           </div>
           <div className="flex space-x-3">
             <button
-              onClick={() => updateUiState({ showImportExport: true })}
-              className={getButtonClasses('secondary')}
-            >
-              <FileSpreadsheet className={themeClasses.iconButton} />
-              Import/Export
-            </button>
-            <button
               onClick={handleCreatePayment}
               className={getButtonClasses('primary')}
             >
               <Plus className={themeClasses.iconButton} />
               Add Payment
+            </button>
+            <button
+              onClick={() => updateUiState({ showImportExport: true })}
+              className={getButtonClasses('primary')}
+            >
+              <FileSpreadsheet className={themeClasses.iconButton} />
+              Import/Export
             </button>
           </div>
         </div>

@@ -515,8 +515,7 @@ const defaultNotificationSettings = {
   showErrorToasts: true,
   showWarningToasts: true,
   showInfoToasts: true,
-  toastDuration: 4000,
-  toastPosition: 'bottom-right'
+  toastDuration: 4000
 } as const;
 
 // Specialized hook for notification settings
@@ -539,8 +538,7 @@ export function useNotificationSettings() {
         showErrorToasts: settings.showErrorToasts ?? defaultNotificationSettings.showErrorToasts,
         showWarningToasts: settings.showWarningToasts ?? defaultNotificationSettings.showWarningToasts,
         showInfoToasts: settings.showInfoToasts ?? defaultNotificationSettings.showInfoToasts,
-        toastDuration: settings.toastDuration ?? defaultNotificationSettings.toastDuration,
-        toastPosition: settings.toastPosition ?? defaultNotificationSettings.toastPosition
+        toastDuration: settings.toastDuration ?? defaultNotificationSettings.toastDuration
       };
     },
     transformSave: (data) => ({

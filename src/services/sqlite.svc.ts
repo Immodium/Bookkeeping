@@ -6,6 +6,7 @@ import {
   InvoiceTemplate,
   Expense,
   Payment,
+  Retainer,
   PaymentFormData,
   Report,
   ImportResult,
@@ -14,7 +15,7 @@ import {
 } from '@/types';
 import type { ApiResponse } from '@/types/shared/common.types';
 import { parseProjectSettingsWithDefaults, validateProjectSettings } from '@/utils/settingsValidation';
-import { getToken } from '@/utils/api';
+import { getToken } from '@/utils/api/auth.util';
 class SQLiteService {
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
@@ -25,9 +26,12 @@ class SQLiteService {
   private readonly SETTINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
   private getApiBaseUrl(): string {
-    // Check if we're running on HTTPS
-    if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
-      return 'https://localhost:3002/api';
+    const configuredApiUrl = import.meta.env?.VITE_API_URL;
+    if (configuredApiUrl) {
+      return `${configuredApiUrl.replace(/\/$/, '')}/api`;
+    }
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/api`;
     }
     return 'http://localhost:3002/api';
   }
@@ -513,6 +517,109 @@ class SQLiteService {
   async bulkDeletePayments(paymentIds: number[]): Promise<{ changes: number }> {
     const result = await this.apiCall<unknown, { changes: number }>('/payments/bulk-delete', 'POST', { payment_ids: paymentIds });
     return result.result || { changes: 0 };
+  }
+
+  // ===== RETAINER API METHODS =====
+  async getRetainers(params?: {
+    status?: string;
+    billing_cycle?: string;
+    client_id?: number;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ retainers: Retainer[]; pagination?: unknown }> {
+    const result = await this.apiCall<{ retainers?: Retainer[]; pagination?: unknown }>(
+      '/retainers',
+      'GET',
+      params
+    );
+    return {
+      retainers: result.data?.retainers || [],
+      pagination: result.data?.pagination
+    };
+  }
+
+  async getRetainerById(id: number): Promise<Retainer | null> {
+    try {
+      const result = await this.apiCall<Retainer>(`/retainers/${id}`);
+      return result.data || null;
+    } catch (error) {
+      if ((error as Error).message.includes('Retainer not found')) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async createRetainer(retainerData: Omit<Retainer, 'id' | 'created_at' | 'updated_at' | 'client_name'>): Promise<Retainer> {
+    const result = await this.apiCall<Retainer>('/retainers', 'POST', { retainerData });
+    if (!result.data) {
+      throw new Error('Failed to create retainer: No data returned');
+    }
+    return result.data;
+  }
+
+  async updateRetainer(
+    id: number,
+    retainerData: Partial<Omit<Retainer, 'id' | 'created_at' | 'updated_at' | 'client_name'>>
+  ): Promise<Retainer> {
+    const result = await this.apiCall<Retainer>(`/retainers/${id}`, 'PUT', { retainerData });
+    if (!result.data) {
+      throw new Error('Failed to update retainer: No data returned');
+    }
+    return result.data;
+  }
+
+  async deleteRetainer(id: number): Promise<{ changes: number }> {
+    const result = await this.apiCall<unknown, { changes: number }>(`/retainers/${id}`, 'DELETE');
+    return result.result || { changes: 0 };
+  }
+
+  async getRetainerStats(): Promise<{
+    summary: {
+      total: number;
+      active: number;
+      paused: number;
+      ended: number;
+      total_amount: number;
+      monthly_value: number;
+    };
+    upcoming_next_30_days: number;
+    by_billing_cycle: Array<{
+      billing_cycle: string;
+      count: number;
+      total_amount: number;
+    }>;
+  }> {
+    const result = await this.apiCall<{
+      summary: {
+        total: number;
+        active: number;
+        paused: number;
+        ended: number;
+        total_amount: number;
+        monthly_value: number;
+      };
+      upcoming_next_30_days: number;
+      by_billing_cycle: Array<{
+        billing_cycle: string;
+        count: number;
+        total_amount: number;
+      }>;
+    }>('/retainers/stats');
+
+    return result.data || {
+      summary: {
+        total: 0,
+        active: 0,
+        paused: 0,
+        ended: 0,
+        total_amount: 0,
+        monthly_value: 0
+      },
+      upcoming_next_30_days: 0,
+      by_billing_cycle: []
+    };
   }
 
   // ===== TEMPLATE API METHODS =====

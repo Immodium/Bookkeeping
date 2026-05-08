@@ -8,7 +8,9 @@ export {
   getUserByEmail,
   getUserByGoogleId,
   createUser,
+  inviteUser,
   updateUser,
+  resetUserPasswordByAdmin,
   deleteUser,
   updateUserLoginAttempts,
   updateUserLastLogin,
@@ -58,6 +60,9 @@ export {
   getAllExpenses,
   getExpenseById,
   createExpense,
+  uploadReceiptAndExtractExpenseData,
+  uploadReceiptFile,
+  parseReceiptOCR,
   updateExpense,
   deleteExpense,
   getExpenseStats,
@@ -86,6 +91,16 @@ export {
   getPaymentMethodsStats,
   searchPayments
 } from './paymentController.js';
+
+// Retainer controller
+export {
+  getAllRetainers,
+  getRetainerById,
+  createRetainer,
+  updateRetainer,
+  deleteRetainer,
+  getRetainerStats
+} from './retainerController.js';
 
 // Authentication controller
 export {

@@ -1,7 +1,5 @@
 // Settings-related types and interfaces for all settings components
 
-// Toast/Notification position types
-export type ToastPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top-center' | 'bottom-center';
 export type SmtpSecurityType = 'tls' | 'ssl' | 'none';
 
 // Tax Settings
@@ -55,7 +53,6 @@ export interface NotificationSettings {
   showWarningToasts: boolean;
   showInfoToasts: boolean;
   toastDuration: number;
-  toastPosition: ToastPosition;
 }
 
 // Appearance Settings

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { Client, ClientFormData } from '@/types';
+import { formatUsPhoneNumber } from '@/utils/formatting';
 
 interface ClientFormProps {
   isOpen?: boolean;
@@ -33,7 +34,7 @@ export const ClientForm: React.FC<ClientFormProps> = ({ isOpen = true, onClose, 
         first_name: client.first_name || '',
         last_name: client.last_name || '',
         email: client.email || '',
-        phone: client.phone || '',
+        phone: formatUsPhoneNumber(client.phone || ''),
         company: client.company || '',
         address: client.address || '',
         city: client.city || '',
@@ -128,7 +129,7 @@ export const ClientForm: React.FC<ClientFormProps> = ({ isOpen = true, onClose, 
               <input
                 type="tel"
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, phone: formatUsPhoneNumber(e.target.value) })}
                 className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
               />
             </div>

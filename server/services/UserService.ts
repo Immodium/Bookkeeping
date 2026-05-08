@@ -2,26 +2,74 @@
 // Handles user CRUD operations and user profile management
 
 import { databaseService } from '../core/DatabaseService.js';
-import { User, UserPublic, ServiceOptions } from '../types/index.js';
+import { User, UserPublic, ServiceOptions, UserRole } from '../types/index.js';
+import { getPrimaryRole, normalizeRoles } from '../auth/roles.js';
 
 /**
  * User Management Service
  * Handles user lifecycle management, profile updates, and administrative operations
  */
 export class UserService {
+  private reserveNextUserId(): number {
+    const counterNextId = databaseService.getNextId('users');
+    const maxUserIdRow = databaseService.getOne<{ maxId: number }>(
+      'SELECT COALESCE(MAX(id), 0) as maxId FROM users'
+    );
+    const maxUserId = maxUserIdRow?.maxId || 0;
+
+    if (counterNextId > maxUserId) {
+      return counterNextId;
+    }
+
+    const reconciledNextId = maxUserId + 1;
+    databaseService.executeQuery(
+      `
+        INSERT INTO counters (name, value)
+        VALUES ('users', ?)
+        ON CONFLICT(name) DO UPDATE SET value = excluded.value
+      `,
+      [reconciledNextId]
+    );
+    return reconciledNextId;
+  }
+
+  private mapUserPublic(row: UserPublic): UserPublic {
+    const roles = normalizeRoles(row.roles);
+    return {
+      ...row,
+      role: getPrimaryRole(roles, row.role),
+      roles
+    };
+  }
+
+  private mapUserWithRoles(row: User | null): User | null {
+    if (!row) {
+      return null;
+    }
+
+    const roles = normalizeRoles(row.roles);
+    return {
+      ...row,
+      role: getPrimaryRole(roles, row.role),
+      roles
+    };
+  }
+
   /**
    * Get all users with pagination
    */
   async getAllUsers(options: ServiceOptions = {}): Promise<UserPublic[]> {
     const { limit = 100, offset = 0 } = options;
     
-    return databaseService.getMany<UserPublic>(`
+    const rows = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
-             last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+             roles, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
+
+    return rows.map((row) => this.mapUserPublic(row));
   }
 
   /**
@@ -32,12 +80,14 @@ export class UserService {
       throw new Error('Valid user ID is required');
     }
 
-    return databaseService.getOne<UserPublic>(`
+    const user = databaseService.getOne<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
-             last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+             roles, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
       WHERE id = ?
     `, [id]);
+
+    return user ? this.mapUserPublic(user) : null;
   }
 
   /**
@@ -48,7 +98,8 @@ export class UserService {
       throw new Error('Valid email is required');
     }
 
-    return databaseService.getOne<User>('SELECT * FROM users WHERE email = ?', [email]);
+    const user = databaseService.getOne<User>('SELECT * FROM users WHERE email = ?', [email]);
+    return this.mapUserWithRoles(user);
   }
 
   /**
@@ -59,10 +110,11 @@ export class UserService {
       throw new Error('Valid Google ID is required');
     }
 
-    return databaseService.getOne<User>(
+    const user = databaseService.getOne<User>(
       'SELECT * FROM users WHERE google_id = ?', 
       [decodeURIComponent(googleId)]
     );
+    return this.mapUserWithRoles(user);
   }
 
   /**
@@ -73,7 +125,8 @@ export class UserService {
     email: string;
     username?: string;
     password_hash?: string;
-    role?: 'user' | 'admin';
+    role?: UserRole;
+    roles?: UserRole[];
     email_verified?: boolean;
     google_id?: string;
     last_login?: string;
@@ -85,7 +138,8 @@ export class UserService {
       email, 
       username, 
       password_hash, 
-      role = 'user', 
+      role = 'user',
+      roles,
       email_verified = false, 
       google_id, 
       last_login, 
@@ -107,31 +161,66 @@ export class UserService {
       throw new Error('User with this email already exists');
     }
 
-    // Get next user ID from counter
-    const nextId = databaseService.getNextId('users');
+    const normalizedRoles = normalizeRoles(roles && roles.length > 0 ? roles : [role]);
+    const primaryRole = getPrimaryRole(normalizedRoles, role);
+
+    // Keep user ID generation resilient if counters drift behind real IDs.
+    const nextId = this.reserveNextUserId();
     
     // Create user
     const now = new Date().toISOString();
-    databaseService.executeQuery(`
-      INSERT INTO users (
-        id, name, email, username, password_hash, role, email_verified,
-        google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      nextId, 
-      name, 
-      email, 
-      username || email, 
-      password_hash || null, 
-      role, 
-      email_verified ? 1 : 0,
-      google_id || null,
-      last_login || null,
-      failed_login_attempts,
-      account_locked_until || null,
-      now, 
-      now
-    ]);
+    try {
+      databaseService.executeQuery(`
+        INSERT INTO users (
+          id, name, email, username, password_hash, role, roles, email_verified,
+          google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        nextId, 
+        name, 
+        email, 
+        username || email, 
+        password_hash || null, 
+        primaryRole,
+        JSON.stringify(normalizedRoles),
+        email_verified ? 1 : 0,
+        google_id || null,
+        last_login || null,
+        failed_login_attempts,
+        account_locked_until || null,
+        now, 
+        now
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('UNIQUE constraint failed: users.id')) {
+        throw error;
+      }
+
+      const fallbackId = this.reserveNextUserId();
+      databaseService.executeQuery(`
+        INSERT INTO users (
+          id, name, email, username, password_hash, role, roles, email_verified,
+          google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        fallbackId,
+        name,
+        email,
+        username || email,
+        password_hash || null,
+        primaryRole,
+        JSON.stringify(normalizedRoles),
+        email_verified ? 1 : 0,
+        google_id || null,
+        last_login || null,
+        failed_login_attempts,
+        account_locked_until || null,
+        now,
+        now
+      ]);
+      return fallbackId;
+    }
 
     return nextId;
   }
@@ -143,7 +232,8 @@ export class UserService {
     name: string;
     email: string;
     username: string;
-    role: 'user' | 'admin';
+    role: UserRole;
+    roles: UserRole[];
     email_verified: boolean;
     google_id: string;
     password_hash: string;
@@ -163,7 +253,7 @@ export class UserService {
     }
 
     // Filter allowed fields and build update data
-    const allowedFields = ['name', 'email', 'username', 'role', 'email_verified', 'google_id', 'password_hash'];
+    const allowedFields = ['name', 'email', 'username', 'role', 'roles', 'email_verified', 'google_id', 'password_hash'];
     const updateData: Record<string, any> = {};
     
     allowedFields.forEach(field => {
@@ -194,6 +284,16 @@ export class UserService {
       }
     }
 
+    if (updateData.roles) {
+      const normalizedRoles = normalizeRoles(updateData.roles as UserRole[]);
+      updateData.roles = JSON.stringify(normalizedRoles);
+      updateData.role = getPrimaryRole(normalizedRoles, updateData.role || existingUser.role);
+    } else if (updateData.role) {
+      const normalizedRoles = normalizeRoles([updateData.role as UserRole]);
+      updateData.roles = JSON.stringify(normalizedRoles);
+      updateData.role = getPrimaryRole(normalizedRoles, updateData.role);
+    }
+
     // Convert boolean to SQLite format
     if (updateData.email_verified !== undefined) {
       updateData.email_verified = updateData.email_verified ? 1 : 0;
@@ -219,10 +319,11 @@ export class UserService {
 
     // Don't allow deletion of the last admin
     const adminCount = databaseService.getOne<{count: number}>(
-      "SELECT COUNT(*) as count FROM users WHERE role = 'admin'"
+      "SELECT COUNT(*) as count FROM users WHERE role = 'admin' OR roles LIKE '%\"admin\"%'"
     );
     
-    if (existingUser.role === 'admin' && (adminCount?.count || 0) <= 1) {
+    const existingRoles = normalizeRoles(existingUser.roles);
+    if (existingRoles.includes('admin') && (adminCount?.count || 0) <= 1) {
       throw new Error('Cannot delete the last administrator');
     }
 
@@ -319,17 +420,19 @@ export class UserService {
   /**
    * Get users by role
    */
-  async getUsersByRole(role: 'user' | 'admin', options: ServiceOptions = {}): Promise<UserPublic[]> {
+  async getUsersByRole(role: UserRole, options: ServiceOptions = {}): Promise<UserPublic[]> {
     const { limit = 100, offset = 0 } = options;
 
-    return databaseService.getMany<UserPublic>(`
+    const rows = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
-             last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+             roles, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
-      WHERE role = ?
+      WHERE role = ? OR roles LIKE ?
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
-    `, [role, limit, offset]);
+    `, [role, `%"${role}"%`, limit, offset]);
+
+    return rows.map((row) => this.mapUserPublic(row));
   }
 
   /**
@@ -338,14 +441,16 @@ export class UserService {
   async getLockedUsers(options: ServiceOptions = {}): Promise<UserPublic[]> {
     const { limit = 100, offset = 0 } = options;
 
-    return databaseService.getMany<UserPublic>(`
+    const rows = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
-             last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+             roles, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
       WHERE account_locked_until IS NOT NULL AND account_locked_until > datetime('now')
       ORDER BY account_locked_until DESC
       LIMIT ? OFFSET ?
     `, [limit, offset]);
+
+    return rows.map((row) => this.mapUserPublic(row));
   }
 
   /**
@@ -375,9 +480,9 @@ export class UserService {
     const { limit = 50, offset = 0 } = options;
     const searchPattern = `%${searchTerm}%`;
 
-    return databaseService.getMany<UserPublic>(`
+    const rows = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
-             last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+             roles, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
       WHERE (name LIKE ? OR email LIKE ? OR username LIKE ?)
       ORDER BY 
@@ -394,6 +499,8 @@ export class UserService {
       searchTerm, searchTerm, searchTerm,
       limit, offset
     ]);
+
+    return rows.map((row) => this.mapUserPublic(row));
   }
 
   /**
@@ -412,7 +519,7 @@ export class UserService {
     )?.count || 0;
 
     const admins = databaseService.getOne<{count: number}>(
-      "SELECT COUNT(*) as count FROM users WHERE role = 'admin'"
+      "SELECT COUNT(*) as count FROM users WHERE role = 'admin' OR roles LIKE '%\"admin\"%'"
     )?.count || 0;
 
     const regular = databaseService.getOne<{count: number}>(
@@ -439,6 +546,25 @@ export class UserService {
       locked,
       recentLogins
     };
+  }
+
+  async setUserRoles(userId: number, roles: UserRole[]): Promise<void> {
+    if (!userId || typeof userId !== 'number') {
+      throw new Error('Valid user ID is required');
+    }
+
+    const existingUser = await this.getUserById(userId);
+    if (!existingUser) {
+      throw new Error('User not found');
+    }
+
+    const normalizedRoles = normalizeRoles(roles);
+    const primaryRole = getPrimaryRole(normalizedRoles, existingUser.role);
+
+    databaseService.updateById('users', userId, {
+      role: primaryRole,
+      roles: JSON.stringify(normalizedRoles)
+    });
   }
 
   /**

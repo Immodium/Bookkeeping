@@ -4,7 +4,6 @@ import {
   Users, 
   FileText, 
   Settings as SettingsIcon,
-  CreditCard,
   LogOut,
   Receipt,
   BarChart
@@ -13,6 +12,8 @@ import { cn } from '@/utils/themeUtils.util';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
+import { ThemeModeToggle } from '@/components/ui/ThemeModeToggle';
+import slimbooksLogo from '@/assets/slimbooks_logo.png';
 
 const navigation = [
   { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, path: '/' },
@@ -86,9 +87,8 @@ export const NavigationGuardedSidebar: React.FC<NavigationGuardedSidebarProps> =
       <div className="flex h-full flex-col">
         {/* Logo/Header */}
         <div className="flex h-16 items-center border-b border-border px-6">
-          <div className="flex items-center space-x-2">
-            <CreditCard className="h-8 w-8 text-blue-600" />
-            <h1 className="text-xl font-bold text-foreground">{companySettings.companyName || 'Slimbooks'}</h1>
+          <div className="flex items-center">
+            <img src={slimbooksLogo} alt={companySettings.companyName || 'Slimbooks'} className="h-8 w-auto" />
           </div>
         </div>
 
@@ -146,6 +146,9 @@ export const NavigationGuardedSidebar: React.FC<NavigationGuardedSidebarProps> =
 
         {/* User Section */}
         <div className="border-t border-border p-4">
+          <div className="mb-3">
+            <ThemeModeToggle />
+          </div>
           <div className="flex items-center mb-3">
             <div className="flex-1">
               <p className="text-sm font-medium text-foreground">Welcome, {user?.username}</p>

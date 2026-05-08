@@ -18,6 +18,7 @@ export * from './domain/client.types';
 export * from './domain/invoice.types';
 export * from './domain/expense.types';
 export * from './domain/payment.types';
+export * from './domain/retainer.types';
 export * from './domain/settings.types';
 
 // Export additional domain types if they exist

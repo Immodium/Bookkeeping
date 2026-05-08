@@ -5,7 +5,7 @@ import { ClientSelector } from './ClientSelector';
 import { CompanyHeader } from './CompanyHeader';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { useNavigate } from 'react-router-dom';
-import { themeClasses } from '@/utils/themeUtils.util';
+import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { validateInvoiceForSave, validateInvoiceForSend, getAvailableInvoiceActions } from '@/utils/data';
 import { invoiceService } from '@/services/invoices.svc';
 import { pdfService } from '@/services/pdf.svc';
@@ -401,10 +401,7 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
     }
 
     try {
-      await pdfService.downloadInvoicePDF(
-        editingInvoice.id,
-        editingInvoice.invoice_number
-      );
+      await pdfService.printInvoicePDF(editingInvoice.id);
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast.error('Failed to generate PDF. Please try again.');
@@ -440,7 +437,7 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
               <button
                 onClick={handleSave}
                 disabled={!isValidForSave() || isSaving}
-                className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 disabled:bg-muted disabled:cursor-not-allowed transition-colors"
+                className={`${getButtonClasses('primary')} disabled:bg-muted disabled:cursor-not-allowed`}
               >
                 {isSaving ? 'Saving...' : (editingInvoice ? 'Update Invoice' : 'Save Invoice')}
               </button>
@@ -449,7 +446,7 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
               {editingInvoice?.id && (
                 <button
                   onClick={handlePrintInvoice}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center"
+                  className={getButtonClasses('primary')}
                 >
                   <Printer className="h-4 w-4 mr-2" />
                   Print Invoice
@@ -480,37 +477,15 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
                     </button>
                   );
                 } else {
-                  // Show print button as fallback with tooltip explaining why send is not available
-                  let tooltipMessage = '';
-                  if (!hasClientEmail) {
-                    tooltipMessage = 'Client email is required to send invoices';
-                  } else if (!canSendEmails) {
-                    tooltipMessage = 'Email settings need to be configured in Settings to send invoices';
-                  } else if (isInvoiceAlreadySent) {
-                    tooltipMessage = 'Invoice has already been sent';
-                  }
-
-                  // Determine print button tooltip
-                  const printTooltipMessage = !editingInvoice?.id ? 'Save invoice first to enable printing' : '';
-                  const showTooltip = tooltipMessage || printTooltipMessage;
-
                   return (
-                    <div className="relative group">
-                      <button
-                        onClick={handlePrintInvoice}
-                        disabled={!editingInvoice?.id}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed transition-colors flex items-center"
-                      >
-                        <Printer className="h-4 w-4 mr-2" />
-                        Print Invoice
-                      </button>
-                      {showTooltip && (
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                          {tooltipMessage || printTooltipMessage}
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      onClick={handlePrintInvoice}
+                      disabled={!editingInvoice?.id}
+                      className={`${getButtonClasses('primary')} disabled:bg-muted disabled:cursor-not-allowed`}
+                    >
+                      <Printer className="h-4 w-4 mr-2" />
+                      Print Invoice
+                    </button>
                   );
                 }
               })()}

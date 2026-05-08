@@ -76,7 +76,7 @@ const hexToHue = (hex: string): number => {
 
 export const AppearanceSettingsTab = forwardRef<SettingsTabRef>((props, ref) => {
   const { isAdmin, user } = useAuth();
-  const { theme, setTheme: setGlobalTheme, setAccentColor: setGlobalAccentColor } = useTheme();
+  const { setAccentColor: setGlobalAccentColor } = useTheme();
   const [invoiceTemplate, setInvoiceTemplate] = useState('modern-blue');
   const [pdfFormat, setPdfFormat] = useState('A4');
   const [accentMode, setAccentMode] = useState<'preset' | 'custom'>('preset');
@@ -168,7 +168,6 @@ export const AppearanceSettingsTab = forwardRef<SettingsTabRef>((props, ref) => 
 
         // Migrate from localStorage if database settings don't exist
         if (!settings || (!settings.theme && !settings.invoice_template)) {
-          const localTheme = localStorage.getItem('theme') || 'system';
           const localTemplate = localStorage.getItem('invoiceTemplate') || 'modern-blue';
           setInvoiceTemplate(localTemplate);
           setPdfFormat('A4'); // Default PDF format
@@ -232,10 +231,6 @@ export const AppearanceSettingsTab = forwardRef<SettingsTabRef>((props, ref) => 
     }
   }), [invoiceTemplate, pdfFormat, isLoaded, isAdmin, user?.role]);
 
-  const handleThemeChange = (newTheme: string) => {
-    setGlobalTheme(newTheme as 'light' | 'dark' | 'system');
-  };
-
   const handleInvoiceTemplateChange = (newTemplate: string) => {
     setInvoiceTemplate(newTemplate);
   };
@@ -270,19 +265,6 @@ export const AppearanceSettingsTab = forwardRef<SettingsTabRef>((props, ref) => 
       )}
       
       <div className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-muted-foreground mb-2">Theme</label>
-          <select
-            value={theme}
-            onChange={(e) => handleThemeChange(e.target.value)}
-            disabled={!isAdmin}
-            className={`w-full ${themeClasses.select} ${!isAdmin ? 'opacity-60 cursor-not-allowed' : ''}`}
-          >
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </div>
         <div>
           <label className="block text-sm font-medium text-muted-foreground mb-2">Invoice Template</label>
           <select

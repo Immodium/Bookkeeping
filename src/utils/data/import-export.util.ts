@@ -6,6 +6,64 @@ const XLSX_MIME_TYPES = new Set([
   'application/vnd.ms-excel'
 ]);
 
+type ExcelJSLike = {
+  Workbook: new () => {
+    addWorksheet: (name: string) => {
+      addRow: (value: unknown[]) => void;
+    };
+    xlsx: {
+      writeBuffer: () => Promise<ArrayBuffer | Uint8Array>;
+      load: (buffer: ArrayBuffer) => Promise<void>;
+    };
+    worksheets: Array<{
+      getRow: (index: number) => {
+        values: unknown[];
+      };
+      rowCount: number;
+    }>;
+  };
+};
+
+const hasWorkbookCtor = (candidate: unknown): candidate is ExcelJSLike =>
+  Boolean(
+    candidate &&
+      typeof candidate === 'object' &&
+      typeof (candidate as { Workbook?: unknown }).Workbook === 'function'
+  );
+
+const loadExcelJS = async (): Promise<ExcelJSLike> => {
+  try {
+    // Use explicit browser build to avoid Vite resolving exceljs Node entry (excel.js).
+    const browserImport = await import('exceljs/dist/exceljs.min.js');
+    const browserCandidate = browserImport.default ?? browserImport;
+    const nestedCandidate =
+      browserCandidate &&
+      typeof browserCandidate === 'object' &&
+      'ExcelJS' in browserCandidate
+        ? (browserCandidate as { ExcelJS?: unknown }).ExcelJS
+        : undefined;
+
+    const excel = hasWorkbookCtor(browserCandidate)
+      ? browserCandidate
+      : hasWorkbookCtor(nestedCandidate)
+        ? nestedCandidate
+        : undefined;
+
+    if (excel) {
+      return excel;
+    }
+
+    throw new Error('Browser ExcelJS bundle did not expose Workbook');
+  } catch {
+    const packageImport = await import('exceljs');
+    const packageCandidate = packageImport.default ?? packageImport;
+    if (hasWorkbookCtor(packageCandidate)) {
+      return packageCandidate;
+    }
+    throw new Error('ExcelJS package fallback missing Workbook constructor');
+  }
+};
+
 export const exportToXLSX = async (
   rows: CSVRow[],
   filename = 'export.xlsx',
@@ -15,7 +73,7 @@ export const exportToXLSX = async (
     return;
   }
 
-  const ExcelJS = await import('exceljs');
+  const ExcelJS = await loadExcelJS();
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(sheetName);
 
@@ -85,7 +143,7 @@ const excelValueToString = (value: unknown): string => {
 };
 
 export const parseXLSX = async (file: File): Promise<Array<Record<string, string>>> => {
-  const ExcelJS = await import('exceljs');
+  const ExcelJS = await loadExcelJS();
   const buffer = await file.arrayBuffer();
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);

@@ -20,6 +20,7 @@ export interface ServerConfig {
   nodeEnv: string;
   isDevelopment: boolean;
   isProduction: boolean;
+  saasMode: boolean;
   enableHttps: boolean;
   sslKeyPath: string;
   sslCertPath: string;
@@ -30,6 +31,8 @@ export interface ServerConfig {
   uploadPath: string;
   enableDebugEndpoints: boolean;
   enableSampleData: boolean;
+  allowDatabaseImportExport: boolean;
+  cronJobSecret?: string;
   rateLimiting: {
     windowMs: number;
     maxRequests: number;
@@ -192,6 +195,7 @@ export const serverConfig: ServerConfig = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isDevelopment: process.env.NODE_ENV === 'development',
   isProduction: process.env.NODE_ENV === 'production',
+  saasMode: process.env.SAAS_MODE === 'true',
   enableHttps: process.env.ENABLE_HTTPS === 'true',
   sslKeyPath: process.env.SSL_KEY_PATH || 'certs/server.key',
   sslCertPath: process.env.SSL_CERT_PATH || 'certs/server.crt',
@@ -208,6 +212,10 @@ export const serverConfig: ServerConfig = {
   // Security configuration
   enableDebugEndpoints: process.env.ENABLE_DEBUG_ENDPOINTS === 'true',
   enableSampleData: process.env.ENABLE_SAMPLE_DATA === 'true',
+  allowDatabaseImportExport:
+    process.env.ALLOW_DATABASE_IMPORT_EXPORT === 'true' ||
+    (process.env.NODE_ENV !== 'production' && process.env.SAAS_MODE !== 'true'),
+  cronJobSecret: process.env.CRON_JOB_SECRET,
 
   // Rate limiting configuration
   rateLimiting: {

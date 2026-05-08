@@ -9,16 +9,24 @@ import { Setting, ProjectSettings } from '../types/index.js';
  * Manages application settings and project configuration
  */
 export class SettingsService {
+  private normalizeTenantId(tenantId?: number): number {
+    if (tenantId && Number.isInteger(tenantId) && tenantId > 0) {
+      return tenantId;
+    }
+    return 1;
+  }
+
   /**
    * Get all settings by category (using key prefix since table doesn't have category column)
    */
-  async getAllSettings(category?: string): Promise<Record<string, unknown>> {
-    let query = 'SELECT key, value FROM settings';
-    const params: (string | number)[] = [];
+  async getAllSettings(category?: string, tenantId?: number): Promise<Record<string, unknown>> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    let query = 'SELECT key, value FROM settings WHERE tenant_id = ?';
+    const params: (string | number)[] = [scopedTenantId];
 
     if (category) {
       // Use key prefix to simulate category filtering
-      query += ' WHERE key LIKE ?';
+      query += ' AND key LIKE ?';
       params.push(`${category}.%`);
     }
 
@@ -46,12 +54,16 @@ export class SettingsService {
   /**
    * Get individual setting by key
    */
-  async getSettingByKey(key: string): Promise<unknown> {
+  async getSettingByKey(key: string, tenantId?: number): Promise<unknown> {
     if (!key || typeof key !== 'string') {
       throw new Error('Valid setting key is required');
     }
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const result = databaseService.getOne<{value: string}>('SELECT value FROM settings WHERE key = ?', [key]);
+    const result = databaseService.getOne<{value: string}>(
+      'SELECT value FROM settings WHERE tenant_id = ? AND key = ?',
+      [scopedTenantId, key]
+    );
     
     if (result?.value) {
       try {
@@ -67,10 +79,11 @@ export class SettingsService {
   /**
    * Save individual setting
    */
-  async saveSetting(key: string, value: any, category: string = 'general'): Promise<boolean> {
+  async saveSetting(key: string, value: any, category: string = 'general', tenantId?: number): Promise<boolean> {
     if (!key || typeof key !== 'string') {
       throw new Error('Setting key is required');
     }
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     // Include category in the key if not already present
     const settingKey = key.includes('.') ? key : `${category}.${key}`;
@@ -78,8 +91,8 @@ export class SettingsService {
     const jsonValue = typeof value === 'string' ? value : JSON.stringify(value);
     
     databaseService.executeQuery(
-      'INSERT OR REPLACE INTO settings (key, value, category) VALUES (?, ?, ?)',
-      [settingKey, jsonValue, category]
+      'INSERT OR REPLACE INTO settings (tenant_id, key, value, category) VALUES (?, ?, ?, ?)',
+      [scopedTenantId, settingKey, jsonValue, category]
     );
     
     return true;
@@ -117,10 +130,11 @@ export class SettingsService {
   async saveMultipleSettings(settings: Record<string, {
     value: any;
     category?: string;
-  }>): Promise<boolean> {
+  }>, tenantId?: number): Promise<boolean> {
     if (!settings || typeof settings !== 'object') {
       throw new Error('Settings object is required');
     }
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const operations = () => {
       for (const [key, data] of Object.entries(settings)) {
@@ -133,8 +147,8 @@ export class SettingsService {
         const jsonValue = typeof value === 'string' ? value : JSON.stringify(value);
         
         databaseService.executeQuery(
-          'INSERT OR REPLACE INTO settings (key, value, category) VALUES (?, ?, ?)', 
-          [settingKey, jsonValue, category]
+          'INSERT OR REPLACE INTO settings (tenant_id, key, value, category) VALUES (?, ?, ?, ?)', 
+          [scopedTenantId, settingKey, jsonValue, category]
         );
       }
     };
@@ -146,12 +160,13 @@ export class SettingsService {
   /**
    * Get project settings with environment defaults
    */
-  async getProjectSettings(): Promise<ProjectSettings> {
+  async getProjectSettings(tenantId?: number): Promise<ProjectSettings> {
     try {
+      const scopedTenantId = this.normalizeTenantId(tenantId);
       // Get all project settings from database using settings table
       const dbSettings = databaseService.getMany<{key: string, value: string}>(
-        'SELECT key, value FROM settings WHERE key LIKE ? OR key LIKE ? OR key LIKE ? OR key LIKE ?',
-        ['google_oauth.%', 'stripe.%', 'email.%', 'security.%']
+        'SELECT key, value FROM settings WHERE tenant_id = ? AND (key LIKE ? OR key LIKE ? OR key LIKE ? OR key LIKE ?)',
+        [scopedTenantId, 'google_oauth.%', 'stripe.%', 'email.%', 'security.%']
       );
 
       // Convert database settings to a map for easy lookup
@@ -222,10 +237,11 @@ export class SettingsService {
   /**
    * Update project settings
    */
-  async updateProjectSettings(settings: Partial<ProjectSettings>): Promise<boolean> {
+  async updateProjectSettings(settings: Partial<ProjectSettings>, tenantId?: number): Promise<boolean> {
     if (!settings || typeof settings !== 'object') {
       throw new Error('Settings object is required');
     }
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     // Flatten the settings object for database storage
     const flattenSettings = (obj: any, prefix: string = '', parentEnabled: number | null = null): Setting[] => {
@@ -262,8 +278,8 @@ export class SettingsService {
     const operations = () => {
       for (const setting of flatSettings) {
         databaseService.executeQuery(
-          'INSERT OR REPLACE INTO settings (key, value, category) VALUES (?, ?, ?)', 
-          [setting.key, setting.value, 'project']
+          'INSERT OR REPLACE INTO settings (tenant_id, key, value, category) VALUES (?, ?, ?, ?)', 
+          [scopedTenantId, setting.key, setting.value, 'project']
         );
       }
     };
@@ -275,14 +291,15 @@ export class SettingsService {
   /**
    * Get security setting value
    */
-  async getSecuritySetting(settingName: string): Promise<any> {
+  async getSecuritySetting(settingName: string, tenantId?: number): Promise<any> {
     if (!settingName || typeof settingName !== 'string') {
       throw new Error('Setting name is required');
     }
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const setting = databaseService.getOne<{value: string}>(
-      'SELECT value FROM settings WHERE key = ?', 
-      [`security.${settingName}`]
+      'SELECT value FROM settings WHERE tenant_id = ? AND key = ?', 
+      [scopedTenantId, `security.${settingName}`]
     );
     
     if (setting) {
@@ -309,33 +326,43 @@ export class SettingsService {
   /**
    * Delete setting by key
    */
-  async deleteSetting(key: string): Promise<boolean> {
+  async deleteSetting(key: string, tenantId?: number): Promise<boolean> {
     if (!key || typeof key !== 'string') {
       throw new Error('Valid setting key is required');
     }
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const result = databaseService.executeQuery('DELETE FROM settings WHERE key = ?', [key]);
+    const result = databaseService.executeQuery(
+      'DELETE FROM settings WHERE tenant_id = ? AND key = ?',
+      [scopedTenantId, key]
+    );
     return result.changes > 0;
   }
 
   /**
    * Delete settings by category (using key prefix)
    */
-  async deleteSettingsByCategory(category: string): Promise<number> {
+  async deleteSettingsByCategory(category: string, tenantId?: number): Promise<number> {
     if (!category || typeof category !== 'string') {
       throw new Error('Valid category is required');
     }
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const result = databaseService.executeQuery('DELETE FROM settings WHERE key LIKE ?', [`${category}.%`]);
+    const result = databaseService.executeQuery(
+      'DELETE FROM settings WHERE tenant_id = ? AND key LIKE ?',
+      [scopedTenantId, `${category}.%`]
+    );
     return result.changes;
   }
 
   /**
    * Get all categories (extracted from key prefixes)
    */
-  async getCategories(): Promise<string[]> {
+  async getCategories(tenantId?: number): Promise<string[]> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const results = databaseService.getMany<{key: string}>(
-      'SELECT DISTINCT key FROM settings WHERE key LIKE "%.%" ORDER BY key'
+      'SELECT DISTINCT key FROM settings WHERE tenant_id = ? AND key LIKE "%.%" ORDER BY key',
+      [scopedTenantId]
     );
     
     // Extract categories from keys (everything before the first dot)
@@ -353,23 +380,29 @@ export class SettingsService {
   /**
    * Check if setting exists
    */
-  async settingExists(key: string): Promise<boolean> {
+  async settingExists(key: string, tenantId?: number): Promise<boolean> {
     if (!key || typeof key !== 'string') {
       return false;
     }
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    return databaseService.exists('settings', 'key', key);
+    const setting = databaseService.getOne<{ key: string }>(
+      'SELECT key FROM settings WHERE tenant_id = ? AND key = ?',
+      [scopedTenantId, key]
+    );
+    return Boolean(setting);
   }
 
   /**
    * Get settings count by category (using key prefix)
    */
-  async getSettingsCount(category?: string): Promise<number> {
-    let query = 'SELECT COUNT(*) as count FROM settings';
-    const params: (string | number | null | boolean)[] = [];
+  async getSettingsCount(category?: string, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    let query = 'SELECT COUNT(*) as count FROM settings WHERE tenant_id = ?';
+    const params: (string | number | null | boolean)[] = [scopedTenantId];
 
     if (category) {
-      query += ' WHERE key LIKE ?';
+      query += ' AND key LIKE ?';
       params.push(`${category}.%`);
     }
 
@@ -380,12 +413,13 @@ export class SettingsService {
   /**
    * Reset settings to defaults (using key prefix for category)
    */
-  async resetSettings(category?: string): Promise<boolean> {
-    let query = 'DELETE FROM settings';
-    const params: (string | number | null | boolean)[] = [];
+  async resetSettings(category?: string, tenantId?: number): Promise<boolean> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    let query = 'DELETE FROM settings WHERE tenant_id = ?';
+    const params: (string | number | null | boolean)[] = [scopedTenantId];
 
     if (category) {
-      query += ' WHERE key LIKE ?';
+      query += ' AND key LIKE ?';
       params.push(`${category}.%`);
     }
 

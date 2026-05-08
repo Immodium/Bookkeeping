@@ -493,6 +493,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: UserPublic;
+      tenantId?: number;
       rateLimitInfo?: {
         limit: number;
         remaining: number;

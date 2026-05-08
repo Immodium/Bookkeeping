@@ -13,12 +13,14 @@ declare global {
   namespace Express {
     interface Request {
       user?: UserPublic;
+      tenantId?: number;
     }
   }
 }
 
 interface JWTPayload {
   userId: number;
+  tenantId?: number;
   email: string;
   role: UserRole;
   roles?: UserRole[];
@@ -28,6 +30,7 @@ interface JWTPayload {
 
 interface TokenGenerationUser {
   id: number;
+  tenant_id?: number;
   email: string;
   role: UserRole;
   roles?: UserRole[];
@@ -80,7 +83,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       
       // Check if email verification is required
       try {
-        const requireEmailVerification = await authService.isEmailVerificationRequired();
+        const requireEmailVerification = await authService.isEmailVerificationRequired(user.tenant_id || 1);
         
         if (requireEmailVerification && !user.email_verified) {
           res.status(403).json({
@@ -97,6 +100,15 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       
       // Attach user to request
       req.user = user;
+      const resolvedTenantId = user.tenant_id || 1;
+      if (decoded.tenantId && decoded.tenantId !== resolvedTenantId) {
+        res.status(401).json({
+          success: false,
+          error: 'Invalid token - tenant mismatch'
+        });
+        return;
+      }
+      req.tenantId = resolvedTenantId;
       next();
       
     } catch (jwtError) {
@@ -208,6 +220,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
         
         if (user && (!user.account_locked_until || new Date(user.account_locked_until) <= new Date())) {
           req.user = user;
+          req.tenantId = user.tenant_id || 1;
         }
       } catch (jwtError) {
         // Invalid token, but that's okay for optional auth
@@ -230,6 +243,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
 export const generateToken = (user: TokenGenerationUser): string => {
   const payload: JWTPayload = {
     userId: user.id,
+    tenantId: user.tenant_id || 1,
     email: user.email,
     role: user.role,
     ...(user.roles ? { roles: user.roles } : {}),

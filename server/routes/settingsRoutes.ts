@@ -67,7 +67,7 @@ const uploadImage = multer({
 router.get('/currency', async (_req: Request, res: Response): Promise<void> => {
   try {
     const { settingsService } = await import('../services/SettingsService.js');
-    const result = await settingsService.getSettingByKey('general.currency_format_settings');
+    const result = await settingsService.getSettingByKey('general.currency_format_settings', 1);
 
     if (result) {
       res.json({ success: true, value: result });
@@ -94,7 +94,7 @@ router.get('/currency', async (_req: Request, res: Response): Promise<void> => {
 router.get('/company', async (_req: Request, res: Response): Promise<void> => {
   try {
     const { settingsService } = await import('../services/SettingsService.js');
-    const result = await settingsService.getSettingByKey('company.company_settings');
+    const result = await settingsService.getSettingByKey('company.company_settings', 1);
 
     if (result) {
       res.json({ success: true, value: result });
@@ -123,6 +123,7 @@ router.get('/company', async (_req: Request, res: Response): Promise<void> => {
 // Upload company logo (requires auth but not admin)
 router.post('/company/logo', requireAuth, uploadImage.single('logo'), async (req: Request, res: Response): Promise<void> => {
   try {
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
     if (!req.file) {
       res.status(400).json({ success: false, error: 'No file uploaded' });
       return;
@@ -132,7 +133,7 @@ router.post('/company/logo', requireAuth, uploadImage.single('logo'), async (req
     const logoPath = `/uploads/logos/${req.file.filename}`;
 
     // Get existing company settings
-    const existingSettings = (await settingsService.getSettingByKey('company.company_settings') as Record<string, string>) || {
+    const existingSettings = (await settingsService.getSettingByKey('company.company_settings', tenantId) as Record<string, string>) || {
       companyName: '',
       ownerName: '',
       address: '',
@@ -163,7 +164,7 @@ router.post('/company/logo', requireAuth, uploadImage.single('logo'), async (req
       brandingImage: logoPath
     };
 
-    await settingsService.saveSetting('company_settings', updatedSettings, 'company');
+    await settingsService.saveSetting('company_settings', updatedSettings, 'company', tenantId);
 
     res.json({
       success: true,
@@ -180,10 +181,11 @@ router.post('/company/logo', requireAuth, uploadImage.single('logo'), async (req
 // Delete company logo (requires auth but not admin)
 router.delete('/company/logo', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
     const { settingsService } = await import('../services/SettingsService.js');
 
     // Get existing company settings
-    const existingSettings = (await settingsService.getSettingByKey('company.company_settings') as Record<string, string>) || {
+    const existingSettings = (await settingsService.getSettingByKey('company.company_settings', tenantId) as Record<string, string>) || {
       companyName: '',
       ownerName: '',
       address: '',
@@ -215,7 +217,7 @@ router.delete('/company/logo', requireAuth, async (req: Request, res: Response):
       brandingImage: ''
     };
 
-    await settingsService.saveSetting('company_settings', updatedSettings, 'company');
+    await settingsService.saveSetting('company_settings', updatedSettings, 'company', tenantId);
 
     res.json({
       success: true,
@@ -231,6 +233,7 @@ router.delete('/company/logo', requireAuth, async (req: Request, res: Response):
 // Save company settings (requires auth but not admin)
 router.post('/company', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
     const { settingsService } = await import('../services/SettingsService.js');
     const { companyName, ownerName, address, city, state, zipCode, email, phone, brandingImage } = req.body;
     
@@ -253,7 +256,7 @@ router.post('/company', requireAuth, async (req: Request, res: Response): Promis
       brandingImage: brandingImage || ''
     };
     
-    await settingsService.saveSetting('company_settings', companySettings, 'company');
+    await settingsService.saveSetting('company_settings', companySettings, 'company', tenantId);
     res.json({ success: true, message: 'Company settings saved successfully' });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -311,7 +314,8 @@ router.put('/appearance', requireAuth, async (req: Request, res: Response): Prom
 router.get('/general', requireAuth, async (_req: Request, res: Response): Promise<void> => {
   try {
     const { settingsService } = await import('../services/SettingsService.js');
-    const settings = await settingsService.getAllSettings('general');
+    const tenantId = _req.tenantId || _req.user?.tenant_id || 1;
+    const settings = await settingsService.getAllSettings('general', tenantId);
     res.json({ success: true, settings });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
@@ -322,7 +326,8 @@ router.get('/general', requireAuth, async (_req: Request, res: Response): Promis
 router.get('/notification', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { settingsService } = await import('../services/SettingsService.js');
-    const result = await settingsService.getSettingByKey('general.notification_settings');
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const result = await settingsService.getSettingByKey('general.notification_settings', tenantId);
 
     if (result) {
       res.json({ success: true, settings: { notification_settings: result } });

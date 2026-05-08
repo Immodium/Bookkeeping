@@ -28,6 +28,7 @@ import { User, UserPublic } from '../types/index.js';
 
 interface DecodedToken {
   userId: number;
+  tenantId?: number;
   email: string;
   exp?: number;
   iat?: number;
@@ -71,7 +72,7 @@ export const login = asyncHandler(async (req: Request<object, LoginResponse, Log
   await authService.updateLoginAttempts(user.id, true);
 
   // Check if email verification is required
-  const requireEmailVerification = await authService.isEmailVerificationRequired();
+  const requireEmailVerification = await authService.isEmailVerificationRequired(user.tenant_id || 1);
   if (requireEmailVerification && !user.email_verified) {
     res.status(403).json({
       success: false,

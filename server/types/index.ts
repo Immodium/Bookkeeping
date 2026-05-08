@@ -23,8 +23,15 @@ export const USER_ROLE_VALUES: UserRole[] = [
 // Base entity interface for database entities
 export interface BaseEntity {
   id: number;
+  tenant_id?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface Tenant extends BaseEntity {
+  name: string;
+  slug: string;
+  status: 'active' | 'suspended' | 'deleted';
 }
 
 // Essential database entity types for server use

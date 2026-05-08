@@ -14,6 +14,7 @@ export class AuthService {
   private buildUserPublicSelectClause(includeSensitive = false): string {
     const baseFields = [
       'u.id',
+      'u.tenant_id',
       'u.name',
       'u.email',
       'u.username',
@@ -95,6 +96,7 @@ export class AuthService {
    * Create new user
    */
   async createUser(userData: {
+    tenant_id?: number;
     name: string;
     email: string;
     username?: string;
@@ -104,6 +106,7 @@ export class AuthService {
     email_verified?: number;
   }): Promise<number> {
     const {
+      tenant_id = 1,
       name,
       email,
       username,
@@ -132,11 +135,12 @@ export class AuthService {
     const now = new Date().toISOString();
     databaseService.executeQuery(`
       INSERT INTO users (
-        id, name, email, username, password_hash, role, roles, email_verified,
+        id, tenant_id, name, email, username, password_hash, role, roles, email_verified,
         failed_login_attempts, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       nextId,
+      tenant_id,
       name,
       email,
       username || email,
@@ -178,8 +182,13 @@ export class AuthService {
     const newAttempts = (user?.failed_login_attempts || 0) + 1;
     
     // Get current lockout settings
-    const maxAttempts = await settingsService.getSecuritySetting('max_failed_login_attempts');
-    const lockoutDuration = await settingsService.getSecuritySetting('account_lockout_duration');
+    const userTenant = databaseService.getOne<{ tenant_id: number }>(
+      'SELECT tenant_id FROM users WHERE id = ?',
+      [userId]
+    );
+    const tenantId = userTenant?.tenant_id || 1;
+    const maxAttempts = await settingsService.getSecuritySetting('max_failed_login_attempts', tenantId);
+    const lockoutDuration = await settingsService.getSecuritySetting('account_lockout_duration', tenantId);
     
     let lockedUntil: string | null = null;
     if (newAttempts >= maxAttempts) {
@@ -206,8 +215,8 @@ export class AuthService {
   /**
    * Check if email verification is required
    */
-  async isEmailVerificationRequired(): Promise<boolean> {
-    return await settingsService.getSecuritySetting('require_email_verification');
+  async isEmailVerificationRequired(tenantId = 1): Promise<boolean> {
+    return await settingsService.getSecuritySetting('require_email_verification', tenantId);
   }
 
   /**
@@ -253,7 +262,7 @@ export class AuthService {
     }
 
     return databaseService.getOne<User>(`
-      SELECT id, name, email, username, password_hash, role, email_verified, 
+      SELECT id, tenant_id, name, email, username, password_hash, role, roles, email_verified, 
              failed_login_attempts, account_locked_until, last_login
       FROM users WHERE email = ?
     `, [email]);

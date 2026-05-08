@@ -22,8 +22,9 @@ import {
  */
 export const getAllSettings = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { category } = req.query;
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   
-  const settings = await settingsService.getAllSettings(category as string);
+  const settings = await settingsService.getAllSettings(category as string, tenantId);
   res.json({ success: true, settings });
 });
 
@@ -32,12 +33,13 @@ export const getAllSettings = asyncHandler(async (req: Request, res: Response): 
  */
 export const getSettingByKey = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { key } = req.params;
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   
   if (!key) {
     throw new ValidationError('Setting key parameter is required');
   }
   
-  const value = await settingsService.getSettingByKey(key);
+  const value = await settingsService.getSettingByKey(key, tenantId);
   res.json({ success: true, value });
 });
 
@@ -46,13 +48,14 @@ export const getSettingByKey = asyncHandler(async (req: Request, res: Response):
  */
 export const saveSetting = asyncHandler(async (req: Request<object, object, IndividualSettingSaveRequest>, res: Response): Promise<void> => {
   const { key, value, category = 'general' } = req.body;
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   
   if (!key) {
     throw new ValidationError('Setting key is required');
   }
   
   try {
-    await settingsService.saveSetting(key, value, category);
+    await settingsService.saveSetting(key, value, category, tenantId);
     res.json({ success: true, message: 'Setting saved successfully' });
   } catch (error) {
     const errorMessage = (error as Error).message;
@@ -70,6 +73,7 @@ export const saveSetting = asyncHandler(async (req: Request<object, object, Indi
  */
 export const saveMultipleSettings = asyncHandler(async (req: Request<object, object, SettingsSaveRequest>, res: Response): Promise<void> => {
   const { settings } = req.body;
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
 
   if (!settings || typeof settings !== 'object') {
     throw new ValidationError('Settings object is required');
@@ -86,7 +90,7 @@ export const saveMultipleSettings = asyncHandler(async (req: Request<object, obj
   }
 
   try {
-    await settingsService.saveMultipleSettings(settings);
+    await settingsService.saveMultipleSettings(settings, tenantId);
     res.json({ success: true, message: 'Settings saved successfully' });
   } catch (error) {
     const errorMessage = (error as Error).message;
@@ -101,7 +105,8 @@ export const saveMultipleSettings = asyncHandler(async (req: Request<object, obj
  * Get project configuration (combines .env defaults with database overrides)
  */
 export const getProjectSettings = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const projectSettings = await settingsService.getProjectSettings();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const projectSettings = await settingsService.getProjectSettings(tenantId);
   res.json({ success: true, settings: projectSettings });
 });
 
@@ -110,6 +115,7 @@ export const getProjectSettings = asyncHandler(async (req: Request, res: Respons
  */
 export const updateProjectSettings = asyncHandler(async (req: Request<object, object, ProjectSettingsRequest>, res: Response): Promise<void> => {
   const { settings } = req.body;
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
 
   if (!settings || typeof settings !== 'object') {
     throw new ValidationError('Settings object is required');
@@ -165,7 +171,7 @@ export const updateProjectSettings = asyncHandler(async (req: Request<object, ob
       projectSettings.email.configured = false;
     }
     
-    await settingsService.updateProjectSettings(projectSettings);
+    await settingsService.updateProjectSettings(projectSettings, tenantId);
     res.json({ success: true, message: 'Project settings updated successfully' });
   } catch (error) {
     const errorMessage = (error as Error).message;
@@ -181,13 +187,14 @@ export const updateProjectSettings = asyncHandler(async (req: Request<object, ob
  */
 export const getSecuritySetting = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { setting_name } = req.params;
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   
   if (!setting_name) {
     throw new ValidationError('Setting name parameter is required');
   }
   
   try {
-    const value = await settingsService.getSecuritySetting(setting_name);
+    const value = await settingsService.getSecuritySetting(setting_name, tenantId);
     res.json({ success: true, value });
   } catch (error) {
     const errorMessage = (error as Error).message;
@@ -203,13 +210,14 @@ export const getSecuritySetting = asyncHandler(async (req: Request, res: Respons
  */
 export const deleteSetting = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { key } = req.params;
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   
   if (!key) {
     throw new ValidationError('Setting key parameter is required');
   }
   
   try {
-    const deleted = await settingsService.deleteSetting(key);
+    const deleted = await settingsService.deleteSetting(key, tenantId);
     if (deleted) {
       res.json({ success: true, message: 'Setting deleted successfully' });
     } else {
@@ -229,13 +237,14 @@ export const deleteSetting = asyncHandler(async (req: Request, res: Response): P
  */
 export const deleteSettingsByCategory = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { category } = req.params;
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   
   if (!category) {
     throw new ValidationError('Category parameter is required');
   }
   
   try {
-    const deletedCount = await settingsService.deleteSettingsByCategory(category);
+    const deletedCount = await settingsService.deleteSettingsByCategory(category, tenantId);
     res.json({ 
       success: true, 
       data: { deletedCount },
@@ -254,7 +263,8 @@ export const deleteSettingsByCategory = asyncHandler(async (req: Request, res: R
  * Get all categories
  */
 export const getCategories = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const categories = await settingsService.getCategories();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const categories = await settingsService.getCategories(tenantId);
   res.json({ success: true, data: categories });
 });
 
@@ -263,12 +273,13 @@ export const getCategories = asyncHandler(async (req: Request, res: Response): P
  */
 export const checkSettingExists = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { key } = req.params;
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   
   if (!key) {
     throw new ValidationError('Setting key parameter is required');
   }
   
-  const exists = await settingsService.settingExists(key);
+  const exists = await settingsService.settingExists(key, tenantId);
   res.json({ success: true, data: { exists } });
 });
 
@@ -277,8 +288,9 @@ export const checkSettingExists = asyncHandler(async (req: Request, res: Respons
  */
 export const getSettingsCount = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { category } = req.query;
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   
-  const count = await settingsService.getSettingsCount(category as string);
+  const count = await settingsService.getSettingsCount(category as string, tenantId);
   res.json({ success: true, data: { count } });
 });
 
@@ -287,9 +299,10 @@ export const getSettingsCount = asyncHandler(async (req: Request, res: Response)
  */
 export const resetSettings = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { category } = req.query;
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   
   try {
-    await settingsService.resetSettings(category as string);
+    await settingsService.resetSettings(category as string, tenantId);
     const message = category 
       ? `Settings for category '${category}' reset successfully`
       : 'All settings reset successfully';

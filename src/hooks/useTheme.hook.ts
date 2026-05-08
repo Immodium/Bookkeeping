@@ -14,6 +14,8 @@ let isUserSetTheme = false; // Track if theme was explicitly set by user
 
 const DEFAULT_ACCENT = '#1d4ed8';
 const LOCAL_STORAGE_ACCENT_KEY = 'accent_color';
+const LOCAL_STORAGE_THEME_KEY = 'theme';
+const VALID_THEMES: ThemeType[] = ['light', 'dark', 'system'];
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
@@ -70,6 +72,16 @@ const normalizeHexColor = (value: string | undefined | null): string | null => {
   const hex = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
   const validHex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
   return validHex.test(hex) ? hex : null;
+};
+
+const normalizeTheme = (value: string | null | undefined): ThemeType | null => {
+  if (!value) return null;
+  return VALID_THEMES.includes(value as ThemeType) ? (value as ThemeType) : null;
+};
+
+const getStoredTheme = (): ThemeType | null => {
+  if (typeof window === 'undefined') return null;
+  return normalizeTheme(localStorage.getItem(LOCAL_STORAGE_THEME_KEY));
 };
 
 const hslToCssValue = ({ h, s, l }: { h: number; s: number; l: number }): string => `${h} ${s}% ${l}%`;
@@ -182,7 +194,7 @@ export const useTheme = () => {
           if (!authToken) {
             log('useTheme: No auth token found, using localStorage fallback');
             // Use localStorage immediately if not authenticated
-            const localTheme = (localStorage.getItem('theme') as ThemeType) || 'system';
+            const localTheme = getStoredTheme() || 'system';
             const localAccent = normalizeHexColor(localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY));
             log('useTheme: LocalStorage theme:', localTheme);
             
@@ -201,16 +213,21 @@ export const useTheme = () => {
           await sqliteService.initialize();
           
           const settings = await sqliteService.getAllSettings('appearance');
-          const dbTheme = (settings?.theme as ThemeType) || 'system';
+          const dbTheme = normalizeTheme(settings?.theme as string);
+          const localTheme = getStoredTheme();
+          const preferredTheme = localTheme || dbTheme || 'system';
           const dbAccent = normalizeHexColor((settings?.accent_color as string) || '');
           
-          globalTheme = dbTheme;
-          setTheme(dbTheme);
-          applyTheme(dbTheme);
+          globalTheme = preferredTheme;
+          setTheme(preferredTheme);
+          applyTheme(preferredTheme);
           applyAccentColor(dbAccent || DEFAULT_ACCENT);
+          if (!localTheme && dbTheme) {
+            localStorage.setItem(LOCAL_STORAGE_THEME_KEY, dbTheme);
+          }
           isThemeInitialized = true;
           isUserSetTheme = false; // This is a database load, not user action
-          log('useTheme: Theme initialization completed successfully from database');
+          log('useTheme: Theme initialization completed successfully from storage/database');
         } catch (error) {
           console.error('useTheme: Failed to load theme from database:', error);
           console.error('useTheme: Database error details:', {
@@ -221,7 +238,7 @@ export const useTheme = () => {
           
           // Fallback to localStorage for migration
           log('useTheme: Falling back to localStorage...');
-          const localTheme = (localStorage.getItem('theme') as ThemeType) || 'system';
+          const localTheme = getStoredTheme() || 'system';
           const localAccent = normalizeHexColor(localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY));
           log('useTheme: LocalStorage theme:', localTheme);
           
@@ -262,6 +279,9 @@ export const useTheme = () => {
     globalTheme = newTheme;
     setTheme(newTheme);
     applyTheme(newTheme);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_THEME_KEY, newTheme);
+    }
     
     // Mark as initialized and user-set to prevent reloading from database
     isThemeInitialized = true;

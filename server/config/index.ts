@@ -32,7 +32,7 @@ export interface ServerConfig {
   enableDebugEndpoints: boolean;
   enableSampleData: boolean;
   allowDatabaseImportExport: boolean;
-  cronJobSecret?: string;
+  cronJobSecret: string | undefined;
   rateLimiting: {
     windowMs: number;
     maxRequests: number;

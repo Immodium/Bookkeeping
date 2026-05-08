@@ -163,11 +163,11 @@ export class InvoiceService {
    * Generate secure public token for invoice
    */
   async generatePublicInvoiceToken(id: number, tenantId?: number): Promise<{
-    const scopedTenantId = this.normalizeTenantId(tenantId);
     token: string;
     expiresIn: string;
     publicUrl: string;
   }> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid invoice ID is required');
     }
@@ -481,7 +481,6 @@ export class InvoiceService {
    * Get invoice statistics
    */
   async getInvoiceStats(tenantId?: number): Promise<{
-    const scopedTenantId = this.normalizeTenantId(tenantId);
     total_invoices: number;
     total_paid: number;
     total_pending: number;
@@ -493,6 +492,7 @@ export class InvoiceService {
     overdue_count: number;
     draft_count: number;
   }> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const stats = databaseService.getOne<{
       total_invoices: number;
       total_paid: number;

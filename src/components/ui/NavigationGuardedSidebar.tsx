@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
 import { ThemeModeToggle } from '@/components/ui/ThemeModeToggle';
-import slimbooksLogo from '@/assets/slimbooks_logo.png';
+import { AppLogo } from '@/components/ui/AppLogo';
 
 const navigation = [
   { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, path: '/' },
@@ -88,7 +88,7 @@ export const NavigationGuardedSidebar: React.FC<NavigationGuardedSidebarProps> =
         {/* Logo/Header */}
         <div className="flex h-16 items-center border-b border-border px-6">
           <div className="flex items-center">
-            <img src={slimbooksLogo} alt={companySettings.companyName || 'Slimbooks'} className="h-8 w-auto" />
+            <AppLogo alt={companySettings.companyName || 'Slimbooks'} className="h-8 w-auto" />
           </div>
         </div>
 

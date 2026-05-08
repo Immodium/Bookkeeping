@@ -9,6 +9,10 @@ import { Client, ServiceOptions } from '../types/index.js';
  * Manages client-related operations with proper validation and security
  */
 export class ClientService {
+  private normalizeTenantId(tenantId?: number): number {
+    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+  }
+
   private normalizeClientRecord(client: Client & { zip?: string }): Client {
     const normalized: Client = { ...client };
     const resolvedZip = client.zipCode || client.zip;
@@ -29,15 +33,16 @@ export class ClientService {
   /**
    * Get all clients
    */
-  async getAllClients(options: ServiceOptions = {}): Promise<Client[]> {
+  async getAllClients(options: ServiceOptions = {}, tenantId?: number): Promise<Client[]> {
     const { limit = 100, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const clients = databaseService.getMany<Client>(`
       SELECT * FROM clients
-      WHERE deleted_at IS NULL
+      WHERE tenant_id = ? AND deleted_at IS NULL
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
-    `, [limit, offset]);
+    `, [scopedTenantId, limit, offset]);
 
     return clients.map(client => this.normalizeClientRecord(client));
   }
@@ -45,14 +50,15 @@ export class ClientService {
   /**
    * Get client by ID
    */
-  async getClientById(id: number): Promise<Client | null> {
+  async getClientById(id: number, tenantId?: number): Promise<Client | null> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid client ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const client = databaseService.getOne<Client>(
-      'SELECT * FROM clients WHERE id = ? AND deleted_at IS NULL',
-      [id]
+      'SELECT * FROM clients WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
+      [id, scopedTenantId]
     );
     return client ? this.normalizeClientRecord(client) : null;
   }
@@ -75,7 +81,8 @@ export class ClientService {
     company?: string;
     tax_id?: string;
     notes?: string;
-  }): Promise<number> {
+  }, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!clientData) {
       throw new Error('Client data is required');
     }
@@ -98,8 +105,8 @@ export class ClientService {
     // Check if client with same email already exists (if email provided)
     if (clientData.email) {
       const existingClient = databaseService.getOne<{id: number}>(
-        'SELECT id FROM clients WHERE email = ?', 
-        [clientData.email]
+        'SELECT id FROM clients WHERE tenant_id = ? AND email = ?', 
+        [scopedTenantId, clientData.email]
       );
       if (existingClient) {
         throw new Error('Client with this email already exists');
@@ -114,6 +121,7 @@ export class ClientService {
     const zipValue = clientData.zipCode || clientData.zip || null;
     const clientRecord = {
       id: nextId,
+      tenant_id: scopedTenantId,
       name: resolvedName,
       first_name: firstName || null,
       last_name: lastName || null,
@@ -135,11 +143,11 @@ export class ClientService {
     // Create client
     databaseService.executeQuery(`
       INSERT INTO clients (
-        id, name, first_name, last_name, email, phone, company, address, city, state,
+        id, tenant_id, name, first_name, last_name, email, phone, company, address, city, state,
         zip, country, tax_id, notes, is_active, stripe_customer_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      clientRecord.id, clientRecord.name, clientRecord.first_name, clientRecord.last_name,
+      clientRecord.id, clientRecord.tenant_id, clientRecord.name, clientRecord.first_name, clientRecord.last_name,
       clientRecord.email, clientRecord.phone, clientRecord.company, clientRecord.address,
       clientRecord.city, clientRecord.state, clientRecord.zip, clientRecord.country,
       clientRecord.tax_id, clientRecord.notes, clientRecord.is_active,
@@ -168,7 +176,8 @@ export class ClientService {
     tax_id: string;
     notes: string;
     is_active: number;
-  }>): Promise<number> {
+  }>, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid client ID is required');
     }
@@ -178,7 +187,7 @@ export class ClientService {
     }
 
     // Check if client exists
-    const existingClient = await this.getClientById(id);
+    const existingClient = await this.getClientById(id, scopedTenantId);
     if (!existingClient) {
       throw new Error('Client not found');
     }
@@ -192,8 +201,8 @@ export class ClientService {
       // Check email uniqueness if email is being changed
       if (clientData.email !== existingClient.email) {
         const emailExists = databaseService.getOne<{id: number}>(
-          'SELECT id FROM clients WHERE email = ? AND id != ?', 
-          [clientData.email, id]
+          'SELECT id FROM clients WHERE tenant_id = ? AND email = ? AND id != ?', 
+          [scopedTenantId, clientData.email, id]
         );
         if (emailExists) {
           throw new Error('Email is already in use by another client');
@@ -238,28 +247,35 @@ export class ClientService {
       throw new Error('No valid fields to update');
     }
 
-    const success = databaseService.updateById('clients', id, updateData);
-    return success ? 1 : 0;
+    const keys = Object.keys(updateData);
+    const values = Object.values(updateData);
+    const setClause = keys.map((key) => `${key} = ?`).join(', ');
+    const result = databaseService.executeQuery(
+      `UPDATE clients SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+      [...values, id, scopedTenantId]
+    );
+    return result.changes;
   }
 
   /**
    * Delete client
    */
-  async deleteClient(id: number): Promise<number> {
+  async deleteClient(id: number, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid client ID is required');
     }
 
     // Check if client exists
-    const existingClient = await this.getClientById(id);
+    const existingClient = await this.getClientById(id, scopedTenantId);
     if (!existingClient) {
       throw new Error('Client not found');
     }
 
     // Check if client has associated invoices
     const invoiceCount = databaseService.getOne<{count: number}>(
-      'SELECT COUNT(*) as count FROM invoices WHERE client_id = ?',
-      [id]
+      'SELECT COUNT(*) as count FROM invoices WHERE tenant_id = ? AND client_id = ?',
+      [scopedTenantId, id]
     );
 
     if (invoiceCount && invoiceCount.count > 0) {
@@ -268,24 +284,41 @@ export class ClientService {
 
     // Use setting-based delete (checks data.clients_soft_delete_enabled setting)
     // Default is hard delete if setting doesn't exist
-    const success = databaseService.deleteWithSetting('clients', id, 'clients');
-    return success ? 1 : 0;
+    const useSoftDelete = databaseService.getOne<{ value: string }>(
+      'SELECT value FROM settings WHERE tenant_id = ? AND key = ?',
+      [scopedTenantId, 'data.clients_soft_delete_enabled']
+    )?.value;
+
+    if (useSoftDelete === 'true' || useSoftDelete === '1') {
+      const result = databaseService.executeQuery(
+        "UPDATE clients SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+        [id, scopedTenantId]
+      );
+      return result.changes;
+    }
+
+    const result = databaseService.executeQuery(
+      'DELETE FROM clients WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    );
+    return result.changes;
   }
 
   /**
    * Search clients
    */
-  async searchClients(searchTerm: string, options: ServiceOptions = {}): Promise<Client[]> {
+  async searchClients(searchTerm: string, options: ServiceOptions = {}, tenantId?: number): Promise<Client[]> {
     if (!searchTerm || typeof searchTerm !== 'string') {
       return [];
     }
 
     const { limit = 50, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const searchPattern = `%${searchTerm}%`;
 
     const clients = databaseService.getMany<Client>(`
       SELECT * FROM clients
-      WHERE (name LIKE ? OR email LIKE ? OR company LIKE ? OR phone LIKE ?)
+      WHERE tenant_id = ? AND (name LIKE ? OR email LIKE ? OR company LIKE ? OR phone LIKE ?)
         AND deleted_at IS NULL
       ORDER BY 
         CASE 
@@ -297,7 +330,7 @@ export class ClientService {
         created_at DESC
       LIMIT ? OFFSET ?
     `, [
-      searchPattern, searchPattern, searchPattern, searchPattern,
+      scopedTenantId, searchPattern, searchPattern, searchPattern, searchPattern,
       searchTerm, searchTerm, searchTerm,
       limit, offset
     ]);
@@ -307,14 +340,16 @@ export class ClientService {
   /**
    * Get active clients
    */
-  async getActiveClients(options: ServiceOptions = {}): Promise<Client[]> {
+  async getActiveClients(options: ServiceOptions = {}, tenantId?: number): Promise<Client[]> {
     const { limit = 100, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const clients = databaseService.getMany<Client>(`
       SELECT * FROM clients 
+      WHERE tenant_id = ?
       ORDER BY name ASC
       LIMIT ? OFFSET ?
-    `, [limit, offset]);
+    `, [scopedTenantId, limit, offset]);
     return clients.map(client => this.normalizeClientRecord(client));
   }
 
@@ -330,26 +365,27 @@ export class ClientService {
   /**
    * Get clients by country
    */
-  async getClientsByCountry(country: string, options: ServiceOptions = {}): Promise<Client[]> {
+  async getClientsByCountry(country: string, options: ServiceOptions = {}, tenantId?: number): Promise<Client[]> {
     if (!country || typeof country !== 'string') {
       throw new Error('Valid country is required');
     }
 
     const { limit = 100, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const clients = databaseService.getMany<Client>(`
       SELECT * FROM clients 
-      WHERE country = ?
+      WHERE tenant_id = ? AND country = ?
       ORDER BY name ASC
       LIMIT ? OFFSET ?
-    `, [country, limit, offset]);
+    `, [scopedTenantId, country, limit, offset]);
     return clients.map(client => this.normalizeClientRecord(client));
   }
 
   /**
    * Get client statistics
    */
-  async getClientStats(): Promise<{
+  async getClientStats(tenantId?: number): Promise<{
     total: number;
     active: number;
     inactive: number;
@@ -357,24 +393,29 @@ export class ClientService {
     withPhone: number;
     byCountry: Record<string, number>;
   }> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const total = databaseService.getOne<{count: number}>(
-      'SELECT COUNT(*) as count FROM clients'
+      'SELECT COUNT(*) as count FROM clients WHERE tenant_id = ?',
+      [scopedTenantId]
     )?.count || 0;
 
     const active = total; // All clients are considered active now
     const inactive = 0;
 
     const withEmail = databaseService.getOne<{count: number}>(
-      'SELECT COUNT(*) as count FROM clients WHERE email IS NOT NULL'
+      'SELECT COUNT(*) as count FROM clients WHERE tenant_id = ? AND email IS NOT NULL',
+      [scopedTenantId]
     )?.count || 0;
 
     const withPhone = databaseService.getOne<{count: number}>(
-      'SELECT COUNT(*) as count FROM clients WHERE phone IS NOT NULL'
+      'SELECT COUNT(*) as count FROM clients WHERE tenant_id = ? AND phone IS NOT NULL',
+      [scopedTenantId]
     )?.count || 0;
 
     // Get country distribution
     const countryData = databaseService.getMany<{country: string; count: number}>(
-      'SELECT country, COUNT(*) as count FROM clients WHERE country IS NOT NULL GROUP BY country ORDER BY count DESC'
+      'SELECT country, COUNT(*) as count FROM clients WHERE tenant_id = ? AND country IS NOT NULL GROUP BY country ORDER BY count DESC',
+      [scopedTenantId]
     );
 
     const byCountry: Record<string, number> = {};
@@ -397,47 +438,56 @@ export class ClientService {
   /**
    * Get clients with recent invoices
    */
-  async getClientsWithRecentActivity(days: number = 30, options: ServiceOptions = {}): Promise<Client[]> {
+  async getClientsWithRecentActivity(days: number = 30, options: ServiceOptions = {}, tenantId?: number): Promise<Client[]> {
     const { limit = 50, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const clients = databaseService.getMany<Client>(`
       SELECT DISTINCT c.* FROM clients c
       INNER JOIN invoices i ON c.id = i.client_id
-      WHERE i.created_at > datetime('now', '-${days} days')
+      WHERE c.tenant_id = ? AND i.tenant_id = ? AND i.created_at > datetime('now', '-${days} days')
       ORDER BY c.name ASC
       LIMIT ? OFFSET ?
-    `, [limit, offset]);
+    `, [scopedTenantId, scopedTenantId, limit, offset]);
     return clients.map(client => this.normalizeClientRecord(client));
   }
 
   /**
    * Check if client exists
    */
-  async clientExists(id: number): Promise<boolean> {
+  async clientExists(id: number, tenantId?: number): Promise<boolean> {
     if (!id || typeof id !== 'number') {
       return false;
     }
-
-    return databaseService.exists('clients', 'id', id);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const client = databaseService.getOne<{ id: number }>(
+      'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    );
+    return Boolean(client);
   }
 
   /**
    * Check if email is already in use
    */
-  async emailExists(email: string, excludeId?: number): Promise<boolean> {
+  async emailExists(email: string, excludeId?: number, tenantId?: number): Promise<boolean> {
     if (!email || typeof email !== 'string') {
       return false;
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (excludeId) {
       const client = databaseService.getOne<{id: number}>(
-        'SELECT id FROM clients WHERE email = ? AND id != ?', 
-        [email, excludeId]
+        'SELECT id FROM clients WHERE tenant_id = ? AND email = ? AND id != ?', 
+        [scopedTenantId, email, excludeId]
       );
       return !!client;
     }
-
-    return databaseService.exists('clients', 'email', email);
+    const client = databaseService.getOne<{ id: number }>(
+      'SELECT id FROM clients WHERE tenant_id = ? AND email = ?',
+      [scopedTenantId, email]
+    );
+    return Boolean(client);
   }
 
   /**

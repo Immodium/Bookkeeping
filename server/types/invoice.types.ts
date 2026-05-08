@@ -6,6 +6,7 @@ import { InvoiceWithClient } from "./index.js";
  */
 export interface PublicInvoiceTokenPayload extends JwtPayload {
   invoiceId: number;
+  tenantId?: number;
   type: string;
 }
 

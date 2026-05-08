@@ -47,10 +47,11 @@ export const getAllExpenses = asyncHandler(async (req: Request, res: Response): 
   else if (is_billable === 'false') filters.is_billable = false;
   if (client_id) filters.client_id = parseInt(client_id as string, 10);
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const results = await expenseService.getAllExpenses(filters, { 
     limit: parsedLimit, 
     offset: parsedOffset 
-  });
+  }, tenantId);
   
   res.json({ 
     success: true, 
@@ -74,7 +75,8 @@ export const getExpenseById = asyncHandler(async (req: Request, res: Response): 
     throw new ValidationError('Invalid expense ID');
   }
   
-  const expense = await expenseService.getExpenseById(expenseId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const expense = await expenseService.getExpenseById(expenseId, tenantId);
 
   if (!expense) {
     throw new NotFoundError('Expense');
@@ -94,7 +96,8 @@ export const createExpense = asyncHandler(async (req: Request<object, object, { 
   }
 
   try {
-    const expenseId = await expenseService.createExpense(expenseData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const expenseId = await expenseService.createExpense(expenseData, tenantId);
     
     res.status(201).json({ 
       success: true, 
@@ -234,7 +237,8 @@ export const updateExpense = asyncHandler(async (req: Request<{ id: string }, ob
     if (expenseData.is_billable !== undefined) {
       dbExpenseData.is_billable = !!expenseData.is_billable;
     }
-    const changes = await expenseService.updateExpense(expenseId, dbExpenseData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await expenseService.updateExpense(expenseId, dbExpenseData, tenantId);
     
     res.json({ 
       success: true, 
@@ -275,7 +279,8 @@ export const deleteExpense = asyncHandler(async (req: Request, res: Response): P
   }
   
   try {
-    const changes = await expenseService.deleteExpense(expenseId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await expenseService.deleteExpense(expenseId, tenantId);
     
     res.json({ 
       success: true, 
@@ -302,7 +307,8 @@ export const getExpenseStats = asyncHandler(async (req: Request, res: Response):
     date_to: date_to as string
   };
 
-  const stats = await expenseService.getExpenseStats(filters);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const stats = await expenseService.getExpenseStats(filters, tenantId);
 
   res.json({ 
     success: true, 
@@ -314,7 +320,8 @@ export const getExpenseStats = asyncHandler(async (req: Request, res: Response):
  * Get expense categories
  */
 export const getExpenseCategories = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const categories = await expenseService.getExpenseCategories();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const categories = await expenseService.getExpenseCategories(tenantId);
   res.json({ success: true, data: categories });
 });
 
@@ -337,10 +344,11 @@ export const getExpensesByCategory = asyncHandler(async (req: Request, res: Resp
   }
 
   try {
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
     const expenses = await expenseService.getExpensesByCategory(category, { 
       limit: parsedLimit, 
       offset: parsedOffset 
-    });
+    }, tenantId);
     res.json({ success: true, data: expenses });
   } catch (error) {
     throw new ValidationError((error as Error).message);
@@ -365,10 +373,11 @@ export const getBillableExpenses = asyncHandler(async (req: Request, res: Respon
     throw new ValidationError('Invalid client ID');
   }
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const expenses = await expenseService.getBillableExpenses(clientId, { 
     limit: parsedLimit, 
     offset: parsedOffset 
-  });
+  }, tenantId);
   
   res.json({ success: true, data: expenses });
 });
@@ -391,10 +400,12 @@ export const getExpensesByDateRange = asyncHandler(async (req: Request, res: Res
   }
 
   try {
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
     const expenses = await expenseService.getExpensesByDateRange(
       start_date as string, 
       end_date as string, 
-      { limit: parsedLimit, offset: parsedOffset }
+      { limit: parsedLimit, offset: parsedOffset },
+      tenantId
     );
     res.json({ 
       success: true, 
@@ -422,10 +433,11 @@ export const searchExpenses = asyncHandler(async (req: Request, res: Response): 
     throw new ValidationError('Invalid limit or offset');
   }
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const expenses = await expenseService.searchExpenses(q, { 
     limit: parsedLimit, 
     offset: parsedOffset 
-  });
+  }, tenantId);
   
   res.json({ success: true, data: expenses });
 });

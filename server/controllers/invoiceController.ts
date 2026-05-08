@@ -40,10 +40,11 @@ export const getAllInvoices = asyncHandler(async (req: Request, res: Response): 
     throw new ValidationError('Invalid client ID');
   }
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const results = await invoiceService.getAllInvoices(filters, { 
     limit: parsedLimit, 
     offset: parsedOffset 
-  });
+  }, tenantId);
   
   res.json({ 
     success: true, 
@@ -67,7 +68,8 @@ export const getInvoiceById = asyncHandler(async (req: Request, res: Response): 
     throw new ValidationError('Invalid invoice ID');
   }
   
-  const invoice = await invoiceService.getInvoiceById(invoiceId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const invoice = await invoiceService.getInvoiceById(invoiceId, tenantId);
 
   if (!invoice) {
     throw new NotFoundError('Invoice');
@@ -144,7 +146,8 @@ export const generatePublicInvoiceToken = asyncHandler(async (req: Request, res:
   }
 
   try {
-    const tokenData = await invoiceService.generatePublicInvoiceToken(invoiceId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const tokenData = await invoiceService.generatePublicInvoiceToken(invoiceId, tenantId);
     res.json({
       success: true,
       data: tokenData
@@ -169,7 +172,8 @@ export const createInvoice = asyncHandler(async (req: Request<object, object, { 
   }
 
   try {
-    const invoiceId = await invoiceService.createInvoice(invoiceData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const invoiceId = await invoiceService.createInvoice(invoiceData, tenantId);
     
     res.status(201).json({ 
       success: true, 
@@ -210,7 +214,8 @@ export const updateInvoice = asyncHandler(async (req: Request<{ id: string }, Re
   }
 
   try {
-    const changes = await invoiceService.updateInvoice(invoiceId, invoiceData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await invoiceService.updateInvoice(invoiceId, invoiceData, tenantId);
     
     res.json({ 
       success: true, 
@@ -251,7 +256,8 @@ export const deleteInvoice = asyncHandler(async (req: Request, res: Response): P
   }
   
   try {
-    const changes = await invoiceService.deleteInvoice(invoiceId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await invoiceService.deleteInvoice(invoiceId, tenantId);
     
     res.json({ 
       success: true, 
@@ -273,7 +279,8 @@ export const deleteInvoice = asyncHandler(async (req: Request, res: Response): P
  * Get invoice statistics
  */
 export const getInvoiceStats = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const stats = await invoiceService.getInvoiceStats();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const stats = await invoiceService.getInvoiceStats(tenantId);
   res.json({ success: true, data: stats });
 });
 
@@ -294,7 +301,8 @@ export const updateInvoiceStatus = asyncHandler(async (req: Request<{ id: string
   }
 
   try {
-    const changes = await invoiceService.updateInvoiceStatus(invoiceId, status);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await invoiceService.updateInvoiceStatus(invoiceId, status, tenantId);
     
     res.json({ 
       success: true, 
@@ -325,7 +333,8 @@ export const markInvoiceAsSent = asyncHandler(async (req: Request<{ id: string }
   }
 
   try {
-    const changes = await invoiceService.markInvoiceAsSent(invoiceId, email_sent_at);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await invoiceService.markInvoiceAsSent(invoiceId, email_sent_at, tenantId);
 
     res.json({ 
       success: true, 
@@ -345,7 +354,8 @@ export const markInvoiceAsSent = asyncHandler(async (req: Request<{ id: string }
  * Get overdue invoices
  */
 export const getOverdueInvoices = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const overdueInvoices = await invoiceService.getOverdueInvoices();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const overdueInvoices = await invoiceService.getOverdueInvoices(tenantId);
   res.json({ success: true, data: overdueInvoices });
 });
 
@@ -373,10 +383,11 @@ export const getInvoicesByClientId = asyncHandler(async (req: Request, res: Resp
     throw new ValidationError('Invalid limit or offset');
   }
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const invoices = await invoiceService.getInvoicesByClientId(clientId, { 
     limit: parsedLimit, 
     offset: parsedOffset 
-  });
+  }, tenantId);
   
   res.json({ success: true, data: invoices });
 });
@@ -392,7 +403,8 @@ export const getRecentInvoices = asyncHandler(async (req: Request, res: Response
     throw new ValidationError('Invalid limit');
   }
 
-  const invoices = await invoiceService.getRecentInvoices(parsedLimit);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const invoices = await invoiceService.getRecentInvoices(parsedLimit, tenantId);
   res.json({ success: true, data: invoices });
 });
 
@@ -415,7 +427,8 @@ export const checkInvoiceNumberExists = asyncHandler(async (req: Request, res: R
     }
   }
 
-  const exists = await invoiceService.invoiceNumberExists(invoice_number, excludeId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const exists = await invoiceService.invoiceNumberExists(invoice_number, excludeId, tenantId);
   res.json({ success: true, data: { exists } });
 });
 

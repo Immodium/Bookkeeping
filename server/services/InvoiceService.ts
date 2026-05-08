@@ -13,13 +13,17 @@ import { invoiceNumberService } from './InvoiceNumberService.js';
  * Manages invoice-related operations with proper validation and security
  */
 export class InvoiceService {
+  private normalizeTenantId(tenantId?: number): number {
+    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+  }
+
   /**
    * Get all invoices with filtering and pagination
    */
   async getAllInvoices(filters: {
     status?: InvoiceStatus;
     client_id?: number;
-  } = {}, options: ServiceOptions = {}): Promise<{
+  } = {}, options: ServiceOptions = {}, tenantId?: number): Promise<{
     invoices: InvoiceWithClient[];
     pagination: {
       total: number;
@@ -30,6 +34,7 @@ export class InvoiceService {
   }> {
     const { limit = 50, offset = 0 } = options;
     const { status, client_id } = filters;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     
     let query = `
       SELECT i.*, c.name as client_name, c.email as client_email 
@@ -39,6 +44,8 @@ export class InvoiceService {
     
     const conditions: string[] = [];
     const params: (string | number | null | boolean)[] = [];
+    conditions.push('i.tenant_id = ?');
+    params.push(scopedTenantId);
     
     if (status) {
       conditions.push('i.status = ?');
@@ -82,19 +89,20 @@ export class InvoiceService {
   /**
    * Get invoice by ID with client details
    */
-  async getInvoiceById(id: number): Promise<InvoiceWithClient | null> {
+  async getInvoiceById(id: number, tenantId?: number): Promise<InvoiceWithClient | null> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid invoice ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getOne<InvoiceWithClient>(`
       SELECT i.*, c.name as client_name, c.email as client_email, c.company as client_company,
              c.address as client_address, c.city as client_city, c.state as client_state,
              c.zip as client_zip, c.country as client_country, c.phone as client_phone
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
-      WHERE i.id = ?
-    `, [id]);
+      WHERE i.id = ? AND i.tenant_id = ?
+    `, [id, scopedTenantId]);
   }
 
   /**
@@ -120,23 +128,23 @@ export class InvoiceService {
       }
 
       // Get invoice with client details
-      const invoice = await this.getInvoiceById(id);
+      const invoice = await this.getInvoiceById(id, decoded.tenantId || 1);
       if (!invoice) {
         throw new Error('Invalid or expired invoice link');
       }
 
       // Get company settings for public display
       const companySettings = databaseService.getOne<{value: string}>(`
-        SELECT value FROM settings WHERE key = ? AND category = ?
-      `, ['company_settings', 'company']);
+        SELECT value FROM settings WHERE tenant_id = ? AND key = ? AND category = ?
+      `, [invoice?.tenant_id || 1, 'company_settings', 'company']);
 
       const currencySettings = databaseService.getOne<{value: string}>(`
-        SELECT value FROM settings WHERE key = ? AND category = ?
-      `, ['currency_settings', 'currency']);
+        SELECT value FROM settings WHERE tenant_id = ? AND key = ? AND category = ?
+      `, [invoice?.tenant_id || 1, 'currency_settings', 'currency']);
 
       const invoiceTemplate = databaseService.getOne<{value: string}>(`
-        SELECT value FROM settings WHERE key = ? AND category = ?
-      `, ['invoice_template', 'appearance']);
+        SELECT value FROM settings WHERE tenant_id = ? AND key = ? AND category = ?
+      `, [invoice?.tenant_id || 1, 'invoice_template', 'appearance']);
 
       // Include settings in the response for public display
       return {
@@ -154,7 +162,8 @@ export class InvoiceService {
   /**
    * Generate secure public token for invoice
    */
-  async generatePublicInvoiceToken(id: number): Promise<{
+  async generatePublicInvoiceToken(id: number, tenantId?: number): Promise<{
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     token: string;
     expiresIn: string;
     publicUrl: string;
@@ -167,8 +176,8 @@ export class InvoiceService {
     const invoice = databaseService.getOne<{id: number; invoice_number: string}>(`
       SELECT i.id, i.invoice_number
       FROM invoices i
-      WHERE i.id = ?
-    `, [id]);
+      WHERE i.id = ? AND i.tenant_id = ?
+    `, [id, scopedTenantId]);
 
     if (!invoice) {
       throw new Error('Invoice not found');
@@ -177,6 +186,7 @@ export class InvoiceService {
     // Generate secure token with expiration
     const tokenPayload = {
       invoiceId: id,
+      tenantId: scopedTenantId,
       type: 'public_invoice',
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
@@ -224,7 +234,8 @@ export class InvoiceService {
     email_sent_at?: string;
     email_error?: string;
     last_email_attempt?: string;
-  }): Promise<number> {
+  }, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!invoiceData || !invoiceData.client_id || !invoiceData.amount) {
       throw new Error('Invalid invoice data - client_id and amount are required');
     }
@@ -239,7 +250,10 @@ export class InvoiceService {
     }
 
     // Check if client exists
-    const clientExists = databaseService.exists('clients', 'id', invoiceData.client_id);
+    const clientExists = databaseService.getOne<{ id: number }>(
+      'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
+      [invoiceData.client_id, scopedTenantId]
+    );
     if (!clientExists) {
       throw new Error('Client not found');
     }
@@ -250,7 +264,10 @@ export class InvoiceService {
       invoiceNumber = await invoiceNumberService.generateInvoiceNumber();
     } else {
       // Check if provided invoice number already exists
-      const invoiceExists = databaseService.exists('invoices', 'invoice_number', invoiceNumber);
+      const invoiceExists = databaseService.getOne<{ id: number }>(
+        'SELECT id FROM invoices WHERE tenant_id = ? AND invoice_number = ?',
+        [scopedTenantId, invoiceNumber]
+      );
       if (invoiceExists) {
         throw new Error('Invoice number already exists');
       }
@@ -263,6 +280,7 @@ export class InvoiceService {
     const now = new Date().toISOString();
     const invoiceRecord = {
       id: nextId,
+      tenant_id: scopedTenantId,
       invoice_number: invoiceNumber,
       client_id: invoiceData.client_id,
       design_template_id: invoiceData.design_template_id || null,
@@ -299,15 +317,15 @@ export class InvoiceService {
     // Create invoice
     databaseService.executeQuery(`
       INSERT INTO invoices (
-        id, invoice_number, client_id, design_template_id, recurring_template_id, amount, tax_amount, total_amount,
+        id, tenant_id, invoice_number, client_id, design_template_id, recurring_template_id, amount, tax_amount, total_amount,
         status, due_date, issue_date, description, items, notes, payment_terms,
         stripe_invoice_id, stripe_payment_intent_id, type, client_name, client_email,
         client_phone, client_address, line_items, tax_rate_id, shipping_amount,
         shipping_rate_id, email_status, email_sent_at, email_error, last_email_attempt,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      invoiceRecord.id, invoiceRecord.invoice_number, invoiceRecord.client_id,
+      invoiceRecord.id, invoiceRecord.tenant_id, invoiceRecord.invoice_number, invoiceRecord.client_id,
       invoiceRecord.design_template_id, invoiceRecord.recurring_template_id, invoiceRecord.amount, invoiceRecord.tax_amount,
       invoiceRecord.total_amount, invoiceRecord.status, invoiceRecord.due_date,
       invoiceRecord.issue_date, invoiceRecord.description, invoiceRecord.items,
@@ -356,7 +374,8 @@ export class InvoiceService {
     email_sent_at: string;
     email_error: string;
     last_email_attempt: string;
-  }>): Promise<number> {
+  }>, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid invoice ID is required');
     }
@@ -366,7 +385,7 @@ export class InvoiceService {
     }
 
     // Check if invoice exists
-    const existingInvoice = await this.getInvoiceById(id);
+    const existingInvoice = await this.getInvoiceById(id, scopedTenantId);
     if (!existingInvoice) {
       throw new Error('Invoice not found');
     }
@@ -380,8 +399,8 @@ export class InvoiceService {
     // If invoice number is being updated, check for duplicates
     if (invoiceData.invoice_number) {
       const numberExists = databaseService.getOne<{id: number}>(
-        'SELECT id FROM invoices WHERE invoice_number = ? AND id != ?', 
-        [invoiceData.invoice_number, id]
+        'SELECT id FROM invoices WHERE tenant_id = ? AND invoice_number = ? AND id != ?', 
+        [scopedTenantId, invoiceData.invoice_number, id]
       );
       if (numberExists) {
         throw new Error('Another invoice with this number already exists');
@@ -389,7 +408,10 @@ export class InvoiceService {
     }
 
     // If client_id is being updated, check if client exists
-    if (invoiceData.client_id && !databaseService.exists('clients', 'id', invoiceData.client_id)) {
+    if (invoiceData.client_id && !databaseService.getOne<{ id: number }>(
+      'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
+      [invoiceData.client_id, scopedTenantId]
+    )) {
       throw new Error('Client not found');
     }
 
@@ -414,22 +436,29 @@ export class InvoiceService {
       throw new Error('No valid fields to update');
     }
 
-    const success = databaseService.updateById('invoices', id, updateData);
-    return success ? 1 : 0;
+    const keys = Object.keys(updateData);
+    const values = Object.values(updateData);
+    const setClause = keys.map((key) => `${key} = ?`).join(', ');
+    const result = databaseService.executeQuery(
+      `UPDATE invoices SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+      [...values, id, scopedTenantId]
+    );
+    return result.changes;
   }
 
   /**
    * Delete invoice
    */
-  async deleteInvoice(id: number): Promise<number> {
+  async deleteInvoice(id: number, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid invoice ID is required');
     }
 
     // Check if invoice exists and get status
     const invoice = databaseService.getOne<{id: number; status: InvoiceStatus}>(
-      'SELECT id, status FROM invoices WHERE id = ?', 
-      [id]
+      'SELECT id, status FROM invoices WHERE id = ? AND tenant_id = ?', 
+      [id, scopedTenantId]
     );
     
     if (!invoice) {
@@ -441,14 +470,18 @@ export class InvoiceService {
       throw new Error('Cannot delete paid invoices');
     }
 
-    const success = databaseService.deleteById('invoices', id);
-    return success ? 1 : 0;
+    const result = databaseService.executeQuery(
+      'DELETE FROM invoices WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    );
+    return result.changes;
   }
 
   /**
    * Get invoice statistics
    */
-  async getInvoiceStats(): Promise<{
+  async getInvoiceStats(tenantId?: number): Promise<{
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     total_invoices: number;
     total_paid: number;
     total_pending: number;
@@ -484,7 +517,8 @@ export class InvoiceService {
         COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue_count,
         COUNT(CASE WHEN status = 'draft' THEN 1 END) as draft_count
       FROM invoices
-    `);
+      WHERE tenant_id = ?
+    `, [scopedTenantId]);
 
     return stats || {
       total_invoices: 0,
@@ -503,7 +537,8 @@ export class InvoiceService {
   /**
    * Update invoice status
    */
-  async updateInvoiceStatus(id: number, status: InvoiceStatus): Promise<number> {
+  async updateInvoiceStatus(id: number, status: InvoiceStatus, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid invoice ID is required');
     }
@@ -514,7 +549,10 @@ export class InvoiceService {
     }
 
     // Check if invoice exists
-    const invoiceExists = databaseService.exists('invoices', 'id', id);
+    const invoiceExists = databaseService.getOne<{ id: number }>(
+      'SELECT id FROM invoices WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    );
     if (!invoiceExists) {
       throw new Error('Invoice not found');
     }
@@ -522,8 +560,8 @@ export class InvoiceService {
     const result = databaseService.executeQuery(`
       UPDATE invoices 
       SET status = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `, [status, id]);
+      WHERE id = ? AND tenant_id = ?
+    `, [status, id, scopedTenantId]);
 
     return result.changes;
   }
@@ -531,7 +569,8 @@ export class InvoiceService {
   /**
    * Mark invoice as sent
    */
-  async markInvoiceAsSent(id: number, emailSentAt?: string): Promise<number> {
+  async markInvoiceAsSent(id: number, emailSentAt?: string, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid invoice ID is required');
     }
@@ -541,8 +580,8 @@ export class InvoiceService {
     const result = databaseService.executeQuery(`
       UPDATE invoices 
       SET status = 'sent', email_status = 'sent', email_sent_at = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `, [sentAt, id]);
+      WHERE id = ? AND tenant_id = ?
+    `, [sentAt, id, scopedTenantId]);
 
     return result.changes;
   }
@@ -550,81 +589,91 @@ export class InvoiceService {
   /**
    * Get overdue invoices
    */
-  async getOverdueInvoices(): Promise<InvoiceWithClient[]> {
+  async getOverdueInvoices(tenantId?: number): Promise<InvoiceWithClient[]> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getMany<InvoiceWithClient>(`
       SELECT i.*, c.name as client_name, c.email as client_email
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
-      WHERE i.status IN ('sent', 'overdue') AND i.due_date < date('now')
+      WHERE i.tenant_id = ? AND i.status IN ('sent', 'overdue') AND i.due_date < date('now')
       ORDER BY i.due_date ASC
-    `);
+    `, [scopedTenantId]);
   }
 
   /**
    * Get invoices by client ID
    */
-  async getInvoicesByClientId(clientId: number, options: ServiceOptions = {}): Promise<InvoiceWithClient[]> {
+  async getInvoicesByClientId(clientId: number, options: ServiceOptions = {}, tenantId?: number): Promise<InvoiceWithClient[]> {
     if (!clientId || typeof clientId !== 'number') {
       throw new Error('Valid client ID is required');
     }
 
     const { limit = 100, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     return databaseService.getMany<InvoiceWithClient>(`
       SELECT i.*, c.name as client_name, c.email as client_email
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
-      WHERE i.client_id = ?
+      WHERE i.tenant_id = ? AND i.client_id = ?
       ORDER BY i.created_at DESC
       LIMIT ? OFFSET ?
-    `, [clientId, limit, offset]);
+    `, [scopedTenantId, clientId, limit, offset]);
   }
 
   /**
    * Get recent invoices
    */
-  async getRecentInvoices(limit: number = 10): Promise<InvoiceWithClient[]> {
+  async getRecentInvoices(limit: number = 10, tenantId?: number): Promise<InvoiceWithClient[]> {
     if (typeof limit !== 'number' || limit < 1) {
       limit = 10;
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getMany<InvoiceWithClient>(`
       SELECT i.*, c.name as client_name, c.email as client_email
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
+      WHERE i.tenant_id = ?
       ORDER BY i.created_at DESC
       LIMIT ?
-    `, [limit]);
+    `, [scopedTenantId, limit]);
   }
 
   /**
    * Check if invoice exists
    */
-  async invoiceExists(id: number): Promise<boolean> {
+  async invoiceExists(id: number, tenantId?: number): Promise<boolean> {
     if (!id || typeof id !== 'number') {
       return false;
     }
-
-    return databaseService.exists('invoices', 'id', id);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    return Boolean(databaseService.getOne<{ id: number }>(
+      'SELECT id FROM invoices WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    ));
   }
 
   /**
    * Check if invoice number exists
    */
-  async invoiceNumberExists(invoiceNumber: string, excludeId?: number): Promise<boolean> {
+  async invoiceNumberExists(invoiceNumber: string, excludeId?: number, tenantId?: number): Promise<boolean> {
     if (!invoiceNumber || typeof invoiceNumber !== 'string') {
       return false;
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (excludeId) {
       const result = databaseService.getOne<{id: number}>(
-        'SELECT id FROM invoices WHERE invoice_number = ? AND id != ?', 
-        [invoiceNumber, excludeId]
+        'SELECT id FROM invoices WHERE tenant_id = ? AND invoice_number = ? AND id != ?', 
+        [scopedTenantId, invoiceNumber, excludeId]
       );
       return !!result;
     }
-
-    return databaseService.exists('invoices', 'invoice_number', invoiceNumber);
+    return Boolean(databaseService.getOne<{ id: number }>(
+      'SELECT id FROM invoices WHERE tenant_id = ? AND invoice_number = ?',
+      [scopedTenantId, invoiceNumber]
+    ));
   }
 }
 

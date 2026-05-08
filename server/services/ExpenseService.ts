@@ -9,6 +9,10 @@ import { Expense, ServiceOptions } from '../types/index.js';
  * Manages expense-related operations with proper validation and security
  */
 export class ExpenseService {
+  private normalizeTenantId(tenantId?: number): number {
+    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+  }
+
   /**
    * Get all expenses with filtering and pagination
    */
@@ -18,7 +22,7 @@ export class ExpenseService {
     date_to?: string | undefined;
     is_billable?: boolean | undefined;
     client_id?: number | undefined;
-  } = {}, options: ServiceOptions = {}): Promise<{
+  } = {}, options: ServiceOptions = {}, tenantId?: number): Promise<{
     data: Expense[];
     total: number;
     page: number;
@@ -26,10 +30,13 @@ export class ExpenseService {
   }> {
     const { limit = 50, offset = 0 } = options;
     const { category, date_from, date_to, is_billable, client_id } = filters;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     
     let query = 'SELECT * FROM expenses';
     const conditions: string[] = [];
     const params: (string | number | null | boolean)[] = [];
+    conditions.push('tenant_id = ?');
+    params.push(scopedTenantId);
     
     if (category) {
       conditions.push('category = ?');
@@ -89,12 +96,16 @@ export class ExpenseService {
   /**
    * Get expense by ID
    */
-  async getExpenseById(id: number): Promise<Expense | null> {
+  async getExpenseById(id: number, tenantId?: number): Promise<Expense | null> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid expense ID is required');
     }
 
-    return databaseService.getOne<Expense>('SELECT * FROM expenses WHERE id = ?', [id]);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    return databaseService.getOne<Expense>(
+      'SELECT * FROM expenses WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    );
   }
 
   /**
@@ -111,7 +122,8 @@ export class ExpenseService {
     is_billable: boolean | undefined;
     client_id: number | undefined;
     project?: string;
-  }): Promise<number> {
+  }, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!expenseData) {
       throw new Error('Expense data is required');
     }
@@ -135,7 +147,7 @@ export class ExpenseService {
     }
 
     // Validate client exists if client_id provided
-    if (expenseData.client_id && !(await this.clientExists(expenseData.client_id))) {
+    if (expenseData.client_id && !(await this.clientExists(expenseData.client_id, scopedTenantId))) {
       throw new Error('Specified client does not exist');
     }
 
@@ -146,6 +158,7 @@ export class ExpenseService {
     const now = new Date().toISOString();
     const expenseRecord = {
       id: nextId,
+      tenant_id: scopedTenantId,
       amount: expenseData.amount,
       description: expenseData.description,
       category: expenseData.category || null,
@@ -163,11 +176,11 @@ export class ExpenseService {
     // Create expense
     databaseService.executeQuery(`
       INSERT INTO expenses (
-        id, amount, description, category, date, vendor, notes, receipt_url,
+        id, tenant_id, amount, description, category, date, vendor, notes, receipt_url,
         is_billable, client_id, project, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      expenseRecord.id, expenseRecord.amount, expenseRecord.description, 
+      expenseRecord.id, expenseRecord.tenant_id, expenseRecord.amount, expenseRecord.description, 
       expenseRecord.category, expenseRecord.date, expenseRecord.vendor,
       expenseRecord.notes, expenseRecord.receipt_url, expenseRecord.is_billable,
       expenseRecord.client_id, expenseRecord.project, expenseRecord.created_at,
@@ -191,7 +204,8 @@ export class ExpenseService {
     is_billable: boolean;
     client_id: number;
     project: string;
-  }>): Promise<number> {
+  }>, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid expense ID is required');
     }
@@ -201,7 +215,7 @@ export class ExpenseService {
     }
 
     // Check if expense exists
-    const existingExpense = await this.getExpenseById(id);
+    const existingExpense = await this.getExpenseById(id, scopedTenantId);
     if (!existingExpense) {
       throw new Error('Expense not found');
     }
@@ -218,7 +232,7 @@ export class ExpenseService {
     }
 
     // Validate client exists if client_id provided
-    if (expenseData.client_id && !(await this.clientExists(expenseData.client_id))) {
+    if (expenseData.client_id && !(await this.clientExists(expenseData.client_id, scopedTenantId))) {
       throw new Error('Specified client does not exist');
     }
 
@@ -246,54 +260,66 @@ export class ExpenseService {
       throw new Error('No valid fields to update');
     }
 
-    const success = databaseService.updateById('expenses', id, updateData);
-    return success ? 1 : 0;
+    const keys = Object.keys(updateData);
+    const values = Object.values(updateData);
+    const setClause = keys.map((key) => `${key} = ?`).join(', ');
+    const result = databaseService.executeQuery(
+      `UPDATE expenses SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+      [...values, id, scopedTenantId]
+    );
+    return result.changes;
   }
 
   /**
    * Delete expense
    */
-  async deleteExpense(id: number): Promise<number> {
+  async deleteExpense(id: number, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid expense ID is required');
     }
 
     // Check if expense exists
-    const existingExpense = await this.getExpenseById(id);
+    const existingExpense = await this.getExpenseById(id, scopedTenantId);
     if (!existingExpense) {
       throw new Error('Expense not found');
     }
 
-    const success = databaseService.deleteById('expenses', id);
-    return success ? 1 : 0;
+    const result = databaseService.executeQuery(
+      'DELETE FROM expenses WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    );
+    return result.changes;
   }
 
   /**
    * Get expenses by category
    */
-  async getExpensesByCategory(category: string, options: ServiceOptions = {}): Promise<Expense[]> {
+  async getExpensesByCategory(category: string, options: ServiceOptions = {}, tenantId?: number): Promise<Expense[]> {
     if (!category || typeof category !== 'string') {
       throw new Error('Valid category is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const { limit = 100, offset = 0 } = options;
 
     return databaseService.getMany<Expense>(`
       SELECT * FROM expenses 
-      WHERE category = ?
+      WHERE tenant_id = ? AND category = ?
       ORDER BY date DESC
       LIMIT ? OFFSET ?
-    `, [category, limit, offset]);
+    `, [scopedTenantId, category, limit, offset]);
   }
 
   /**
    * Get billable expenses
    */
-  async getBillableExpenses(clientId?: number, options: ServiceOptions = {}): Promise<Expense[]> {
+  async getBillableExpenses(clientId?: number, options: ServiceOptions = {}, tenantId?: number): Promise<Expense[]> {
     const { limit = 100, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     
-    let query = 'SELECT * FROM expenses WHERE is_billable = 1';
-    const params: (string | number | null | boolean)[] = [];
+    let query = 'SELECT * FROM expenses WHERE tenant_id = ? AND is_billable = 1';
+    const params: (string | number | null | boolean)[] = [scopedTenantId];
 
     if (clientId) {
       query += ' AND client_id = ?';
@@ -312,36 +338,39 @@ export class ExpenseService {
   async getExpensesByDateRange(
     startDate: string, 
     endDate: string, 
-    options: ServiceOptions = {}
+    options: ServiceOptions = {},
+    tenantId?: number
   ): Promise<Expense[]> {
     if (!startDate || !endDate) {
       throw new Error('Start date and end date are required');
     }
 
     const { limit = 100, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     return databaseService.getMany<Expense>(`
       SELECT * FROM expenses 
-      WHERE date >= ? AND date <= ?
+      WHERE tenant_id = ? AND date >= ? AND date <= ?
       ORDER BY date DESC
       LIMIT ? OFFSET ?
-    `, [startDate, endDate, limit, offset]);
+    `, [scopedTenantId, startDate, endDate, limit, offset]);
   }
 
   /**
    * Get expense categories
    */
-  async getExpenseCategories(): Promise<Array<{category: string; count: number; total: number}>> {
+  async getExpenseCategories(tenantId?: number): Promise<Array<{category: string; count: number; total: number}>> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getMany<{category: string; count: number; total: number}>(`
       SELECT 
         category,
         COUNT(*) as count,
         SUM(amount) as total
       FROM expenses 
-      WHERE category IS NOT NULL
+      WHERE tenant_id = ? AND category IS NOT NULL
       GROUP BY category
       ORDER BY total DESC
-    `);
+    `, [scopedTenantId]);
   }
 
   /**
@@ -350,7 +379,7 @@ export class ExpenseService {
   async getExpenseStats(filters: {
     date_from?: string;
     date_to?: string;
-  } = {}): Promise<{
+  } = {}, tenantId?: number): Promise<{
     total: number;
     totalAmount: number;
     billableAmount: number;
@@ -359,25 +388,21 @@ export class ExpenseService {
     monthlyTrend: Array<{month: string; count: number; amount: number}>;
   }> {
     const { date_from, date_to } = filters;
-    
-    let baseCondition = '';
-    const params: (string | number | null | boolean)[] = [];
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const conditions: string[] = ['tenant_id = ?'];
+    const params: (string | number | null | boolean)[] = [scopedTenantId];
 
-    if (date_from || date_to) {
-      const conditions: string[] = [];
-      
-      if (date_from) {
-        conditions.push('date >= ?');
-        params.push(date_from);
-      }
-      
-      if (date_to) {
-        conditions.push('date <= ?');
-        params.push(date_to);
-      }
-      
-      baseCondition = ' WHERE ' + conditions.join(' AND ');
+    if (date_from) {
+      conditions.push('date >= ?');
+      params.push(date_from);
     }
+
+    if (date_to) {
+      conditions.push('date <= ?');
+      params.push(date_to);
+    }
+
+    const baseCondition = ` WHERE ${conditions.join(' AND ')}`;
 
     // Get basic stats
     const basicStats = databaseService.getOne<{
@@ -401,7 +426,7 @@ export class ExpenseService {
         COUNT(*) as count,
         SUM(amount) as amount
       FROM expenses${baseCondition}
-        ${baseCondition ? ' AND' : ' WHERE'} category IS NOT NULL
+      AND category IS NOT NULL
       GROUP BY category
       ORDER BY amount DESC
     `, params);
@@ -423,7 +448,8 @@ export class ExpenseService {
         COUNT(*) as count,
         SUM(amount) as amount
       FROM expenses 
-      WHERE date >= date('now', '-12 months')${baseCondition ? ' AND ' + baseCondition.substring(7) : ''}
+      ${baseCondition}
+      AND date >= date('now', '-12 months')
       GROUP BY strftime('%Y-%m', date)
       ORDER BY month DESC
       LIMIT 12
@@ -442,17 +468,18 @@ export class ExpenseService {
   /**
    * Search expenses
    */
-  async searchExpenses(searchTerm: string, options: ServiceOptions = {}): Promise<Expense[]> {
+  async searchExpenses(searchTerm: string, options: ServiceOptions = {}, tenantId?: number): Promise<Expense[]> {
     if (!searchTerm || typeof searchTerm !== 'string') {
       return [];
     }
 
     const { limit = 50, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const searchPattern = `%${searchTerm}%`;
 
     return databaseService.getMany<Expense>(`
       SELECT * FROM expenses
-      WHERE (description LIKE ? OR vendor LIKE ? OR notes LIKE ? OR category LIKE ?)
+      WHERE tenant_id = ? AND (description LIKE ? OR vendor LIKE ? OR notes LIKE ? OR category LIKE ?)
       ORDER BY 
         CASE 
           WHEN description = ? THEN 1
@@ -462,7 +489,7 @@ export class ExpenseService {
         date DESC
       LIMIT ? OFFSET ?
     `, [
-      searchPattern, searchPattern, searchPattern, searchPattern,
+      scopedTenantId, searchPattern, searchPattern, searchPattern, searchPattern,
       searchTerm, searchTerm,
       limit, offset
     ]);
@@ -471,23 +498,28 @@ export class ExpenseService {
   /**
    * Check if expense exists
    */
-  async expenseExists(id: number): Promise<boolean> {
+  async expenseExists(id: number, tenantId?: number): Promise<boolean> {
     if (!id || typeof id !== 'number') {
       return false;
     }
-
-    return databaseService.exists('expenses', 'id', id);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    return Boolean(databaseService.getOne<{ id: number }>(
+      'SELECT id FROM expenses WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    ));
   }
 
   /**
    * Check if client exists (helper method)
    */
-  private async clientExists(clientId: number): Promise<boolean> {
+  private async clientExists(clientId: number, tenantId: number): Promise<boolean> {
     if (!clientId || typeof clientId !== 'number') {
       return false;
     }
-
-    return databaseService.exists('clients', 'id', clientId);
+    return Boolean(databaseService.getOne<{ id: number }>(
+      'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
+      [clientId, tenantId]
+    ));
   }
 
   /**

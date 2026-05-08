@@ -9,26 +9,32 @@ import { Payment, ServiceOptions, PaymentStatus, PaymentMethod } from '../types/
  * Manages payment-related operations with proper validation and security
  */
 export class PaymentService {
-  private getInvoiceClientId(invoiceId?: number): number | null {
+  private normalizeTenantId(tenantId?: number): number {
+    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+  }
+
+  private getInvoiceClientId(invoiceId?: number, tenantId?: number): number | null {
     if (!invoiceId) {
       return null;
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const invoice = databaseService.getOne<{ client_id: number }>(
-      'SELECT client_id FROM invoices WHERE id = ? LIMIT 1',
-      [invoiceId]
+      'SELECT client_id FROM invoices WHERE id = ? AND tenant_id = ? LIMIT 1',
+      [invoiceId, scopedTenantId]
     );
     return invoice?.client_id || null;
   }
 
-  private mapClientNameToId(clientName?: string): number | null {
+  private mapClientNameToId(clientName?: string, tenantId?: number): number | null {
     if (!clientName || typeof clientName !== 'string') {
       return null;
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const exactMatch = databaseService.getOne<{ id: number }>(
-      'SELECT id FROM clients WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL LIMIT 1',
-      [clientName.trim()]
+      'SELECT id FROM clients WHERE tenant_id = ? AND LOWER(name) = LOWER(?) AND deleted_at IS NULL LIMIT 1',
+      [scopedTenantId, clientName.trim()]
     );
 
     if (exactMatch?.id) {
@@ -36,21 +42,22 @@ export class PaymentService {
     }
 
     const fuzzyMatch = databaseService.getOne<{ id: number }>(
-      'SELECT id FROM clients WHERE LOWER(name) LIKE LOWER(?) AND deleted_at IS NULL ORDER BY id ASC LIMIT 1',
-      [`%${clientName.trim()}%`]
+      'SELECT id FROM clients WHERE tenant_id = ? AND LOWER(name) LIKE LOWER(?) AND deleted_at IS NULL ORDER BY id ASC LIMIT 1',
+      [scopedTenantId, `%${clientName.trim()}%`]
     );
 
     return fuzzyMatch?.id || null;
   }
 
-  private getClientNameById(clientId?: number): string {
+  private getClientNameById(clientId?: number, tenantId?: number): string {
     if (!clientId) {
       return 'Unknown Client';
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const client = databaseService.getOne<{ name: string }>(
-      'SELECT name FROM clients WHERE id = ? LIMIT 1',
-      [clientId]
+      'SELECT name FROM clients WHERE id = ? AND tenant_id = ? LIMIT 1',
+      [clientId, scopedTenantId]
     );
 
     return client?.name || 'Unknown Client';
@@ -92,7 +99,7 @@ export class PaymentService {
     method?: PaymentMethod;
     date_from?: string;
     date_to?: string;
-  } = {}, options: ServiceOptions = {}): Promise<{
+  } = {}, options: ServiceOptions = {}, tenantId?: number): Promise<{
     payments: Payment[];
     pagination: {
       total: number;
@@ -103,10 +110,11 @@ export class PaymentService {
   }> {
     const { limit = 50, offset = 0 } = options;
     const { status, method, date_from, date_to } = filters;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     
     let query = this.getPaymentSelectClause();
-    const conditions: string[] = [];
-    const params: (string | number | null | boolean)[] = [];
+    const conditions: string[] = ['p.tenant_id = ?'];
+    const params: (string | number | null | boolean)[] = [scopedTenantId];
     
     if (status) {
       conditions.push('p.status = ?');
@@ -160,16 +168,17 @@ export class PaymentService {
   /**
    * Get payment by ID
    */
-  async getPaymentById(id: number): Promise<Payment | null> {
+  async getPaymentById(id: number, tenantId?: number): Promise<Payment | null> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid payment ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getOne<Payment>(`
       ${this.getPaymentSelectClause()}
-      WHERE p.id = ?
+      WHERE p.id = ? AND p.tenant_id = ?
       LIMIT 1
-    `, [id]);
+    `, [id, scopedTenantId]);
   }
 
   /**
@@ -185,7 +194,8 @@ export class PaymentService {
     reference?: string;
     description?: string;
     status?: PaymentStatus;
-  }): Promise<number> {
+  }, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!paymentData || !paymentData.date || !paymentData.amount || !paymentData.method) {
       throw new Error('Invalid payment data - date, client_name, amount, and method are required');
     }
@@ -209,22 +219,28 @@ export class PaymentService {
     }
 
     // Validate invoice exists if invoice_id provided
-    if (paymentData.invoice_id && !databaseService.exists('invoices', 'id', paymentData.invoice_id)) {
+    if (paymentData.invoice_id && !databaseService.getOne<{ id: number }>(
+      'SELECT id FROM invoices WHERE id = ? AND tenant_id = ?',
+      [paymentData.invoice_id, scopedTenantId]
+    )) {
       throw new Error('Specified invoice does not exist');
     }
 
     let resolvedClientId: number | null = null;
     if (paymentData.client_id) {
-      if (!databaseService.exists('clients', 'id', paymentData.client_id)) {
+      if (!databaseService.getOne<{ id: number }>(
+        'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
+        [paymentData.client_id, scopedTenantId]
+      )) {
         throw new Error(`Client ID "${paymentData.client_id}" was not found`);
       }
       resolvedClientId = paymentData.client_id;
     } else {
-      resolvedClientId = this.mapClientNameToId(paymentData.client_name);
+      resolvedClientId = this.mapClientNameToId(paymentData.client_name, scopedTenantId);
     }
 
     if (!resolvedClientId && paymentData.invoice_id) {
-      resolvedClientId = this.getInvoiceClientId(paymentData.invoice_id);
+      resolvedClientId = this.getInvoiceClientId(paymentData.invoice_id, scopedTenantId);
     }
 
     if (!resolvedClientId) {
@@ -241,6 +257,7 @@ export class PaymentService {
     const now = new Date().toISOString();
     const paymentRecord = {
       id: nextId,
+      tenant_id: scopedTenantId,
       date: paymentData.date,
       client_id: resolvedClientId,
       invoice_id: paymentData.invoice_id || null,
@@ -256,11 +273,11 @@ export class PaymentService {
     // Create payment
     databaseService.executeQuery(`
       INSERT INTO payments (
-        id, date, client_id, invoice_id, amount, method, transaction_id, 
+        id, tenant_id, date, client_id, invoice_id, amount, method, transaction_id, 
         notes, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      paymentRecord.id, paymentRecord.date, paymentRecord.client_id,
+      paymentRecord.id, paymentRecord.tenant_id, paymentRecord.date, paymentRecord.client_id,
       paymentRecord.invoice_id, paymentRecord.amount, paymentRecord.method,
       paymentRecord.transaction_id, paymentRecord.notes, paymentRecord.status,
       paymentRecord.created_at, paymentRecord.updated_at
@@ -282,7 +299,8 @@ export class PaymentService {
     reference: string;
     description: string;
     status: PaymentStatus;
-  }>): Promise<number> {
+  }>, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid payment ID is required');
     }
@@ -292,7 +310,7 @@ export class PaymentService {
     }
 
     // Check if payment exists
-    const existingPayment = await this.getPaymentById(id);
+    const existingPayment = await this.getPaymentById(id, scopedTenantId);
     if (!existingPayment) {
       throw new Error('Payment not found');
     }
@@ -309,11 +327,17 @@ export class PaymentService {
     }
 
     // Validate invoice exists if invoice_id provided
-    if (paymentData.invoice_id && !databaseService.exists('invoices', 'id', paymentData.invoice_id)) {
+    if (paymentData.invoice_id && !databaseService.getOne<{ id: number }>(
+      'SELECT id FROM invoices WHERE id = ? AND tenant_id = ?',
+      [paymentData.invoice_id, scopedTenantId]
+    )) {
       throw new Error('Specified invoice does not exist');
     }
 
-    if (paymentData.client_id !== undefined && !databaseService.exists('clients', 'id', paymentData.client_id)) {
+    if (paymentData.client_id !== undefined && !databaseService.getOne<{ id: number }>(
+      'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
+      [paymentData.client_id, scopedTenantId]
+    )) {
       throw new Error(`Client ID "${paymentData.client_id}" was not found`);
     }
 
@@ -328,7 +352,7 @@ export class PaymentService {
     if (paymentData.status !== undefined) updateData.status = paymentData.status;
 
     if (paymentData.client_name !== undefined) {
-      const resolvedClientId = this.mapClientNameToId(paymentData.client_name);
+      const resolvedClientId = this.mapClientNameToId(paymentData.client_name, scopedTenantId);
       if (!resolvedClientId) {
         throw new Error(`Client "${paymentData.client_name}" was not found`);
       }
@@ -343,32 +367,43 @@ export class PaymentService {
       throw new Error('No valid fields to update');
     }
 
-    const success = databaseService.updateById('payments', id, updateData);
-    return success ? 1 : 0;
+    const keys = Object.keys(updateData);
+    const values = Object.values(updateData);
+    const setClause = keys.map((key) => `${key} = ?`).join(', ');
+    const result = databaseService.executeQuery(
+      `UPDATE payments SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+      [...values, id, scopedTenantId]
+    );
+    return result.changes;
   }
 
   /**
    * Delete payment
    */
-  async deletePayment(id: number): Promise<number> {
+  async deletePayment(id: number, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid payment ID is required');
     }
 
     // Check if payment exists
-    const existingPayment = await this.getPaymentById(id);
+    const existingPayment = await this.getPaymentById(id, scopedTenantId);
     if (!existingPayment) {
       throw new Error('Payment not found');
     }
 
-    const success = databaseService.deleteById('payments', id);
-    return success ? 1 : 0;
+    const result = databaseService.executeQuery(
+      'DELETE FROM payments WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    );
+    return result.changes;
   }
 
   /**
    * Bulk delete payments
    */
-  async bulkDeletePayments(paymentIds: number[]): Promise<number> {
+  async bulkDeletePayments(paymentIds: number[], tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!paymentIds || !Array.isArray(paymentIds) || paymentIds.length === 0) {
       throw new Error('payment_ids must be a non-empty array');
     }
@@ -387,8 +422,8 @@ export class PaymentService {
     // Validate all payment IDs exist
     const placeholders = paymentIds.map(() => '?').join(',');
     const existingPayments = databaseService.getMany<{id: number}>(
-      `SELECT id FROM payments WHERE id IN (${placeholders})`, 
-      paymentIds
+      `SELECT id FROM payments WHERE tenant_id = ? AND id IN (${placeholders})`, 
+      [scopedTenantId, ...paymentIds]
     );
     
     if (existingPayments.length !== paymentIds.length) {
@@ -397,8 +432,8 @@ export class PaymentService {
 
     // Delete all payments
     const result = databaseService.executeQuery(
-      `DELETE FROM payments WHERE id IN (${placeholders})`, 
-      paymentIds
+      `DELETE FROM payments WHERE tenant_id = ? AND id IN (${placeholders})`, 
+      [scopedTenantId, ...paymentIds]
     );
 
     return result.changes;
@@ -410,7 +445,7 @@ export class PaymentService {
   async getPaymentStats(filters: {
     year?: string;
     month?: string;
-  } = {}): Promise<{
+  } = {}, tenantId?: number): Promise<{
     summary: {
       total_payments: number;
       total_amount: number;
@@ -435,16 +470,17 @@ export class PaymentService {
     }>;
   }> {
     const { year, month } = filters;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     
-    let dateFilter = '';
-    const params: (string | number | null | boolean)[] = [];
+    let dateFilter = 'WHERE tenant_id = ?';
+    const params: (string | number | null | boolean)[] = [scopedTenantId];
     
     if (year) {
       if (month) {
-        dateFilter = "WHERE strftime('%Y-%m', date) = ?";
+        dateFilter += " AND strftime('%Y-%m', date) = ?";
         params.push(`${year}-${month.padStart(2, '0')}`);
       } else {
-        dateFilter = "WHERE strftime('%Y', date) = ?";
+        dateFilter += " AND strftime('%Y', date) = ?";
         params.push(year);
       }
     }
@@ -501,10 +537,10 @@ export class PaymentService {
         COUNT(*) as count,
         SUM(amount) as total_amount
       FROM payments
-      WHERE date >= date('now', '-12 months')
+      WHERE tenant_id = ? AND date >= date('now', '-12 months')
       GROUP BY strftime('%Y-%m', date)
       ORDER BY month ASC
-    `);
+    `, [scopedTenantId]);
 
     return {
       summary: summaryStats || {
@@ -526,37 +562,39 @@ export class PaymentService {
   /**
    * Get payments by invoice ID
    */
-  async getPaymentsByInvoiceId(invoiceId: number, options: ServiceOptions = {}): Promise<Payment[]> {
+  async getPaymentsByInvoiceId(invoiceId: number, options: ServiceOptions = {}, tenantId?: number): Promise<Payment[]> {
     if (!invoiceId || typeof invoiceId !== 'number') {
       throw new Error('Valid invoice ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const { limit = 100, offset = 0 } = options;
 
     return this.enrichPaymentRows(databaseService.getMany<Payment>(`
       ${this.getPaymentSelectClause()}
-      WHERE p.invoice_id = ? 
+      WHERE p.tenant_id = ? AND p.invoice_id = ? 
       ORDER BY p.date DESC 
       LIMIT ? OFFSET ?
-    `, [invoiceId, limit, offset]));
+    `, [scopedTenantId, invoiceId, limit, offset]));
   }
 
   /**
    * Get payments by client name
    */
-  async getPaymentsByClientName(clientName: string, options: ServiceOptions = {}): Promise<Payment[]> {
+  async getPaymentsByClientName(clientName: string, options: ServiceOptions = {}, tenantId?: number): Promise<Payment[]> {
     if (!clientName || typeof clientName !== 'string') {
       throw new Error('Valid client name is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const { limit = 100, offset = 0 } = options;
 
     return this.enrichPaymentRows(databaseService.getMany<Payment>(`
       ${this.getPaymentSelectClause()}
-      WHERE LOWER(COALESCE(c.name, '')) LIKE LOWER(?) 
+      WHERE p.tenant_id = ? AND LOWER(COALESCE(c.name, '')) LIKE LOWER(?) 
       ORDER BY p.date DESC 
       LIMIT ? OFFSET ?
-    `, [`%${clientName}%`, limit, offset]));
+    `, [scopedTenantId, `%${clientName}%`, limit, offset]));
   }
 
   /**
@@ -565,7 +603,8 @@ export class PaymentService {
   async getPaymentsByDateRange(
     startDate: string, 
     endDate: string, 
-    options: ServiceOptions = {}
+    options: ServiceOptions = {},
+    tenantId?: number
   ): Promise<{
     payments: Payment[];
     summary: {
@@ -583,13 +622,14 @@ export class PaymentService {
     }
 
     const { limit = 100, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const payments = this.enrichPaymentRows(databaseService.getMany<Payment>(`
       ${this.getPaymentSelectClause()}
-      WHERE p.date BETWEEN ? AND ?
+      WHERE p.tenant_id = ? AND p.date BETWEEN ? AND ?
       ORDER BY p.date DESC, p.created_at DESC
       LIMIT ? OFFSET ?
-    `, [startDate, endDate, limit, offset]));
+    `, [scopedTenantId, startDate, endDate, limit, offset]));
 
     const summaryResult = databaseService.getOne<{
       count: number;
@@ -601,8 +641,8 @@ export class PaymentService {
         SUM(amount) as total_amount,
         AVG(amount) as average_amount
       FROM payments p
-      WHERE p.date BETWEEN ? AND ?
-    `, [startDate, endDate]);
+      WHERE p.tenant_id = ? AND p.date BETWEEN ? AND ?
+    `, [scopedTenantId, startDate, endDate]);
 
     const summary = summaryResult || {
       count: 0,
@@ -619,16 +659,18 @@ export class PaymentService {
   /**
    * Get recent payments
    */
-  async getRecentPayments(limit: number = 10): Promise<Payment[]> {
+  async getRecentPayments(limit: number = 10, tenantId?: number): Promise<Payment[]> {
     if (typeof limit !== 'number' || limit < 1) {
       limit = 10;
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return this.enrichPaymentRows(databaseService.getMany<Payment>(`
       ${this.getPaymentSelectClause()}
+      WHERE p.tenant_id = ?
       ORDER BY p.date DESC, p.created_at DESC
       LIMIT ?
-    `, [limit]));
+    `, [scopedTenantId, limit]));
   }
 
   /**
@@ -639,12 +681,13 @@ export class PaymentService {
     method?: PaymentMethod;
     date_from?: string;
     date_to?: string;
-  } = {}): Promise<number> {
+  } = {}, tenantId?: number): Promise<number> {
     const { status, method, date_from, date_to } = filters;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     
     let query = 'SELECT SUM(p.amount) as total FROM payments p';
-    const conditions: string[] = [];
-    const params: (string | number | null | boolean)[] = [];
+    const conditions: string[] = ['p.tenant_id = ?'];
+    const params: (string | number | null | boolean)[] = [scopedTenantId];
     
     if (status) {
       conditions.push('p.status = ?');
@@ -677,7 +720,8 @@ export class PaymentService {
   /**
    * Update payment status
    */
-  async updatePaymentStatus(id: number, status: PaymentStatus): Promise<number> {
+  async updatePaymentStatus(id: number, status: PaymentStatus, tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
       throw new Error('Valid payment ID is required');
     }
@@ -688,7 +732,10 @@ export class PaymentService {
     }
 
     // Check if payment exists
-    const paymentExists = databaseService.exists('payments', 'id', id);
+    const paymentExists = databaseService.getOne<{ id: number }>(
+      'SELECT id FROM payments WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    );
     if (!paymentExists) {
       throw new Error('Payment not found');
     }
@@ -696,8 +743,8 @@ export class PaymentService {
     const result = databaseService.executeQuery(`
       UPDATE payments 
       SET status = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `, [status, id]);
+      WHERE id = ? AND tenant_id = ?
+    `, [status, id, scopedTenantId]);
 
     return result.changes;
   }
@@ -705,13 +752,14 @@ export class PaymentService {
   /**
    * Get payment methods statistics
    */
-  async getPaymentMethodsStats(): Promise<Array<{
+  async getPaymentMethodsStats(tenantId?: number): Promise<Array<{
     method: PaymentMethod;
     count: number;
     total_amount: number;
     average_amount: number;
     last_used: string;
   }>> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getMany<{
       method: PaymentMethod;
       count: number;
@@ -726,15 +774,16 @@ export class PaymentService {
         AVG(p.amount) as average_amount,
         MAX(p.date) as last_used
       FROM payments p
+      WHERE p.tenant_id = ?
       GROUP BY p.method
       ORDER BY count DESC
-    `);
+    `, [scopedTenantId]);
   }
 
   /**
    * Search payments
    */
-  async searchPayments(searchTerm: string, options: ServiceOptions = {}): Promise<{
+  async searchPayments(searchTerm: string, options: ServiceOptions = {}, tenantId?: number): Promise<{
     payments: Payment[];
     pagination: {
       total: number;
@@ -756,14 +805,16 @@ export class PaymentService {
     }
 
     const { limit = 50, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const searchPattern = `%${searchTerm.trim()}%`;
 
     const payments = this.enrichPaymentRows(databaseService.getMany<Payment>(`
       ${this.getPaymentSelectClause()}
       WHERE (
-        COALESCE(p.transaction_id, '') LIKE ? 
+        p.tenant_id = ?
+        AND (COALESCE(p.transaction_id, '') LIKE ? 
         OR COALESCE(p.notes, '') LIKE ? 
-        OR COALESCE(c.name, '') LIKE ?
+        OR COALESCE(c.name, '') LIKE ?)
       )
       ORDER BY 
         CASE 
@@ -774,7 +825,7 @@ export class PaymentService {
         p.date DESC
       LIMIT ? OFFSET ?
     `, [
-      searchPattern, searchPattern, searchPattern,
+      scopedTenantId, searchPattern, searchPattern, searchPattern,
       searchTerm, searchTerm,
       limit, offset
     ]));
@@ -783,10 +834,11 @@ export class PaymentService {
       SELECT COUNT(*) as count 
       FROM payments p
       LEFT JOIN clients c ON p.client_id = c.id
-      WHERE COALESCE(p.transaction_id, '') LIKE ? 
+      WHERE p.tenant_id = ? AND (
+        COALESCE(p.transaction_id, '') LIKE ? 
         OR COALESCE(p.notes, '') LIKE ? 
-        OR COALESCE(c.name, '') LIKE ?
-    `, [searchPattern, searchPattern, searchPattern]);
+        OR COALESCE(c.name, '') LIKE ?)
+    `, [scopedTenantId, searchPattern, searchPattern, searchPattern]);
 
     const total = totalResult?.count || 0;
 
@@ -804,12 +856,15 @@ export class PaymentService {
   /**
    * Check if payment exists
    */
-  async paymentExists(id: number): Promise<boolean> {
+  async paymentExists(id: number, tenantId?: number): Promise<boolean> {
     if (!id || typeof id !== 'number') {
       return false;
     }
-
-    return databaseService.exists('payments', 'id', id);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    return Boolean(databaseService.getOne<{ id: number }>(
+      'SELECT id FROM payments WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    ));
   }
 
   /**

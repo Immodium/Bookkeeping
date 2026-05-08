@@ -20,7 +20,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
 import { ThemeModeToggle } from '@/components/ui/ThemeModeToggle';
-import slimbooksLogo from '@/assets/slimbooks_logo.png';
+import { AppLogo } from '@/components/ui/AppLogo';
 
 interface NavItem {
   id: string;
@@ -150,7 +150,7 @@ export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigati
       {isMobile && (
         <div className="flex h-16 items-center justify-between border-b border-border px-4 lg:hidden">
           <div className="flex items-center">
-            <img src={slimbooksLogo} alt={companySettings.companyName || 'Slimbooks'} className="h-6 w-auto" />
+            <AppLogo alt={companySettings.companyName || 'Slimbooks'} className="h-6 w-auto" />
           </div>
           <button
             onClick={() => setIsMobileMenuOpen(false)}
@@ -165,8 +165,7 @@ export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigati
       {!isMobile && (
         <div className="flex h-16 items-center justify-between border-b border-border px-6">
           <div className="flex items-center">
-            <img
-              src={slimbooksLogo}
+            <AppLogo
               alt={companySettings.companyName || 'Slimbooks'}
               className={cn('w-auto', isCollapsed ? 'h-6' : 'h-8')}
             />
@@ -205,7 +204,7 @@ export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigati
                     'h-5 w-5 flex-shrink-0',
                     !isCollapsed && 'mr-3',
                     itemActive 
-                      ? 'text-primary' 
+                      ? 'text-accent-foreground' 
                       : 'text-muted-foreground group-hover:text-muted-foreground'
                   )}
                 />

@@ -299,7 +299,7 @@ export interface BulkOperationResponse {
 
 // Export/Import types
 export interface ExportRequest {
-  format: 'csv' | 'json' | 'xlsx';
+  format: 'csv' | 'json';
   type: 'clients' | 'invoices' | 'expenses' | 'payments';
   date_from?: string;
   date_to?: string;

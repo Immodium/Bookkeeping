@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { Upload, Download, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { authenticatedFetch } from '@/utils/api';
-import { exportToCSV, exportToXLSX, parseSpreadsheetFile, validateExpenseData } from '@/utils/data';
+import { exportToCSV, parseSpreadsheetFile, validateExpenseData } from '@/utils/data';
 import { toast } from 'sonner';
 import { themeClasses, getIconColorClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { FieldMapping, ImportExportProps, EXPENSE_FIELDS } from '@/types/shared/import.types';
@@ -10,8 +10,6 @@ import { EXPENSE_STATUSES } from '@/types/constants/enums.types';
 
 export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onImportComplete }) => {
   const [mode, setMode] = useState<'select' | 'import' | 'export'>('select');
-  const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('csv');
-  const [importFormat, setImportFormat] = useState<'csv' | 'xlsx'>('csv');
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
@@ -46,12 +44,8 @@ export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
       }));
       
       const exportDate = new Date().toISOString().split('T')[0];
-      if (exportFormat === 'xlsx') {
-        await exportToXLSX(exportData, `expenses-${exportDate}.xlsx`);
-      } else {
-        exportToCSV(exportData, `expenses-${exportDate}.csv`);
-      }
-      toast.success(`Expenses exported successfully as ${exportFormat.toUpperCase()}`);
+      exportToCSV(exportData, `expenses-${exportDate}.csv`);
+      toast.success('Expenses exported successfully as CSV');
       onClose();
     } catch (error) {
       toast.error('Failed to export expenses');
@@ -64,15 +58,13 @@ export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
     if (!file) return;
 
     try {
-      const isXlsxFile = file.name.toLowerCase().endsWith('.xlsx');
       const parsedData = await parseSpreadsheetFile(file);
 
       if (parsedData.length === 0) {
-        toast.error(`${isXlsxFile ? 'XLSX' : 'CSV'} file is empty or invalid`);
+        toast.error('CSV file is empty or invalid');
         return;
       }
 
-      setImportFormat(isXlsxFile ? 'xlsx' : 'csv');
       setCsvData(parsedData);
       setCsvHeaders(Object.keys(parsedData[0]));
 
@@ -250,7 +242,7 @@ export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
               <Download className={`${themeClasses.iconMedium} ${getIconColorClasses('blue')} mr-3`} />
               <div className="text-left">
                 <div className="font-medium text-foreground">Export Expenses</div>
-                <div className="text-sm text-muted-foreground">Download all expenses as CSV or XLSX</div>
+                <div className="text-sm text-muted-foreground">Download all expenses as CSV</div>
               </div>
             </button>
 
@@ -261,14 +253,14 @@ export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
               <Upload className={`${themeClasses.iconMedium} ${getIconColorClasses('blue')} mr-3`} />
               <div className="text-left">
                 <div className="font-medium text-foreground">Import Expenses</div>
-                <div className="text-sm text-muted-foreground">Upload CSV or XLSX file to import</div>
+                <div className="text-sm text-muted-foreground">Upload CSV file to import</div>
               </div>
             </button>
 
             <input
               id="expense-csv-upload"
               type="file"
-              accept=".csv,.xlsx"
+              accept=".csv,text/csv"
               onChange={handleFileUpload}
               className="hidden"
             />
@@ -294,29 +286,14 @@ export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
 
           <div className="text-center py-6">
             <FileText className={`h-12 w-12 ${getIconColorClasses('blue')} mx-auto mb-4`} />
-            <p className="text-muted-foreground mb-6">Export all expenses as CSV or XLSX for backup or analysis.</p>
-
-            <div className="mb-4">
-              <label htmlFor="expense-export-format" className="block text-sm font-medium text-foreground mb-2">
-                Export format
-              </label>
-              <select
-                id="expense-export-format"
-                value={exportFormat}
-                onChange={(event) => setExportFormat(event.target.value as 'csv' | 'xlsx')}
-                className={themeClasses.select}
-              >
-                <option value="csv">CSV (.csv)</option>
-                <option value="xlsx">Excel (.xlsx)</option>
-              </select>
-            </div>
+            <p className="text-muted-foreground mb-6">Export all expenses as CSV for backup or analysis.</p>
 
             <div className="space-y-3">
               <button
                 onClick={handleExport}
                 className={getButtonClasses('primary')}
               >
-                {exportFormat === 'xlsx' ? 'Download XLSX' : 'Download CSV'}
+                Download CSV
               </button>
               <button
                 onClick={() => setMode('select')}
@@ -348,7 +325,7 @@ export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
           {/* Field Mapping */}
           <div>
             <h3 className="text-lg font-medium text-foreground mb-4">
-              Map {importFormat === 'xlsx' ? 'XLSX' : 'CSV'} Fields
+              Map CSV Fields
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {EXPENSE_FIELDS.map(field => (

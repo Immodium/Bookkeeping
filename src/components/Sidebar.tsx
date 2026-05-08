@@ -19,7 +19,7 @@ import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
 import { usePermissions } from '@/contexts/AuthContext';
 import { getRoleDisplayName } from '@/auth/roles';
-import slimbooksLogo from '@/assets/slimbooks_logo.png';
+import { AppLogo } from '@/components/ui/AppLogo';
 import { ThemeModeToggle } from '@/components/ui/ThemeModeToggle';
 
 const navigation = [
@@ -172,7 +172,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
         {/* Logo/Header */}
         <div className="flex h-16 items-center border-b border-border px-6">
           <div className="flex items-center">
-            <img src={slimbooksLogo} alt={companySettings.companyName || 'Slimbooks'} className="h-8 w-auto" />
+            <AppLogo alt={companySettings.companyName || 'Slimbooks'} className="h-8 w-auto" />
           </div>
         </div>
 
@@ -196,7 +196,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
                     className={cn(
                       'mr-3 h-5 w-5 flex-shrink-0',
                       parentActive && !item.subItems 
-                        ? 'text-primary' 
+                        ? 'text-accent-foreground' 
                         : 'text-muted-foreground group-hover:text-muted-foreground'
                     )}
                   />

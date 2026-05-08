@@ -163,6 +163,36 @@ export const uploadReceiptAndExtractExpenseData = asyncHandler(async (req: Reque
 export const parseReceiptOCR = uploadReceiptAndExtractExpenseData;
 
 /**
+ * Upload a receipt/document without OCR parsing and return a persistent receipt URL.
+ */
+export const uploadReceiptFile = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  if (!req.file) {
+    throw new ValidationError('Receipt file is required');
+  }
+
+  try {
+    const normalizedReceipt = await convertReceiptToPdfIfNeeded(
+      req.file.path,
+      req.file.filename,
+      req.file.mimetype
+    );
+    const receiptUrl = `/uploads/receipts/${normalizedReceipt.filename}`;
+
+    res.json({
+      success: true,
+      data: {
+        receipt_url: receiptUrl,
+        filename: normalizedReceipt.filename
+      },
+      message: 'Receipt uploaded successfully'
+    });
+  } catch (error) {
+    const errorMessage = (error as Error).message || 'Failed to upload receipt';
+    throw new AppError(errorMessage, 500);
+  }
+});
+
+/**
  * Update expense
  */
 export const updateExpense = asyncHandler(async (req: Request<{ id: string }, object, { expenseData: Partial<ExpenseRequest> }>, res: Response): Promise<void> => {

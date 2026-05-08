@@ -225,8 +225,8 @@ export const ResponsiveSettings = () => {
                     className={cn(
                       "whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px",
                       activeTab === tab.id
-                        ? "border-primary text-primary bg-accent/50"
-                        : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                        ? "border-accent bg-accent text-accent-foreground"
+                        : "border-transparent text-muted-foreground hover:border-accent/70 hover:bg-accent hover:text-accent-foreground"
                     )}
                   >
                     {tab.name}

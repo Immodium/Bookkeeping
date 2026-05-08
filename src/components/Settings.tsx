@@ -162,10 +162,10 @@ export const Settings = () => {
                   window.location.hash = tab.key;
                 }}
                 className={`
-                  py-2 px-1 border-b-2 font-medium text-sm transition-colors
+                  py-2 px-3 rounded-t-md border-b-2 font-medium text-sm transition-colors
                   ${activeTab === tab.key 
-                    ? 'border-primary text-primary' 
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                    ? 'border-accent bg-accent text-accent-foreground' 
+                    : 'border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-accent/70'
                   }
                 `}
               >

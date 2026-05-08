@@ -84,10 +84,18 @@ const applyAccentColor = (accentColor: string): void => {
   const lightAccentL = clamp(hsl.l + 40, 0, 98);
   const darkAccentL = clamp(hsl.l - 18, 10, 90);
   const darkAccentS = clamp(hsl.s + 6, 0, 100);
+  const primaryForeground = hsl.l > 56 ? '222.2 47.4% 11.2%' : '210 40% 98%';
+  const lightAccentForeground = lightAccentL > 58 ? '222.2 47.4% 11.2%' : '210 40% 98%';
+  const darkAccentForeground = darkAccentL > 50 ? '222.2 47.4% 11.2%' : '210 40% 98%';
 
   root.style.setProperty('--primary', hslToCssValue(hsl));
+  root.style.setProperty('--primary-foreground', primaryForeground);
+  root.style.setProperty('--dark-primary-foreground', primaryForeground);
   root.style.setProperty('--ring', `${hsl.h} ${ringS}% ${ringL}%`);
   root.style.setProperty('--accent', `${hsl.h} ${clamp(hsl.s, 10, 100)}% ${lightAccentL}%`);
+  root.style.setProperty('--accent-foreground', lightAccentForeground);
+  root.style.setProperty('--dark-accent', `${hsl.h} ${darkAccentS}% ${darkAccentL}%`);
+  root.style.setProperty('--dark-accent-foreground', darkAccentForeground);
   root.style.setProperty('--sidebar-primary', hslToCssValue(hsl));
   root.style.setProperty('--sidebar-ring', `${hsl.h} ${ringS}% ${ringL}%`);
   root.style.setProperty('--dashboard-stat-blue-foreground', hslToCssValue(hsl));

@@ -112,7 +112,6 @@ export type AppTheme = typeof AppTheme[keyof typeof AppTheme];
 export const SupportedFileType = {
   PDF: 'pdf',
   CSV: 'csv',
-  XLSX: 'xlsx',
   JSON: 'json'
 } as const;
 

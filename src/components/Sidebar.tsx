@@ -196,7 +196,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
                     className={cn(
                       'mr-3 h-5 w-5 flex-shrink-0',
                       parentActive && !item.subItems 
-                        ? 'text-primary' 
+                        ? 'text-accent-foreground' 
                         : 'text-muted-foreground group-hover:text-muted-foreground'
                     )}
                   />

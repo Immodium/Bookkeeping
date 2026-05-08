@@ -104,14 +104,14 @@ export const NavigationGuardedSidebar: React.FC<NavigationGuardedSidebarProps> =
                   className={cn(
                     'group flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                     parentActive && !item.subItems
-                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                      ? 'bg-accent text-accent-foreground border border-border'
                       : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                   )}
                 >
                   <Icon
                     className={cn(
                       'mr-3 h-5 w-5 flex-shrink-0',
-                      parentActive && !item.subItems ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground group-hover:text-accent-foreground'
+                      parentActive && !item.subItems ? 'text-accent-foreground' : 'text-muted-foreground group-hover:text-accent-foreground'
                     )}
                   />
                   {item.name}
@@ -129,7 +129,7 @@ export const NavigationGuardedSidebar: React.FC<NavigationGuardedSidebarProps> =
                           className={cn(
                             'group flex w-full items-center rounded-lg px-3 py-2 text-sm transition-colors',
                             subActive
-                              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                              ? 'bg-accent text-accent-foreground border border-border'
                               : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                           )}
                         >

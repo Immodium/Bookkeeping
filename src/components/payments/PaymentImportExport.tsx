@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Upload, Download, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
-import { exportToCSV, exportToXLSX, parseSpreadsheetFile, validatePaymentData } from '@/utils/data';
+import { exportToCSV, parseSpreadsheetFile, validatePaymentData } from '@/utils/data';
 import { PaymentValidationResult, FieldMapping, ImportExportProps, PreviewDataItem, PAYMENT_FIELDS } from '@/types/shared/import.types';
 import { toast } from 'sonner';
 import { themeClasses, getIconColorClasses, getButtonClasses } from '@/utils/themeUtils.util';
@@ -10,7 +10,6 @@ import { authenticatedFetch } from '@/utils/api';
 
 export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onImportComplete }) => {
   const [mode, setMode] = useState<'select' | 'import' | 'export'>('select');
-  const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('csv');
   const [csvData, setCsvData] = useState<Array<Record<string, string | number | boolean | null | undefined>>>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
@@ -46,12 +45,8 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
       }));
 
       const exportDate = new Date().toISOString().split('T')[0];
-      if (exportFormat === 'xlsx') {
-        await exportToXLSX(exportData, `payments-${exportDate}.xlsx`, 'Payments');
-      } else {
-        exportToCSV(exportData, `payments-${exportDate}.csv`);
-      }
-      toast.success(`Payments exported successfully as ${exportFormat.toUpperCase()}`);
+      exportToCSV(exportData, `payments-${exportDate}.csv`);
+      toast.success('Payments exported successfully as CSV');
       onClose();
     } catch (error) {
       toast.error('Failed to export payments');
@@ -67,7 +62,7 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
       const parsedData = await parseSpreadsheetFile(file);
 
       if (parsedData.length === 0) {
-        toast.error('Spreadsheet file is empty or invalid');
+        toast.error('CSV file is empty or invalid');
         return;
       }
 
@@ -83,8 +78,8 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
 
       setMode('import');
     } catch (error) {
-      toast.error('Failed to parse spreadsheet file');
-      console.error('Spreadsheet parsing error:', error);
+      toast.error('Failed to parse CSV file');
+      console.error('CSV parsing error:', error);
     } finally {
       event.target.value = '';
     }
@@ -297,7 +292,7 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
               <Download className={`${themeClasses.iconMedium} ${getIconColorClasses('blue')} mr-3`} />
               <div className="text-left">
                 <div className="font-medium text-foreground">Export Payments</div>
-                <div className="text-sm text-muted-foreground">Download all payments as CSV or XLSX</div>
+                <div className="text-sm text-muted-foreground">Download all payments as CSV</div>
               </div>
             </button>
 
@@ -308,14 +303,14 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
               <Upload className={`${themeClasses.iconMedium} ${getIconColorClasses('blue')} mr-3`} />
               <div className="text-left">
                 <div className="font-medium text-foreground">Import Payments</div>
-                <div className="text-sm text-muted-foreground">Upload CSV or XLSX file to import</div>
+                <div className="text-sm text-muted-foreground">Upload CSV file to import</div>
               </div>
             </button>
 
             <input
               id="payment-csv-upload"
               type="file"
-              accept=".csv,.xlsx"
+              accept=".csv,text/csv"
               onChange={handleFileUpload}
               className="hidden"
             />
@@ -341,29 +336,14 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
 
           <div className="text-center py-6">
             <FileText className={`h-12 w-12 ${getIconColorClasses('blue')} mx-auto mb-4`} />
-            <p className="text-muted-foreground mb-6">Export all payments as CSV or XLSX for backup or analysis.</p>
-
-            <div className="mb-4">
-              <label htmlFor="payment-export-format" className="block text-sm font-medium text-foreground mb-2">
-                Export format
-              </label>
-              <select
-                id="payment-export-format"
-                value={exportFormat}
-                onChange={(event) => setExportFormat(event.target.value as 'csv' | 'xlsx')}
-                className={themeClasses.select}
-              >
-                <option value="csv">CSV (.csv)</option>
-                <option value="xlsx">Excel (.xlsx)</option>
-              </select>
-            </div>
+            <p className="text-muted-foreground mb-6">Export all payments as CSV for backup or analysis.</p>
 
             <div className="space-y-3">
               <button
                 onClick={handleExport}
                 className={getButtonClasses('primary')}
               >
-                {exportFormat === 'xlsx' ? 'Download XLSX' : 'Download CSV'}
+                Download CSV
               </button>
               <button
                 onClick={() => setMode('select')}
@@ -394,7 +374,7 @@ export const PaymentImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
         <div className="space-y-6">
           {/* Field Mapping */}
           <div>
-            <h3 className="text-lg font-medium text-foreground mb-4">Map Spreadsheet Fields</h3>
+            <h3 className="text-lg font-medium text-foreground mb-4">Map CSV Fields</h3>
             <div className="mb-4 p-3 bg-muted rounded-lg">
               <p className="text-sm text-muted-foreground">
                 <strong>Payment Method:</strong> Valid methods are: {PAYMENT_METHODS.join(', ')}. Common variations will be automatically mapped.

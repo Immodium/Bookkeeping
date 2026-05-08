@@ -192,7 +192,7 @@ export interface SearchParams {
 
 // Export/Import types
 export interface ExportOptions {
-  format: 'csv' | 'pdf' | 'xlsx';
+  format: 'csv' | 'pdf';
   dateRange?: DateRange;
   filters?: Record<string, unknown>;
   columns?: string[];

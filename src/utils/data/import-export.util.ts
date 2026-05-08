@@ -15,33 +15,112 @@ export const exportToXLSX = async (
     return;
   }
 
-  const XLSX = await import('xlsx');
-  const worksheet = XLSX.utils.json_to_sheet(rows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-  XLSX.writeFile(workbook, filename);
+  const ExcelJS = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName);
+
+  const headers = Array.from(
+    rows.reduce((set, row) => {
+      Object.keys(row).forEach(key => set.add(key));
+      return set;
+    }, new Set<string>())
+  );
+
+  worksheet.addRow(headers);
+  rows.forEach(row => {
+    worksheet.addRow(headers.map(header => row[header] ?? ''));
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const excelValueToString = (value: unknown): string => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString().split('T')[0] || value.toISOString();
+  }
+
+  if (typeof value === 'object') {
+    if ('text' in value && typeof (value as { text?: unknown }).text === 'string') {
+      return (value as { text: string }).text;
+    }
+
+    if ('richText' in value && Array.isArray((value as { richText?: Array<{ text?: string }> }).richText)) {
+      return (value as { richText: Array<{ text?: string }> }).richText
+        .map(chunk => chunk.text || '')
+        .join('');
+    }
+
+    if ('result' in value) {
+      return String((value as { result?: unknown }).result ?? '');
+    }
+
+    if ('hyperlink' in value) {
+      const candidate = value as { text?: unknown; hyperlink?: unknown };
+      if (typeof candidate.text === 'string') {
+        return candidate.text;
+      }
+      if (typeof candidate.hyperlink === 'string') {
+        return candidate.hyperlink;
+      }
+    }
+  }
+
+  return String(value);
 };
 
 export const parseXLSX = async (file: File): Promise<Array<Record<string, string>>> => {
-  const XLSX = await import('xlsx');
+  const ExcelJS = await import('exceljs');
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: 'array' });
-  const firstSheetName = workbook.SheetNames[0];
-  if (!firstSheetName) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) {
     return [];
   }
 
-  const sheet = workbook.Sheets[firstSheetName];
-  if (!sheet) {
+  const headerRow = worksheet.getRow(1);
+  const rawHeaders = (headerRow.values as Array<unknown>).slice(1).map(value => excelValueToString(value).trim());
+  const headers = rawHeaders.map((header, index) => header || `Column ${index + 1}`);
+
+  if (!headers.length) {
     return [];
   }
 
-  const rows = XLSX.utils.sheet_to_json<Record<string, CSVValue>>(sheet, { defval: '' });
-  return rows.map(row =>
-    Object.fromEntries(
-      Object.entries(row).map(([key, value]) => [key, value == null ? '' : String(value)])
-    )
-  );
+  const results: Array<Record<string, string>> = [];
+  for (let rowIndex = 2; rowIndex <= worksheet.rowCount; rowIndex += 1) {
+    const row = worksheet.getRow(rowIndex);
+    const values = (row.values as Array<unknown>).slice(1);
+    const normalizedValues = headers.map((_, index) => excelValueToString(values[index]));
+
+    if (normalizedValues.every(value => value.trim() === '')) {
+      continue;
+    }
+
+    const normalizedRow: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      normalizedRow[header] = normalizedValues[index] ?? '';
+    });
+    results.push(normalizedRow);
+  }
+
+  return results;
 };
 
 const escapeCsvCell = (value: CSVValue): string => {

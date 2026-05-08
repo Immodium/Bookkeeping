@@ -11,7 +11,8 @@ import {
   getExpenseStats,
   getExpenseCategories,
   getExpensesByDateRange,
-  uploadReceiptAndExtractExpenseData
+  uploadReceiptAndExtractExpenseData,
+  uploadReceiptFile
 } from '../controllers/index.js';
 import {
   requireAuth,
@@ -66,6 +67,14 @@ router.post(
   uploadReceipt.single('receipt'),
   validateFileUpload(10 * 1024 * 1024, ['image/*', 'application/pdf']),
   uploadReceiptAndExtractExpenseData
+);
+
+// Upload receipt/document without OCR parsing
+router.post(
+  '/receipt-upload',
+  uploadReceipt.single('receipt'),
+  validateFileUpload(10 * 1024 * 1024, ['image/*', 'application/pdf']),
+  uploadReceiptFile
 );
 
 // Get expense by ID

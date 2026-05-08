@@ -140,15 +140,15 @@ export const ProfitLossReport: React.FC<ProfitLossReportProps> = ({ onBack, onSa
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center">
-          <button onClick={onBack} className="flex items-center text-gray-600 hover:text-gray-900 mr-4">
+          <button onClick={onBack} className="flex items-center text-muted-foreground hover:text-foreground mr-4">
             <ArrowLeft className="h-5 w-5 mr-1" />
             Back to Reports
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">Generating Report...</h1>
+          <h1 className="text-2xl font-bold text-foreground">Generating Report...</h1>
         </div>
         <div className="bg-card rounded-lg shadow-sm border border-border p-12 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Please wait while we generate your report...</p>
+          <p className="mt-4 text-muted-foreground">Please wait while we generate your report...</p>
         </div>
       </div>
     );

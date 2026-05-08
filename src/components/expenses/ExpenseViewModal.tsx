@@ -8,39 +8,7 @@ import { ExpenseViewModalProps } from '@/types/components/expense.types';
 export const ExpenseViewModal: React.FC<ExpenseViewModalProps> = ({ expense, isOpen, onClose }) => {
   if (!isOpen || !expense) return null;
 
-  const detectMimeType = (bytes: Uint8Array): string => {
-    if (bytes.length >= 4) {
-      if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
-        return 'application/pdf';
-      }
-      if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-        return 'image/jpeg';
-      }
-      if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
-        return 'image/png';
-      }
-      if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
-        return 'image/gif';
-      }
-      if (
-        bytes.length >= 12 &&
-        bytes[0] === 0x52 &&
-        bytes[1] === 0x49 &&
-        bytes[2] === 0x46 &&
-        bytes[3] === 0x46 &&
-        bytes[8] === 0x57 &&
-        bytes[9] === 0x45 &&
-        bytes[10] === 0x42 &&
-        bytes[11] === 0x50
-      ) {
-        return 'image/webp';
-      }
-    }
-
-    return 'application/pdf';
-  };
-
-  // Use the browser's native file viewer (same experience as invoice tab preview).
+  // Use the browser's native file viewer for uploaded receipt files.
   const handleViewReceipt = async () => {
     if (!expense.receipt_url) {
       return;
@@ -50,49 +18,7 @@ export const ExpenseViewModal: React.FC<ExpenseViewModalProps> = ({ expense, isO
       ? expense.receipt_url
       : `${window.location.origin}${expense.receipt_url}`;
 
-    const viewerTab = window.open('', '_blank');
-    if (!viewerTab) {
-      console.error('Receipt viewer popup blocked by browser');
-      return;
-    }
-
-    viewerTab.document.write('<html><body style="font-family:sans-serif;padding:24px;">Preparing receipt preview...</body></html>');
-    viewerTab.document.close();
-
-    try {
-      const response = await fetch(receiptUrl, { credentials: 'include' });
-      if (!response.ok) {
-        throw new Error(`Failed to load receipt (${response.status})`);
-      }
-
-      const buffer = await response.arrayBuffer();
-      if (!buffer.byteLength) {
-        throw new Error('Receipt file is empty');
-      }
-
-      const bytes = new Uint8Array(buffer.slice(0, 16));
-      const sniffedMimeType = detectMimeType(bytes);
-      const responseMimeType = response.headers.get('content-type') || '';
-      const mimeType =
-        !responseMimeType || responseMimeType === 'application/octet-stream'
-          ? sniffedMimeType
-          : responseMimeType;
-      const blob = new Blob([buffer], { type: mimeType });
-      const objectUrl = window.URL.createObjectURL(blob);
-
-      viewerTab.location.href = objectUrl;
-
-      // Clean up blob URL once the viewer tab is closed.
-      const cleanup = window.setInterval(() => {
-        if (viewerTab.closed) {
-          window.clearInterval(cleanup);
-          window.URL.revokeObjectURL(objectUrl);
-        }
-      }, 1500);
-    } catch (error) {
-      console.error('Failed to open receipt viewer:', error);
-      viewerTab.close();
-    }
+    window.open(receiptUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (

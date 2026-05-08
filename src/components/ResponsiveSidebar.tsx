@@ -19,6 +19,7 @@ import { useAuth, usePermissions } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
+import { ThemeModeToggle } from '@/components/ui/ThemeModeToggle';
 import slimbooksLogo from '@/assets/slimbooks_logo.png';
 
 interface NavItem {
@@ -219,6 +220,9 @@ export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigati
       <div className="border-t border-border p-4">
         {!isCollapsed ? (
           <>
+            <div className="mb-3">
+              <ThemeModeToggle />
+            </div>
             <div className="flex items-center mb-3">
               <div className="flex-1">
                 <p className="text-sm font-medium text-card-foreground truncate">

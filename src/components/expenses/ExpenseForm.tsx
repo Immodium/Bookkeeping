@@ -23,6 +23,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [originalFormData, setOriginalFormData] = useState<any>(null);
   const [isOCRProcessing, setIsOCRProcessing] = useState(false);
+  const [isAttachmentUploading, setIsAttachmentUploading] = useState(false);
 
   // Track if form has been modified
   const isDirty = originalFormData ? JSON.stringify(formData) !== JSON.stringify(originalFormData) : false;
@@ -73,15 +74,6 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
     onSave(expenseData);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setReceiptFile(file);
-      // In a real app, you'd upload this file and get a URL
-      setFormData({ ...formData, receipt_url: `receipt_${Date.now()}.${file.name.split('.').pop()}` });
-    }
-  };
-
   const handleReceiptUploadWithOCR = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || isOCRProcessing) {
@@ -121,6 +113,66 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
       setIsOCRProcessing(false);
       e.target.value = '';
     }
+  };
+
+  const handleReceiptUploadWithoutOCR = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || isAttachmentUploading) {
+      return;
+    }
+
+    setReceiptFile(file);
+    setIsAttachmentUploading(true);
+
+    try {
+      const uploadData = new FormData();
+      uploadData.append('receipt', file);
+
+      const response = await authenticatedFetch('/api/expenses/receipt-upload', {
+        method: 'POST',
+        body: uploadData,
+        headers: {}
+      });
+      const payload = await response.json();
+      const uploaded = payload?.data || {};
+
+      if (!uploaded.receipt_url) {
+        throw new Error('Upload succeeded but no receipt URL was returned');
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        receipt_url: uploaded.receipt_url
+      }));
+
+      toast.success('Receipt attached successfully');
+    } catch (error) {
+      console.error('Manual receipt upload failed:', error);
+      toast.error('Failed to attach receipt document.');
+    } finally {
+      setIsAttachmentUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const getReceiptFileName = (): string => {
+    if (receiptFile?.name) {
+      return receiptFile.name;
+    }
+
+    if (!formData.receipt_url) {
+      return 'Receipt uploaded';
+    }
+
+    const fileName = formData.receipt_url.split('/').pop();
+    return fileName ? decodeURIComponent(fileName) : 'Receipt uploaded';
+  };
+
+  const getReceiptViewerUrl = (): string => {
+    if (!formData.receipt_url) return '';
+    return formData.receipt_url.startsWith('http')
+      ? formData.receipt_url
+      : `${window.location.origin}${formData.receipt_url}`;
   };
 
   const removeReceipt = () => {
@@ -250,24 +302,36 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
               {!receiptFile && !formData.receipt_url ? (
                 <div className="border-2 border-dashed border-border rounded-lg p-6 text-center bg-muted/30">
                   <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground mb-2">Upload receipt for OCR auto-fill</p>
-                  <label className={`cursor-pointer ${getButtonClasses('primary')} ${isOCRProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                    {isOCRProcessing ? 'Processing...' : 'Upload Receipt'}
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={handleReceiptUploadWithOCR}
-                      disabled={isOCRProcessing}
-                      className="hidden"
-                    />
-                  </label>
+                  <p className="text-sm text-muted-foreground mb-3">Upload with OCR auto-fill or attach a document manually</p>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <label className={`cursor-pointer ${getButtonClasses('primary')} ${isOCRProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      {isOCRProcessing ? 'Processing OCR...' : 'Upload & OCR'}
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={handleReceiptUploadWithOCR}
+                        disabled={isOCRProcessing}
+                        className="hidden"
+                      />
+                    </label>
+                    <label className={`cursor-pointer ${getButtonClasses('outline')} ${isAttachmentUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      {isAttachmentUploading ? 'Attaching...' : 'Attach File Only'}
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={handleReceiptUploadWithoutOCR}
+                        disabled={isAttachmentUploading}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border">
-                  <div className="flex items-center">
+                  <div className="flex items-center flex-wrap gap-2">
                     <Receipt className="h-5 w-5 text-muted-foreground mr-2" />
                     <span className="text-sm text-foreground">
-                      {receiptFile?.name || 'Receipt uploaded'}
+                      {getReceiptFileName()}
                     </span>
                     {isOCRProcessing && (
                       <span className="inline-flex items-center ml-3 text-xs text-muted-foreground">
@@ -275,14 +339,42 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
                         OCR processing
                       </span>
                     )}
+                    {isAttachmentUploading && (
+                      <span className="inline-flex items-center ml-3 text-xs text-muted-foreground">
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Uploading file
+                      </span>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={removeReceipt}
-                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {formData.receipt_url && (
+                      <a
+                        href={getReceiptViewerUrl()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        View Receipt
+                      </a>
+                    )}
+                    <label className={`cursor-pointer text-xs ${getButtonClasses('outline')} ${isAttachmentUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                      Replace File
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={handleReceiptUploadWithoutOCR}
+                        disabled={isAttachmentUploading}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={removeReceipt}
+                      className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

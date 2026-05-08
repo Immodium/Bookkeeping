@@ -12,6 +12,7 @@ import { cn } from '@/utils/themeUtils.util';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
+import { ThemeModeToggle } from '@/components/ui/ThemeModeToggle';
 import slimbooksLogo from '@/assets/slimbooks_logo.png';
 
 const navigation = [
@@ -145,6 +146,9 @@ export const NavigationGuardedSidebar: React.FC<NavigationGuardedSidebarProps> =
 
         {/* User Section */}
         <div className="border-t border-border p-4">
+          <div className="mb-3">
+            <ThemeModeToggle />
+          </div>
           <div className="flex items-center mb-3">
             <div className="flex-1">
               <p className="text-sm font-medium text-foreground">Welcome, {user?.username}</p>

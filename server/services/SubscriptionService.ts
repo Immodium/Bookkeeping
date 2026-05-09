@@ -463,16 +463,28 @@ export class SubscriptionService {
 
     const normalizedStatus = this.normalizeSubscriptionStatus(event.data.status);
     const planCode = event.data.planCode || (normalizedStatus === 'trialing' ? 'trial' : 'starter');
-    await this.setTenantSubscription(tenantId, {
+    const updateInput: SubscriptionUpdateInput = {
       planCode,
       status: normalizedStatus,
-      currentPeriodEnd: event.data.currentPeriodEnd,
-      cancelAtPeriodEnd: event.data.cancelAtPeriodEnd,
-      provider: event.provider || 'external',
-      providerCustomerId: event.data.providerCustomerId,
-      providerSubscriptionId: event.data.providerSubscriptionId,
-      metadata: event.data.metadata
-    });
+      provider: event.provider || 'external'
+    };
+    if (event.data.currentPeriodEnd !== undefined) {
+      updateInput.currentPeriodEnd = event.data.currentPeriodEnd;
+    }
+    if (event.data.cancelAtPeriodEnd !== undefined) {
+      updateInput.cancelAtPeriodEnd = event.data.cancelAtPeriodEnd;
+    }
+    if (event.data.providerCustomerId !== undefined) {
+      updateInput.providerCustomerId = event.data.providerCustomerId;
+    }
+    if (event.data.providerSubscriptionId !== undefined) {
+      updateInput.providerSubscriptionId = event.data.providerSubscriptionId;
+    }
+    if (event.data.metadata !== undefined) {
+      updateInput.metadata = event.data.metadata;
+    }
+
+    await this.setTenantSubscription(tenantId, updateInput);
 
     if (event.data.entitlements && isObject(event.data.entitlements)) {
       await this.updateTenantEntitlements(tenantId, event.data.entitlements);

@@ -175,7 +175,7 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
       </div>
     `,
     text: `Password reset request\n\nHello ${user.name || 'there'},\n\nReset your password using this link:\n${resetLink}\n\nIf you did not request this, you can ignore this email.`
-  });
+  }, { tenantId: user.tenant_id || 1 });
 
   res.json({
     success: true,

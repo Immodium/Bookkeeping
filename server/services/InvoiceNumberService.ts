@@ -2,6 +2,7 @@
 // Centralized service for generating unique invoice numbers
 
 import { databaseService } from '../core/DatabaseService.js';
+import { settingsService } from './SettingsService.js';
 
 /**
  * Service for generating unique invoice numbers
@@ -17,20 +18,36 @@ export class InvoiceNumberService {
     return InvoiceNumberService.instance;
   }
 
+  private normalizeTenantId(tenantId?: number): number {
+    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+  }
+
+  private getCounterKey(tenantId: number): string {
+    return tenantId === 1 ? 'invoice_counter' : `invoice_counter__tenant_${tenantId}`;
+  }
+
+  private getInvoicePrefix(basePrefix: string, tenantId: number): string {
+    if (tenantId === 1) {
+      return basePrefix;
+    }
+    return `${basePrefix}-T${tenantId}`;
+  }
+
   /**
    * Generate a unique invoice number based on settings
    * @returns Promise<string> - Generated invoice number
    */
-  async generateInvoiceNumber(): Promise<string> {
+  async generateInvoiceNumber(tenantId?: number): Promise<string> {
     try {
+      const scopedTenantId = this.normalizeTenantId(tenantId);
       // Get user's invoice numbering settings
-      const settings = await this.getInvoiceNumberSettings();
+      const settings = await this.getInvoiceNumberSettings(scopedTenantId);
 
       // Get and increment counter
-      const counter = await this.getNextCounter();
+      const counter = await this.getNextCounter(scopedTenantId);
 
       // Format invoice number based on settings
-      return this.formatInvoiceNumber(counter, settings.prefix);
+      return this.formatInvoiceNumber(counter, this.getInvoicePrefix(settings.prefix, scopedTenantId));
     } catch (error) {
       console.error('Error generating invoice number:', error);
       throw new Error('Failed to generate invoice number');
@@ -40,16 +57,16 @@ export class InvoiceNumberService {
   /**
    * Get invoice number settings from database
    */
-  private async getInvoiceNumberSettings(): Promise<{ prefix: string }> {
+  private async getInvoiceNumberSettings(tenantId: number): Promise<{ prefix: string }> {
     try {
-      const settings = await databaseService.getOne<{ value: string }>(
-        'SELECT value FROM settings WHERE key = ? AND category = ?',
-        ['invoice_number_settings', 'general']
-      );
+      const settings = (
+        await settingsService.getSettingByKey('general.invoice_number_settings', tenantId) ||
+        await settingsService.getSettingByKey('invoice_number_settings', tenantId)
+      ) as Record<string, unknown> | null;
 
-      if (settings && settings.value) {
-        const parsed = JSON.parse(settings.value);
-        return { prefix: parsed.prefix || 'INV' };
+      if (settings && typeof settings === 'object') {
+        const prefix = typeof settings.prefix === 'string' ? settings.prefix : 'INV';
+        return { prefix };
       }
     } catch (error) {
       console.warn('Could not load invoice number settings, using defaults:', error);
@@ -62,11 +79,12 @@ export class InvoiceNumberService {
   /**
    * Get next counter value and increment it
    */
-  private async getNextCounter(): Promise<number> {
+  private async getNextCounter(tenantId: number): Promise<number> {
+    const counterKey = this.getCounterKey(tenantId);
     // Get current counter value
     const counter = await databaseService.getOne<{ value: number }>(
-      'SELECT value FROM counters WHERE name = ?',
-      ['invoice_counter']
+      'SELECT value FROM counters WHERE tenant_id = ? AND name = ?',
+      [tenantId, counterKey]
     );
 
     let nextNumber = 1;
@@ -74,14 +92,14 @@ export class InvoiceNumberService {
       nextNumber = counter.value + 1;
       // Update counter
       databaseService.executeQuery(
-        'UPDATE counters SET value = ?, updated_at = DATETIME(\'now\') WHERE name = ?',
-        [nextNumber, 'invoice_counter']
+        'UPDATE counters SET value = ?, updated_at = DATETIME(\'now\') WHERE tenant_id = ? AND name = ?',
+        [nextNumber, tenantId, counterKey]
       );
     } else {
       // Create counter if it doesn't exist
       databaseService.executeQuery(
-        'INSERT INTO counters (name, value, created_at, updated_at) VALUES (?, ?, DATETIME(\'now\'), DATETIME(\'now\'))',
-        ['invoice_counter', nextNumber]
+        'INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (?, ?, ?, DATETIME(\'now\'), DATETIME(\'now\'))',
+        [tenantId, counterKey, nextNumber]
       );
     }
 
@@ -103,11 +121,12 @@ export class InvoiceNumberService {
   /**
    * Check if invoice number already exists
    */
-  async isInvoiceNumberUnique(invoiceNumber: string): Promise<boolean> {
+  async isInvoiceNumberUnique(invoiceNumber: string, tenantId?: number): Promise<boolean> {
     try {
+      const scopedTenantId = this.normalizeTenantId(tenantId);
       const existing = await databaseService.getOne(
-        'SELECT id FROM invoices WHERE invoice_number = ?',
-        [invoiceNumber]
+        'SELECT id FROM invoices WHERE tenant_id = ? AND invoice_number = ?',
+        [scopedTenantId, invoiceNumber]
       );
       return !existing;
     } catch (error) {
@@ -119,16 +138,18 @@ export class InvoiceNumberService {
   /**
    * Get next invoice number without incrementing counter (preview)
    */
-  async getNextInvoiceNumber(): Promise<string> {
+  async getNextInvoiceNumber(tenantId?: number): Promise<string> {
     try {
-      const settings = await this.getInvoiceNumberSettings();
+      const scopedTenantId = this.normalizeTenantId(tenantId);
+      const settings = await this.getInvoiceNumberSettings(scopedTenantId);
+      const counterKey = this.getCounterKey(scopedTenantId);
       const counter = await databaseService.getOne<{ value: number }>(
-        'SELECT value FROM counters WHERE name = ?',
-        ['invoice_counter']
+        'SELECT value FROM counters WHERE tenant_id = ? AND name = ?',
+        [scopedTenantId, counterKey]
       );
 
       const nextNumber = counter ? counter.value + 1 : 1;
-      return this.formatInvoiceNumber(nextNumber, settings.prefix);
+      return this.formatInvoiceNumber(nextNumber, this.getInvoicePrefix(settings.prefix, scopedTenantId));
     } catch (error) {
       console.error('Error getting next invoice number:', error);
       throw new Error('Failed to get next invoice number');

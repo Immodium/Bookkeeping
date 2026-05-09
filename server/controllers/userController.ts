@@ -69,7 +69,8 @@ const extractUserDataPayload = (payload: unknown): Record<string, unknown> => {
  * Get all users
  */
 export const getAllUsers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const users = await userService.getAllUsers();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const users = await userService.getAllUsers({}, tenantId);
   
   res.json({ success: true, data: users });
 });
@@ -90,7 +91,8 @@ export const getUserById = asyncHandler(async (req: Request, res: Response): Pro
     throw new ValidationError('Invalid user ID');
   }
 
-  const user = await userService.getUserById(userId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const user = await userService.getUserById(userId, tenantId);
 
   if (!user) {
     throw new NotFoundError('User');
@@ -109,7 +111,8 @@ export const getUserByEmail = asyncHandler(async (req: Request, res: Response): 
     throw new ValidationError('Valid email is required');
   }
 
-  const user = await userService.getUserByEmail(email);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const user = await userService.getUserByEmail(email, tenantId);
 
   if (!user) {
     throw new NotFoundError('User');
@@ -128,7 +131,8 @@ export const getUserByGoogleId = asyncHandler(async (req: Request, res: Response
     throw new ValidationError('Valid Google ID is required');
   }
 
-  const user = await userService.getUserByGoogleId(googleId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const user = await userService.getUserByGoogleId(googleId, tenantId);
 
   if (!user) {
     throw new NotFoundError('User');
@@ -141,6 +145,7 @@ export const getUserByGoogleId = asyncHandler(async (req: Request, res: Response
  * Create new user
  */
 export const createUser = asyncHandler(async (req: Request<object, object, CreateUserRequest>, res: Response): Promise<void> => {
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const bodyUserData = extractUserDataPayload(req.body);
 
   try {
@@ -217,8 +222,8 @@ export const createUser = asyncHandler(async (req: Request<object, object, Creat
       sanitizedCreatePayload.account_locked_until = createPayload.account_locked_until;
     }
 
-    const userId = await userService.createUser(sanitizedCreatePayload);
-    const createdUser = await userService.getUserById(userId);
+    const userId = await userService.createUser({ ...sanitizedCreatePayload, tenant_id: tenantId });
+    const createdUser = await userService.getUserById(userId, tenantId);
 
     const effectivePassword = typeof rawPassword === 'string' ? rawPassword.trim() : null;
     if (createdUser && effectivePassword) {
@@ -236,7 +241,7 @@ export const createUser = asyncHandler(async (req: Request<object, object, Creat
           </div>
         `,
         text: `Hello ${createdUser.name},\n\nYou have been invited to Slimbooks.\nEmail: ${createdUser.email}\nTemporary password: ${effectivePassword}\n\nPlease sign in and change your password immediately.`
-      });
+      }, { tenantId });
     }
 
     res.status(201).json({ 
@@ -268,6 +273,7 @@ export const updateUser = asyncHandler(async (req: Request<{id: string}, UpdateU
   }
 
   try {
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
     // Convert and validate user data for service layer
     const convertedUserData: Partial<{
       name: string;
@@ -306,7 +312,7 @@ export const updateUser = asyncHandler(async (req: Request<{id: string}, UpdateU
       }
     }
 
-    const changes = await userService.updateUser(userId, convertedUserData);
+    const changes = await userService.updateUser(userId, convertedUserData, tenantId);
 
     res.json({ 
       success: true, 
@@ -345,7 +351,8 @@ export const deleteUser = asyncHandler(async (req: Request, res: Response): Prom
   }
   
   try {
-    const changes = await userService.deleteUser(userId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await userService.deleteUser(userId, tenantId);
 
     res.json({ 
       success: true, 
@@ -374,7 +381,8 @@ export const updateUserLoginAttempts = asyncHandler(async (req: Request, res: Re
   }
 
   try {
-    const success = await userService.updateUserLoginAttempts(userId, attempts, lockedUntil);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const success = await userService.updateUserLoginAttempts(userId, attempts, lockedUntil, tenantId);
     res.json({ success: true, data: { success } });
   } catch (error) {
     const errorMessage = (error as Error).message;
@@ -396,7 +404,8 @@ export const updateUserLastLogin = asyncHandler(async (req: Request, res: Respon
   }
 
   try {
-    const success = await userService.updateUserLastLogin(userId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const success = await userService.updateUserLastLogin(userId, tenantId);
     res.json({ success: true, data: { success } });
   } catch (error) {
     const errorMessage = (error as Error).message;
@@ -428,7 +437,8 @@ export const updateLoginAttemptsByUserId = asyncHandler(async (req: Request, res
     throw new ValidationError('Valid attempts count is required');
   }
 
-  const success = await userService.updateUserLoginAttempts(userId, attempts, lockedUntil);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const success = await userService.updateUserLoginAttempts(userId, attempts, lockedUntil, tenantId);
   res.json({ success: true, data: { success } });
 });
 
@@ -448,7 +458,8 @@ export const updateLastLoginByUserId = asyncHandler(async (req: Request, res: Re
     throw new ValidationError('Invalid user ID');
   }
 
-  const success = await userService.updateUserLastLogin(userId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const success = await userService.updateUserLastLogin(userId, tenantId);
   res.json({ success: true, data: { success } });
 });
 
@@ -468,7 +479,8 @@ export const verifyUserEmail = asyncHandler(async (req: Request, res: Response):
     throw new ValidationError('Invalid user ID');
   }
 
-  const success = await userService.verifyUserEmail(userId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const success = await userService.verifyUserEmail(userId, tenantId);
   res.json({ success: true, message: 'Email verified successfully' });
 });
 
@@ -476,6 +488,7 @@ export const verifyUserEmail = asyncHandler(async (req: Request, res: Response):
  * Admin: Invite user and send temporary password
  */
 export const inviteUser = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const bodyRecord = (req.body && typeof req.body === 'object')
     ? (req.body as Record<string, unknown>)
     : {};
@@ -522,8 +535,8 @@ export const inviteUser = asyncHandler(async (req: Request, res: Response): Prom
     createPayload.username = usernameValue;
   }
 
-  const userId = await userService.createUser(createPayload);
-  const createdUser = await userService.getUserById(userId);
+  const userId = await userService.createUser({ ...createPayload, tenant_id: tenantId });
+  const createdUser = await userService.getUserById(userId, tenantId);
 
   if (createdUser && sendInviteEmail) {
     await emailProviderService.sendEmail({
@@ -540,7 +553,7 @@ export const inviteUser = asyncHandler(async (req: Request, res: Response): Prom
         </div>
       `,
       text: `Hello ${createdUser.name},\n\nYou were invited to Slimbooks.\nEmail: ${createdUser.email}\nTemporary password: ${tempPassword}\n\nPlease log in and change your password.`
-    });
+    }, { tenantId });
   }
 
   res.status(201).json({
@@ -557,6 +570,7 @@ export const inviteUser = asyncHandler(async (req: Request, res: Response): Prom
  * Admin: Reset user password directly
  */
 export const resetUserPasswordByAdmin = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const { id } = req.params;
   if (!id) {
     throw new ValidationError('User ID is required');
@@ -571,14 +585,14 @@ export const resetUserPasswordByAdmin = asyncHandler(async (req: Request, res: R
     throw new ValidationError('newPassword must be at least 8 characters');
   }
 
-  const user = await userService.getUserById(userId);
+  const user = await userService.getUserById(userId, tenantId);
   if (!user) {
     throw new NotFoundError('User');
   }
 
   const passwordHash = await bcrypt.hash(newPassword.trim(), authConfig.bcryptRounds);
-  await userService.updateUser(userId, { password_hash: passwordHash });
-  await userService.updateUserLoginAttempts(userId, 0, null);
+  await userService.updateUser(userId, { password_hash: passwordHash }, tenantId);
+  await userService.updateUserLoginAttempts(userId, 0, null, tenantId);
 
   if (sendEmail) {
     await emailProviderService.sendEmail({
@@ -594,7 +608,7 @@ export const resetUserPasswordByAdmin = asyncHandler(async (req: Request, res: R
         </div>
       `,
       text: `Hello ${user.name},\n\nAn administrator reset your Slimbooks password.\nNew password: ${newPassword}\n\nPlease log in and update it immediately.`
-    });
+    }, { tenantId });
   }
 
   res.json({

@@ -261,7 +261,7 @@ export class InvoiceService {
     // Auto-generate invoice number if not provided
     let invoiceNumber = invoiceData.invoice_number;
     if (!invoiceNumber) {
-      invoiceNumber = await invoiceNumberService.generateInvoiceNumber();
+      invoiceNumber = await invoiceNumberService.generateInvoiceNumber(scopedTenantId);
     } else {
       // Check if provided invoice number already exists
       const invoiceExists = databaseService.getOne<{ id: number }>(

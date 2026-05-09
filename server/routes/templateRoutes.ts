@@ -11,6 +11,7 @@ import {
 } from '../controllers/templateController.js';
 import {
   requireAuth,
+  requireRole,
   validateRequest,
   validationSets
 } from '../middleware/index.js';
@@ -19,6 +20,7 @@ const router: Router = Router();
 
 // All template routes require authentication
 router.use(requireAuth);
+router.use(requireRole(['admin', 'project_manager']));
 
 // Get all templates
 router.get('/', getAllTemplates);

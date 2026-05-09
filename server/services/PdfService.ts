@@ -13,6 +13,9 @@ import { InvoiceWithClient } from '../types/index.js';
 export class PdfService {
   private browser: Browser | null = null;
   private isInitialized: boolean = false;
+  private normalizeTenantId(tenantId?: number): number {
+    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+  }
 
   /**
    * Initialize the PDF service with a browser instance
@@ -44,7 +47,7 @@ export class PdfService {
   /**
    * Generate PDF from invoice URL with settings-aware styling
    */
-  async generateInvoicePDF(invoiceId: number, token: string, options: any = {}): Promise<Buffer> {
+  async generateInvoicePDF(invoiceId: number, token: string, options: any = {}, tenantId?: number): Promise<Buffer> {
     if (!this.isInitialized) {
       await this.initialize();
     }
@@ -156,7 +159,7 @@ export class PdfService {
       });
 
       // Get PDF format from options or settings
-      const pdfOptions = await this.getPDFOptionsFromSettings();
+      const pdfOptions = await this.getPDFOptionsFromSettings(tenantId);
       const mergedOptions = {
         ...pdfOptions,
         ...options
@@ -264,23 +267,24 @@ export class PdfService {
   /**
    * Get invoice with client information for PDF generation
    */
-  async getInvoiceForPDF(invoiceId: number): Promise<InvoiceWithClient | null> {
+  async getInvoiceForPDF(invoiceId: number, tenantId?: number): Promise<InvoiceWithClient | null> {
     if (!invoiceId || typeof invoiceId !== 'number') {
       throw new Error('Valid invoice ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getOne<InvoiceWithClient>(`
       SELECT i.*, c.name as client_name 
       FROM invoices i 
       LEFT JOIN clients c ON i.client_id = c.id
-      WHERE i.id = ?
-    `, [invoiceId]);
+      WHERE i.id = ? AND i.tenant_id = ?
+    `, [invoiceId, scopedTenantId]);
   }
 
   /**
    * Get PDF generation options based on user settings
    */
-  async getPDFOptionsFromSettings(): Promise<{
+  async getPDFOptionsFromSettings(tenantId?: number): Promise<{
     format: string;
     printBackground: boolean;
     margin: {
@@ -291,11 +295,16 @@ export class PdfService {
     };
   }> {
     try {
+      const scopedTenantId = this.normalizeTenantId(tenantId);
       // Get appearance settings for PDF format preference
-      const pdfFormatSettings = await settingsService.getSettingByKey('pdf_format');
+      const pdfFormatSettings =
+        (await settingsService.getSettingByKey('format.pdf_format', scopedTenantId)) ||
+        (await settingsService.getSettingByKey('pdf_format', scopedTenantId));
       
       // Get company settings for branding
-      const companySettings = await settingsService.getSettingByKey('company_settings');
+      const companySettings =
+        (await settingsService.getSettingByKey('company.company_settings', scopedTenantId)) ||
+        (await settingsService.getSettingByKey('company_settings', scopedTenantId));
 
       // Default PDF options
       const options = {
@@ -310,31 +319,19 @@ export class PdfService {
       };
 
       // Apply format preference if set
-      if ((pdfFormatSettings as any)?.value) {
-        try {
-          const formatSetting = JSON.parse((pdfFormatSettings as any).value);
-          if (formatSetting.format) {
-            options.format = formatSetting.format;
-          }
-        } catch (e) {
-          // Use default if parsing fails
-          console.warn('Failed to parse PDF format settings, using defaults');
-        }
+      const formatSetting = typeof pdfFormatSettings === 'object' && pdfFormatSettings !== null
+        ? pdfFormatSettings as Record<string, unknown>
+        : null;
+      if (formatSetting?.format && typeof formatSetting.format === 'string') {
+        options.format = formatSetting.format;
       }
 
       // Apply company-specific settings if needed
-      if ((companySettings as any)?.value) {
-        try {
-          const company = JSON.parse((companySettings as any).value);
-          // Could add company-specific PDF options here
-          // e.g., letterhead margins, custom page size, etc.
-          if (company.pdfOptions) {
-            Object.assign(options, company.pdfOptions);
-          }
-        } catch (e) {
-          // Use defaults if parsing fails
-          console.warn('Failed to parse company settings for PDF, using defaults');
-        }
+      const company = typeof companySettings === 'object' && companySettings !== null
+        ? companySettings as Record<string, unknown>
+        : null;
+      if (company?.pdfOptions && typeof company.pdfOptions === 'object') {
+        Object.assign(options, company.pdfOptions as Record<string, unknown>);
       }
 
       return options;
@@ -357,14 +354,19 @@ export class PdfService {
   /**
    * Get PDF format setting
    */
-  async getPDFFormat(): Promise<string> {
+  async getPDFFormat(tenantId?: number): Promise<string> {
     try {
+      const scopedTenantId = this.normalizeTenantId(tenantId);
       // Get appearance settings for PDF format preference
-      const formatSetting = await settingsService.getSettingByKey('pdf_format');
+      const formatSetting =
+        (await settingsService.getSettingByKey('format.pdf_format', scopedTenantId)) ||
+        (await settingsService.getSettingByKey('pdf_format', scopedTenantId));
 
-      if ((formatSetting as any)?.value) {
-        const parsed = JSON.parse((formatSetting as any).value);
-        return parsed.format || 'A4';
+      if (formatSetting && typeof formatSetting === 'object') {
+        const format = (formatSetting as Record<string, unknown>).format;
+        if (typeof format === 'string') {
+          return format;
+        }
       }
       
       return 'A4';
@@ -377,25 +379,29 @@ export class PdfService {
   /**
    * Update PDF format setting
    */
-  async updatePDFFormat(format: string): Promise<void> {
+  async updatePDFFormat(format: string, tenantId?: number): Promise<void> {
     const validFormats = ['A4', 'Letter', 'Legal', 'A3', 'A5'];
     if (!validFormats.includes(format)) {
       throw new Error('Invalid PDF format');
     }
 
     const formatData = { format };
-    await settingsService.updateFormatSettings({ pdf_format: formatData });
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    await settingsService.updateFormatSettings({ 'format.pdf_format': formatData }, scopedTenantId);
   }
 
   /**
    * Get company settings for PDF branding
    */
-  async getCompanySettingsForPDF(): Promise<any | null> {
+  async getCompanySettingsForPDF(tenantId?: number): Promise<any | null> {
     try {
-      const companySettings = await settingsService.getSettingByKey('company_settings');
+      const scopedTenantId = this.normalizeTenantId(tenantId);
+      const companySettings =
+        (await settingsService.getSettingByKey('company.company_settings', scopedTenantId)) ||
+        (await settingsService.getSettingByKey('company_settings', scopedTenantId));
       
-      if ((companySettings as any)?.value) {
-        return JSON.parse((companySettings as any).value);
+      if (companySettings && typeof companySettings === 'object') {
+        return companySettings;
       }
       
       return null;
@@ -408,12 +414,12 @@ export class PdfService {
   /**
    * Validate invoice exists and user has access
    */
-  async validateInvoiceAccess(invoiceId: number, userId?: number): Promise<InvoiceWithClient> {
+  async validateInvoiceAccess(invoiceId: number, userId?: number, tenantId?: number): Promise<InvoiceWithClient> {
     if (!invoiceId || typeof invoiceId !== 'number') {
       throw new Error('Valid invoice ID is required');
     }
 
-    const invoice = await this.getInvoiceForPDF(invoiceId);
+    const invoice = await this.getInvoiceForPDF(invoiceId, tenantId);
     
     if (!invoice) {
       throw new Error('Invoice not found');
@@ -428,18 +434,22 @@ export class PdfService {
   /**
    * Check if invoice exists
    */
-  async invoiceExists(invoiceId: number): Promise<boolean> {
+  async invoiceExists(invoiceId: number, tenantId?: number): Promise<boolean> {
     if (!invoiceId || typeof invoiceId !== 'number') {
       return false;
     }
-
-    return databaseService.exists('invoices', 'id', invoiceId);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const invoice = databaseService.getOne<{ id: number }>(
+      'SELECT id FROM invoices WHERE id = ? AND tenant_id = ?',
+      [invoiceId, scopedTenantId]
+    );
+    return Boolean(invoice);
   }
 
   /**
    * Get invoice basic info (without client join)
    */
-  async getInvoiceBasicInfo(invoiceId: number): Promise<{
+  async getInvoiceBasicInfo(invoiceId: number, tenantId?: number): Promise<{
     id: number;
     invoice_number: string;
     client_id: number;
@@ -451,6 +461,7 @@ export class PdfService {
       throw new Error('Valid invoice ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getOne<{
       id: number;
       invoice_number: string;
@@ -461,8 +472,8 @@ export class PdfService {
     }>(`
       SELECT id, invoice_number, client_id, status, amount, created_at
       FROM invoices
-      WHERE id = ?
-    `, [invoiceId]);
+      WHERE id = ? AND tenant_id = ?
+    `, [invoiceId, scopedTenantId]);
   }
 
   /**

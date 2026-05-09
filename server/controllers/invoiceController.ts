@@ -437,7 +437,8 @@ export const checkInvoiceNumberExists = asyncHandler(async (req: Request, res: R
  */
 export const generateInvoiceNumber = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   try {
-    const invoiceNumber = await invoiceNumberService.generateInvoiceNumber();
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const invoiceNumber = await invoiceNumberService.generateInvoiceNumber(tenantId);
 
     res.json({
       success: true,
@@ -454,7 +455,8 @@ export const generateInvoiceNumber = asyncHandler(async (req: Request, res: Resp
  */
 export const previewNextInvoiceNumber = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   try {
-    const invoiceNumber = await invoiceNumberService.getNextInvoiceNumber();
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const invoiceNumber = await invoiceNumberService.getNextInvoiceNumber(tenantId);
 
     res.json({
       success: true,

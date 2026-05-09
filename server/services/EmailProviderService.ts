@@ -71,8 +71,17 @@ export class EmailProviderService {
     return EmailProviderService.instance;
   }
 
+  private extractTenantId(overrides?: Record<string, unknown>): number {
+    const raw = overrides?.tenantId;
+    if (typeof raw === 'number' && Number.isInteger(raw) && raw > 0) {
+      return raw;
+    }
+    return 1;
+  }
+
   private async resolveSettings(overrides?: Record<string, unknown>): Promise<ResolvedEmailSettings> {
-    const saved = await settingsService.getSettingByKey('email.email_settings');
+    const tenantId = this.extractTenantId(overrides);
+    const saved = await settingsService.getSettingByKey('email.email_settings', tenantId);
     const persisted = (saved && typeof saved === 'object' ? saved : {}) as Record<string, unknown>;
     const settings = { ...persisted, ...(overrides || {}) };
 

@@ -101,10 +101,11 @@ export class SettingsService {
   /**
    * Update format-related settings (PDF format, date format, currency format, etc.)
    */
-  async updateFormatSettings(settings: Record<string, any>): Promise<boolean> {
+  async updateFormatSettings(settings: Record<string, any>, tenantId?: number): Promise<boolean> {
     if (!settings || typeof settings !== 'object') {
       throw new Error('Format settings object is required');
     }
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const formatCategory = 'format';
     const operations = () => {
@@ -114,8 +115,8 @@ export class SettingsService {
         const jsonValue = typeof value === 'string' ? value : JSON.stringify(value);
         
         databaseService.executeQuery(
-          'INSERT OR REPLACE INTO settings (key, value, category) VALUES (?, ?, ?)', 
-          [key, jsonValue, formatCategory]
+          'INSERT OR REPLACE INTO settings (tenant_id, key, value, category) VALUES (?, ?, ?, ?)', 
+          [scopedTenantId, key, jsonValue, formatCategory]
         );
       }
     };

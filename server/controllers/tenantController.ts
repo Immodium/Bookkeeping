@@ -96,12 +96,25 @@ export const updateTenantSubscription = asyncHandler(async (req: Request, res: R
   }
 
   try {
-    await subscriptionService.setTenantSubscription(tenantId, {
-      planCode: payload.planCode,
-      status: payload.status,
-      currentPeriodEnd: payload.currentPeriodEnd,
-      cancelAtPeriodEnd: payload.cancelAtPeriodEnd
-    });
+    const updateInput: {
+      planCode: string;
+      status?: 'trialing' | 'active' | 'past_due' | 'suspended' | 'canceled';
+      currentPeriodEnd?: string;
+      cancelAtPeriodEnd?: boolean;
+    } = {
+      planCode: payload.planCode
+    };
+    if (payload.status !== undefined) {
+      updateInput.status = payload.status;
+    }
+    if (payload.currentPeriodEnd !== undefined) {
+      updateInput.currentPeriodEnd = payload.currentPeriodEnd;
+    }
+    if (payload.cancelAtPeriodEnd !== undefined) {
+      updateInput.cancelAtPeriodEnd = payload.cancelAtPeriodEnd;
+    }
+
+    await subscriptionService.setTenantSubscription(tenantId, updateInput);
     const updated = await subscriptionService.getTenantSubscription(tenantId);
     res.json({
       success: true,

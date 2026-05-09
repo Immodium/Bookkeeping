@@ -26,7 +26,7 @@ describe('SettingsService tenant-safe upsert behavior', () => {
     expect(executeMock).toHaveBeenCalledTimes(1);
     expect(executeMock).toHaveBeenCalledWith(
       expect.stringContaining('WHERE tenant_id = ? AND key = ?'),
-      ['UTC', 'general.timezone', 2, 'general.timezone']
+      ['UTC', 'general', 2, 'general.timezone']
     );
   });
 

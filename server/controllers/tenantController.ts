@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { asyncHandler, NotFoundError, ValidationError } from '../middleware/index.js';
 import { tenantService } from '../services/TenantService.js';
+import { subscriptionService } from '../services/SubscriptionService.js';
 import type { Tenant } from '../types/index.js';
 
 type TenantStatus = Tenant['status'];
@@ -59,6 +60,82 @@ export const createTenant = asyncHandler(async (req: Request, res: Response): Pr
       success: true,
       data: result,
       message: 'Tenant created successfully'
+    });
+  } catch (error) {
+    throw new ValidationError((error as Error).message);
+  }
+});
+
+export const getTenantSubscription = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const tenantId = parseTenantId(req.params.id);
+  const subscription = await subscriptionService.getTenantSubscription(tenantId);
+  if (!subscription) {
+    throw new NotFoundError('Tenant subscription');
+  }
+
+  res.json({
+    success: true,
+    data: subscription
+  });
+});
+
+export const updateTenantSubscription = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const tenantId = parseTenantId(req.params.id);
+  const payload = (req.body?.subscriptionData || req.body) as {
+    planCode?: string;
+    status?: 'trialing' | 'active' | 'past_due' | 'suspended' | 'canceled';
+    currentPeriodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
+  };
+
+  if (!payload || typeof payload !== 'object') {
+    throw new ValidationError('Subscription payload is required');
+  }
+  if (!payload.planCode) {
+    throw new ValidationError('Subscription plan code is required');
+  }
+
+  try {
+    await subscriptionService.setTenantSubscription(tenantId, {
+      planCode: payload.planCode,
+      status: payload.status,
+      currentPeriodEnd: payload.currentPeriodEnd,
+      cancelAtPeriodEnd: payload.cancelAtPeriodEnd
+    });
+    const updated = await subscriptionService.getTenantSubscription(tenantId);
+    res.json({
+      success: true,
+      data: updated,
+      message: 'Tenant subscription updated successfully'
+    });
+  } catch (error) {
+    throw new ValidationError((error as Error).message);
+  }
+});
+
+export const getTenantEntitlements = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const tenantId = parseTenantId(req.params.id);
+  const entitlements = await subscriptionService.getTenantEntitlements(tenantId);
+  res.json({
+    success: true,
+    data: entitlements
+  });
+});
+
+export const updateTenantEntitlements = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const tenantId = parseTenantId(req.params.id);
+  const payload = (req.body?.entitlements || req.body) as Record<string, unknown>;
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new ValidationError('Entitlements payload must be an object');
+  }
+
+  try {
+    await subscriptionService.updateTenantEntitlements(tenantId, payload, req.user?.id);
+    const entitlements = await subscriptionService.getTenantEntitlements(tenantId);
+    res.json({
+      success: true,
+      data: entitlements,
+      message: 'Tenant entitlements updated successfully'
     });
   } catch (error) {
     throw new ValidationError((error as Error).message);

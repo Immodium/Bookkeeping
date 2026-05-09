@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { authConfig } from '../config/index.js';
 import { authService } from '../services/AuthService.js';
+import { subscriptionService } from '../services/SubscriptionService.js';
 import { tenantService } from '../services/TenantService.js';
 import { User, UserPublic, UserRole } from '../types/index.js';
 import { hasRole as roleListHasRole, hasAnyRole } from '../auth/roles.js';
@@ -321,6 +322,47 @@ const PERMISSION_ROLE_MAP: Record<PermissionKey, UserRole[]> = {
 export const requirePermission = (permission: PermissionKey) => {
   const roles = PERMISSION_ROLE_MAP[permission] || PERMISSION_ROLE_MAP.all;
   return requireRole(roles);
+};
+
+export const requireEntitlement = (
+  entitlementKey: string,
+  options: { allowAdminBypass?: boolean } = {}
+) => {
+  const { allowAdminBypass = false } = options;
+
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+      return;
+    }
+
+    if (allowAdminBypass && roleListHasRole(req.user.roles, 'admin')) {
+      next();
+      return;
+    }
+
+    const tenantId = req.tenantId || req.user.tenant_id || 1;
+    try {
+      const enabled = await subscriptionService.isFeatureEnabled(tenantId, entitlementKey);
+      if (!enabled) {
+        res.status(403).json({
+          success: false,
+          error: `Feature disabled by subscription entitlement: ${entitlementKey}`
+        });
+        return;
+      }
+      next();
+    } catch (error) {
+      console.error('Entitlement check error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to validate feature entitlement'
+      });
+    }
+  };
 };
 
 /**

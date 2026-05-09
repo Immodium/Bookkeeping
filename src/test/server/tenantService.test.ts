@@ -6,7 +6,8 @@ vi.mock('../../../server/core/DatabaseService.js', () => ({
     getMany: vi.fn(),
     getNextId: vi.fn(),
     executeQuery: vi.fn(),
-    executeTransaction: vi.fn((callback: () => void) => callback())
+    executeTransaction: vi.fn((callback: () => void) => callback()),
+    tableExists: vi.fn().mockReturnValue(false)
   }
 }));
 

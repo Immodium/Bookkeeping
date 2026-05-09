@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { authConfig } from '../config/index.js';
 import { databaseService } from '../core/DatabaseService.js';
 import { Tenant, UserRole } from '../types/index.js';
+import { subscriptionService } from './SubscriptionService.js';
 
 export interface TenantAdminBootstrapInput {
   name: string;
@@ -216,6 +217,9 @@ export class TenantService {
       adminUserId = this.createTenantAdminUser(tenantId, admin);
       this.initializeTenantCounters(tenantId);
     });
+
+    // Seed tenant onto a default subscription lifecycle if billing tables exist.
+    await subscriptionService.bootstrapTenantSubscription(tenantId);
 
     return { tenantId, adminUserId, slug };
   }

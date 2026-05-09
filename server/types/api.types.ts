@@ -117,6 +117,19 @@ export interface UpdateTenantStatusRequest {
   status: Tenant['status'];
 }
 
+export interface UpdateTenantSubscriptionRequest {
+  subscriptionData: {
+    planCode: string;
+    status?: 'trialing' | 'active' | 'past_due' | 'suspended' | 'canceled';
+    currentPeriodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
+  };
+}
+
+export interface UpdateTenantEntitlementsRequest {
+  entitlements: Record<string, unknown>;
+}
+
 // Client API types
 export interface CreateClientRequest {
   clientData: Omit<Client, 'id' | 'created_at' | 'updated_at'>;

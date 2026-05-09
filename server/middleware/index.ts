@@ -9,6 +9,7 @@ export {
   requireRoles,
   requireAnyRole,
   requirePermission,
+  requireEntitlement,
   userHasRole,
   requireEmailVerified,
   optionalAuth,

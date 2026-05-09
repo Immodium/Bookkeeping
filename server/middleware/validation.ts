@@ -269,6 +269,52 @@ export const validationSets = {
       .isIn(['active', 'suspended', 'deleted'])
       .withMessage('Tenant status must be one of: active, suspended, deleted')
   ] as ValidationChain[],
+
+  updateTenantSubscription: [
+    validationRules.id,
+    body('subscriptionData.planCode')
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 64 })
+      .withMessage('Plan code must be between 2 and 64 characters'),
+    body('planCode')
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 64 })
+      .withMessage('Plan code must be between 2 and 64 characters'),
+    body('subscriptionData.status')
+      .optional()
+      .isIn(['trialing', 'active', 'past_due', 'suspended', 'canceled'])
+      .withMessage('Invalid subscription status'),
+    body('status')
+      .optional()
+      .isIn(['trialing', 'active', 'past_due', 'suspended', 'canceled'])
+      .withMessage('Invalid subscription status'),
+    body('subscriptionData.currentPeriodEnd')
+      .optional()
+      .isISO8601()
+      .withMessage('currentPeriodEnd must be a valid ISO date'),
+    body('currentPeriodEnd')
+      .optional()
+      .isISO8601()
+      .withMessage('currentPeriodEnd must be a valid ISO date'),
+    body('subscriptionData.cancelAtPeriodEnd')
+      .optional()
+      .isBoolean()
+      .withMessage('cancelAtPeriodEnd must be a boolean'),
+    body('cancelAtPeriodEnd')
+      .optional()
+      .isBoolean()
+      .withMessage('cancelAtPeriodEnd must be a boolean')
+  ] as ValidationChain[],
+
+  updateTenantEntitlements: [
+    validationRules.id,
+    body('entitlements')
+      .optional()
+      .isObject()
+      .withMessage('entitlements must be an object')
+  ] as ValidationChain[],
   
   updateUser: [
     validationRules.id,

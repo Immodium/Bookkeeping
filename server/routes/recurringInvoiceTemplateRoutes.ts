@@ -18,6 +18,7 @@ import {
 } from '../controllers/recurringInvoiceTemplateController.js';
 import {
   requireAuth,
+  requireEntitlement,
   requireRole,
   validateRequest,
   validationSets
@@ -28,6 +29,7 @@ const router: Router = Router();
 // All recurring invoice template routes require authentication
 router.use(requireAuth);
 router.use(requireRole(['admin', 'project_manager']));
+router.use(requireEntitlement('billing.recurring_invoices'));
 
 // Get all recurring templates
 router.get('/', getAllRecurringTemplates);

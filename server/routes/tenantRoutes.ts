@@ -5,8 +5,12 @@ import {
   createTenant,
   deleteTenant,
   getTenantById,
+  getTenantEntitlements,
+  getTenantSubscription,
   listTenants,
   suspendTenant,
+  updateTenantEntitlements,
+  updateTenantSubscription,
   updateTenantStatus
 } from '../controllers/tenantController.js';
 import { serverConfig } from '../config/index.js';
@@ -51,6 +55,10 @@ router.use(requirePlatformAdmin);
 router.get('/', listTenants);
 router.get('/:id', [validationRules.id], validateRequest, getTenantById);
 router.post('/', validationSets.createTenant, validateRequest, createTenant);
+router.get('/:id/subscription', [validationRules.id], validateRequest, getTenantSubscription);
+router.put('/:id/subscription', validationSets.updateTenantSubscription, validateRequest, updateTenantSubscription);
+router.get('/:id/entitlements', [validationRules.id], validateRequest, getTenantEntitlements);
+router.put('/:id/entitlements', validationSets.updateTenantEntitlements, validateRequest, updateTenantEntitlements);
 router.post('/:id/bootstrap-admin', validationSets.bootstrapTenantAdmin, validateRequest, bootstrapTenantAdmin);
 router.patch('/:id/status', validationSets.updateTenantStatus, validateRequest, updateTenantStatus);
 router.patch('/:id/suspend', [validationRules.id], validateRequest, suspendTenant);

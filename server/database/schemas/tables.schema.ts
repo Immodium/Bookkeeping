@@ -20,6 +20,76 @@ const tenantsSchema: TableSchema = {
 };
 
 /**
+ * SaaS subscription plan catalog
+ */
+const subscriptionPlansSchema: TableSchema = {
+  name: 'subscription_plans',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'code', type: 'TEXT', constraints: ['UNIQUE NOT NULL'] },
+    { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'status', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'active'"] },
+    { name: 'price_cents', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
+    { name: 'currency', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'usd'"] },
+    { name: 'billing_interval', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'monthly'"] },
+    { name: 'trial_days', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
+    { name: 'features_json', type: 'TEXT' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ]
+};
+
+/**
+ * Tenant subscription lifecycle state
+ */
+const tenantSubscriptionsSchema: TableSchema = {
+  name: 'tenant_subscriptions',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'plan_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'status', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'active'"] },
+    { name: 'started_at', type: 'TEXT' },
+    { name: 'current_period_start', type: 'TEXT' },
+    { name: 'current_period_end', type: 'TEXT' },
+    { name: 'cancel_at_period_end', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
+    { name: 'canceled_at', type: 'TEXT' },
+    { name: 'provider', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'internal'"] },
+    { name: 'provider_customer_id', type: 'TEXT' },
+    { name: 'provider_subscription_id', type: 'TEXT' },
+    { name: 'metadata_json', type: 'TEXT' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
+    'FOREIGN KEY (plan_id) REFERENCES subscription_plans (id) ON DELETE RESTRICT',
+    'UNIQUE (tenant_id)'
+  ]
+};
+
+/**
+ * Tenant entitlement overrides (plan defaults can be overridden here)
+ */
+const tenantEntitlementsSchema: TableSchema = {
+  name: 'tenant_entitlements',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'key', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'value', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'source', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'manual'"] },
+    { name: 'updated_by_user_id', type: 'INTEGER' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
+    'UNIQUE (tenant_id, key)'
+  ]
+};
+
+/**
  * User authentication and management table
  */
 const usersSchema: TableSchema = {
@@ -381,6 +451,9 @@ const countersSchema: TableSchema = {
 // Export all schemas
 export const tableSchemas: TableSchema[] = [
   tenantsSchema,
+  subscriptionPlansSchema,
+  tenantSubscriptionsSchema,
+  tenantEntitlementsSchema,
   usersSchema,
   clientsSchema,
   invoiceDesignTemplatesSchema, // Create design templates before invoices due to FK
@@ -418,6 +491,67 @@ export const createTables = (db: IDatabase): void => {
   db.executeQuery(`
     INSERT OR IGNORE INTO tenants (id, name, slug, status)
     VALUES (1, 'Default Tenant', 'default', 'active')
+  `);
+
+  const trialFeatures = JSON.stringify({
+    'reports.enabled': true,
+    'billing.recurring_invoices': true,
+    'billing.max_users': 3,
+    'billing.max_clients': 25,
+    'billing.max_invoices_per_month': 200
+  });
+  const starterFeatures = JSON.stringify({
+    'reports.enabled': true,
+    'billing.recurring_invoices': true,
+    'billing.max_users': 25,
+    'billing.max_clients': 1000,
+    'billing.max_invoices_per_month': 10000
+  });
+
+  db.executeQuery(
+    `
+      INSERT OR IGNORE INTO subscription_plans (
+        code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
+      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, datetime('now'), datetime('now'))
+    `,
+    ['trial', 'Trial', 0, 14, trialFeatures]
+  );
+  db.executeQuery(
+    `
+      INSERT OR IGNORE INTO subscription_plans (
+        code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
+      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, datetime('now'), datetime('now'))
+    `,
+    ['starter', 'Starter', 2900, 0, starterFeatures]
+  );
+
+  db.executeQuery(`
+    INSERT OR IGNORE INTO tenant_subscriptions (
+      tenant_id,
+      plan_id,
+      status,
+      started_at,
+      current_period_start,
+      current_period_end,
+      cancel_at_period_end,
+      provider,
+      created_at,
+      updated_at
+    )
+    SELECT
+      1,
+      sp.id,
+      'active',
+      datetime('now'),
+      datetime('now'),
+      datetime('now', '+1 month'),
+      0,
+      'internal',
+      datetime('now'),
+      datetime('now')
+    FROM subscription_plans sp
+    WHERE sp.code = 'starter'
+    LIMIT 1
   `);
 
   // Create token tables for password reset and email verification

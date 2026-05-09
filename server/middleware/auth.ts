@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { authConfig } from '../config/index.js';
 import { authService } from '../services/AuthService.js';
+import { tenantService } from '../services/TenantService.js';
 import { User, UserPublic, UserRole } from '../types/index.js';
 import { hasRole as roleListHasRole, hasAnyRole } from '../auth/roles.js';
 
@@ -101,6 +102,14 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       // Attach user to request
       req.user = user;
       const resolvedTenantId = user.tenant_id || 1;
+      const tenantIsActive = await tenantService.isTenantActive(resolvedTenantId);
+      if (!tenantIsActive) {
+        res.status(403).json({
+          success: false,
+          error: 'Tenant is suspended or unavailable'
+        });
+        return;
+      }
       if (decoded.tenantId && decoded.tenantId !== resolvedTenantId) {
         res.status(401).json({
           success: false,
@@ -218,7 +227,14 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
         const decoded = jwt.verify(token, authConfig.jwtSecret) as JWTPayload;
         const user = await authService.getUserById(decoded.userId);
         
-        if (user && (!user.account_locked_until || new Date(user.account_locked_until) <= new Date())) {
+        const tenantIsActive = user
+          ? await tenantService.isTenantActive(user.tenant_id || 1)
+          : false;
+        if (
+          user &&
+          (!user.account_locked_until || new Date(user.account_locked_until) <= new Date()) &&
+          tenantIsActive
+        ) {
           req.user = user;
           req.tenantId = user.tenant_id || 1;
         }

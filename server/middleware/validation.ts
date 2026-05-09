@@ -179,6 +179,96 @@ export const validationSets = {
       })
       .withMessage(`Password must be between ${validationConfig.password.minLength} and ${validationConfig.password.maxLength} characters`)
   ] as ValidationChain[],
+
+  createTenant: [
+    body('tenantData.name')
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 120 })
+      .withMessage('Tenant name must be between 2 and 120 characters'),
+    body('name')
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 120 })
+      .withMessage('Tenant name must be between 2 and 120 characters'),
+    body('tenantData.slug')
+      .optional()
+      .trim()
+      .matches(/^[a-zA-Z0-9-]+$/)
+      .withMessage('Tenant slug may only include letters, numbers, and hyphens'),
+    body('slug')
+      .optional()
+      .trim()
+      .matches(/^[a-zA-Z0-9-]+$/)
+      .withMessage('Tenant slug may only include letters, numbers, and hyphens'),
+    body('tenantData.admin.name')
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: validationConfig.maxFieldLengths.name })
+      .withMessage(`Admin name must be between 2 and ${validationConfig.maxFieldLengths.name} characters`),
+    body('admin.name')
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: validationConfig.maxFieldLengths.name })
+      .withMessage(`Admin name must be between 2 and ${validationConfig.maxFieldLengths.name} characters`),
+    body('tenantData.admin.email')
+      .optional()
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Admin email must be a valid email address'),
+    body('admin.email')
+      .optional()
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Admin email must be a valid email address'),
+    body('tenantData.admin.password')
+      .optional()
+      .isLength({ min: validationConfig.password.minLength, max: validationConfig.password.maxLength })
+      .withMessage(`Admin password must be between ${validationConfig.password.minLength} and ${validationConfig.password.maxLength} characters`),
+    body('admin.password')
+      .optional()
+      .isLength({ min: validationConfig.password.minLength, max: validationConfig.password.maxLength })
+      .withMessage(`Admin password must be between ${validationConfig.password.minLength} and ${validationConfig.password.maxLength} characters`)
+  ] as ValidationChain[],
+
+  bootstrapTenantAdmin: [
+    validationRules.id,
+    body('admin.name')
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: validationConfig.maxFieldLengths.name })
+      .withMessage(`Admin name must be between 2 and ${validationConfig.maxFieldLengths.name} characters`),
+    body('name')
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: validationConfig.maxFieldLengths.name })
+      .withMessage(`Admin name must be between 2 and ${validationConfig.maxFieldLengths.name} characters`),
+    body('admin.email')
+      .optional()
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Admin email must be a valid email address'),
+    body('email')
+      .optional()
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Admin email must be a valid email address'),
+    body('admin.password')
+      .optional()
+      .isLength({ min: validationConfig.password.minLength, max: validationConfig.password.maxLength })
+      .withMessage(`Admin password must be between ${validationConfig.password.minLength} and ${validationConfig.password.maxLength} characters`),
+    body('password')
+      .optional()
+      .isLength({ min: validationConfig.password.minLength, max: validationConfig.password.maxLength })
+      .withMessage(`Admin password must be between ${validationConfig.password.minLength} and ${validationConfig.password.maxLength} characters`)
+  ] as ValidationChain[],
+
+  updateTenantStatus: [
+    validationRules.id,
+    body('status')
+      .isIn(['active', 'suspended', 'deleted'])
+      .withMessage('Tenant status must be one of: active, suspended, deleted')
+  ] as ValidationChain[],
   
   updateUser: [
     validationRules.id,

@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { authConfig } from '../config/index.js';
 import { authService } from '../services/AuthService.js';
+import { tenantService } from '../services/TenantService.js';
 import { tokenService } from '../services/TokenService.js';
 import { emailProviderService } from '../services/EmailProviderService.js';
 import { 
@@ -49,6 +50,11 @@ export const login = asyncHandler(async (req: Request<object, LoginResponse, Log
   
   if (!user) {
     throw new AuthenticationError('Invalid email or password');
+  }
+
+  const tenantIsActive = await tenantService.isTenantActive(user.tenant_id || 1);
+  if (!tenantIsActive) {
+    throw new AuthenticationError('Tenant is suspended or unavailable');
   }
 
   // Check if account is locked
@@ -244,6 +250,11 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response): Pro
 
     if (!user) {
       throw new NotFoundError('User');
+    }
+
+    const tenantIsActive = await tenantService.isTenantActive(user.tenant_id || 1);
+    if (!tenantIsActive) {
+      throw new AuthenticationError('Tenant is suspended or unavailable');
     }
 
     if (user.email_verified) {

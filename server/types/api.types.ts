@@ -6,6 +6,7 @@ import {
   User, 
   UserPublic, 
   UserRole,
+  Tenant,
   Client, 
   Invoice, 
   Template, 
@@ -90,6 +91,30 @@ export interface UpdateUserResponse {
     changes: number;
   };
   message: string;
+}
+
+export interface CreateTenantRequest {
+  tenantData: {
+    name: string;
+    slug?: string;
+    admin: {
+      name: string;
+      email: string;
+      password: string;
+    };
+  };
+}
+
+export interface BootstrapTenantAdminRequest {
+  admin: {
+    name: string;
+    email: string;
+    password: string;
+  };
+}
+
+export interface UpdateTenantStatusRequest {
+  status: Tenant['status'];
 }
 
 // Client API types

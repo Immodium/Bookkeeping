@@ -28,9 +28,9 @@ export class UserService {
     const reconciledNextId = maxUserId + 1;
     databaseService.executeQuery(
       `
-        INSERT INTO counters (name, value)
-        VALUES ('users', ?)
-        ON CONFLICT(name) DO UPDATE SET value = excluded.value
+        INSERT INTO counters (tenant_id, name, value, created_at, updated_at)
+        VALUES (1, 'users', ?, datetime('now'), datetime('now'))
+        ON CONFLICT(tenant_id, name) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
       `,
       [reconciledNextId]
     );

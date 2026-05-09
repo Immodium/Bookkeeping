@@ -16,6 +16,20 @@ export class SettingsService {
     return 1;
   }
 
+  private upsertSetting(tenantId: number, key: string, value: string, category: string): void {
+    const updateResult = databaseService.executeQuery(
+      "UPDATE settings SET value = ?, category = ?, updated_at = datetime('now') WHERE tenant_id = ? AND key = ?",
+      [value, category, tenantId, key]
+    );
+
+    if (updateResult.changes === 0) {
+      databaseService.executeQuery(
+        "INSERT INTO settings (tenant_id, key, value, category, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))",
+        [tenantId, key, value, category]
+      );
+    }
+  }
+
   /**
    * Get all settings by category (using key prefix since table doesn't have category column)
    */
@@ -90,10 +104,7 @@ export class SettingsService {
     
     const jsonValue = typeof value === 'string' ? value : JSON.stringify(value);
     
-    databaseService.executeQuery(
-      'INSERT OR REPLACE INTO settings (tenant_id, key, value, category) VALUES (?, ?, ?, ?)',
-      [scopedTenantId, settingKey, jsonValue, category]
-    );
+    this.upsertSetting(scopedTenantId, settingKey, jsonValue, category);
     
     return true;
   }
@@ -114,10 +125,7 @@ export class SettingsService {
         
         const jsonValue = typeof value === 'string' ? value : JSON.stringify(value);
         
-        databaseService.executeQuery(
-          'INSERT OR REPLACE INTO settings (tenant_id, key, value, category) VALUES (?, ?, ?, ?)', 
-          [scopedTenantId, key, jsonValue, formatCategory]
-        );
+        this.upsertSetting(scopedTenantId, key, jsonValue, formatCategory);
       }
     };
 
@@ -147,10 +155,7 @@ export class SettingsService {
         const settingKey = key.includes('.') ? key : `${category}.${key}`;
         const jsonValue = typeof value === 'string' ? value : JSON.stringify(value);
         
-        databaseService.executeQuery(
-          'INSERT OR REPLACE INTO settings (tenant_id, key, value, category) VALUES (?, ?, ?, ?)', 
-          [scopedTenantId, settingKey, jsonValue, category]
-        );
+        this.upsertSetting(scopedTenantId, settingKey, jsonValue, category);
       }
     };
 
@@ -278,10 +283,7 @@ export class SettingsService {
     // Use transaction for bulk updates
     const operations = () => {
       for (const setting of flatSettings) {
-        databaseService.executeQuery(
-          'INSERT OR REPLACE INTO settings (tenant_id, key, value, category) VALUES (?, ?, ?, ?)', 
-          [scopedTenantId, setting.key, setting.value, 'project']
-        );
+        this.upsertSetting(scopedTenantId, setting.key, setting.value, 'project');
       }
     };
 

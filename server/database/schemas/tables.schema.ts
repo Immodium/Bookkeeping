@@ -89,7 +89,7 @@ const invoicesSchema: TableSchema = {
   columns: [
     { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
-    { name: 'invoice_number', type: 'TEXT', constraints: ['UNIQUE NOT NULL'] },
+    { name: 'invoice_number', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'client_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'design_template_id', type: 'INTEGER' },
     { name: 'recurring_template_id', type: 'INTEGER' },
@@ -132,7 +132,8 @@ const invoicesSchema: TableSchema = {
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
     'FOREIGN KEY (client_id) REFERENCES clients (id) ON DELETE CASCADE',
     'FOREIGN KEY (design_template_id) REFERENCES invoice_design_templates (id) ON DELETE SET NULL',
-    'FOREIGN KEY (recurring_template_id) REFERENCES recurring_invoice_templates (id) ON DELETE SET NULL'
+    'FOREIGN KEY (recurring_template_id) REFERENCES recurring_invoice_templates (id) ON DELETE SET NULL',
+    'UNIQUE (tenant_id, invoice_number)'
   ]
 };
 
@@ -304,7 +305,7 @@ const settingsSchema: TableSchema = {
   columns: [
     { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
-    { name: 'key', type: 'TEXT', constraints: ['UNIQUE NOT NULL'] },
+    { name: 'key', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'value', type: 'TEXT' },
     { name: 'type', type: 'TEXT', constraints: ['DEFAULT \'string\''] },
     { name: 'description', type: 'TEXT' },
@@ -313,7 +314,8 @@ const settingsSchema: TableSchema = {
     { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
   ],
   constraints: [
-    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
+    'UNIQUE (tenant_id, key)'
   ]
 };
 
@@ -325,14 +327,15 @@ const projectSettingsSchema: TableSchema = {
   columns: [
     { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
-    { name: 'key', type: 'TEXT', constraints: ['UNIQUE NOT NULL'] },
+    { name: 'key', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'value', type: 'TEXT' },
     { name: 'enabled', type: 'INTEGER', constraints: ['DEFAULT 1'] },
     { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
     { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
   ],
   constraints: [
-    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
+    'UNIQUE (tenant_id, key)'
   ]
 };
 
@@ -364,13 +367,14 @@ const countersSchema: TableSchema = {
   columns: [
     { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
-    { name: 'name', type: 'TEXT', constraints: ['UNIQUE NOT NULL'] },
+    { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'value', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
     { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
     { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
   ],
   constraints: [
-    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
+    'UNIQUE (tenant_id, name)'
   ]
 };
 

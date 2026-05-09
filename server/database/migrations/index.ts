@@ -11,6 +11,7 @@ import { up as migration006 } from './006_add_user_roles.js';
 import { up as migration007 } from './007_add_roles_json_to_users.js';
 import { up as migration008 } from './008_add_multi_tenant_foundation.js';
 import { up as migration009 } from './009_add_tenant_to_report_schedules.js';
+import { up as migration010 } from './010_add_tenant_scoped_unique_constraints.js';
 
 interface Migration {
   id: string;
@@ -66,6 +67,11 @@ const migrations: Migration[] = [
     id: '009',
     name: 'add_tenant_to_report_schedules',
     up: migration009
+  },
+  {
+    id: '010',
+    name: 'add_tenant_scoped_unique_constraints',
+    up: migration010
   }
 ];
 

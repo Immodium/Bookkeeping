@@ -33,6 +33,7 @@ export interface ServerConfig {
   enableSampleData: boolean;
   allowDatabaseImportExport: boolean;
   cronJobSecret: string | undefined;
+  billingWebhookSecret: string | undefined;
   rateLimiting: {
     windowMs: number;
     maxRequests: number;
@@ -216,6 +217,7 @@ export const serverConfig: ServerConfig = {
     process.env.ALLOW_DATABASE_IMPORT_EXPORT === 'true' ||
     (process.env.NODE_ENV !== 'production' && process.env.SAAS_MODE !== 'true'),
   cronJobSecret: process.env.CRON_JOB_SECRET,
+  billingWebhookSecret: process.env.BILLING_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET,
 
   // Rate limiting configuration
   rateLimiting: {

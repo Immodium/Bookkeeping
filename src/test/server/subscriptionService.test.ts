@@ -93,4 +93,44 @@ describe('SubscriptionService entitlement lifecycle', () => {
     const executeQueryMock = databaseService.executeQuery as unknown as ReturnType<typeof vi.fn>;
     expect(executeQueryMock).not.toHaveBeenCalled();
   });
+
+  it('normalizes webhook status and applies suspension update', async () => {
+    const getOneMock = databaseService.getOne as unknown as ReturnType<typeof vi.fn>;
+    getOneMock
+      .mockReturnValueOnce({
+        id: 88,
+        code: 'starter',
+        name: 'Starter',
+        status: 'active',
+        price_cents: 2900,
+        currency: 'usd',
+        billing_interval: 'monthly',
+        trial_days: 0,
+        features_json: '{}'
+      })
+      .mockReturnValueOnce({ id: 321 });
+
+    const executeQueryMock = databaseService.executeQuery as unknown as ReturnType<typeof vi.fn>;
+    executeQueryMock.mockReturnValue({ changes: 1, lastInsertRowid: 0 });
+
+    const result = await subscriptionService.syncSubscriptionFromWebhook({
+      provider: 'stripe',
+      eventType: 'customer.subscription.updated',
+      data: {
+        tenantId: 9,
+        planCode: 'starter',
+        status: 'cancelled'
+      }
+    });
+
+    expect(result).toEqual({ tenantId: 9 });
+    expect(executeQueryMock).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE tenant_subscriptions'),
+      expect.arrayContaining([88, 'canceled'])
+    );
+    expect(executeQueryMock).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE tenants SET status = 'suspended'"),
+      [9]
+    );
+  });
 });

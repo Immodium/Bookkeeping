@@ -20,6 +20,7 @@ import templateRoutes from './templateRoutes.js';
 import recurringInvoiceTemplateRoutes from './recurringInvoiceTemplateRoutes.js';
 import databaseRoutes from './databaseRoutes.js';
 import tenantRoutes from './tenantRoutes.js';
+import billingRoutes from './billingRoutes.js';
 
 const router: Router = Router();
 
@@ -41,6 +42,7 @@ router.use('/api/templates', templateRoutes);
 router.use('/api/recurring-templates', recurringInvoiceTemplateRoutes);
 router.use('/api/db', databaseRoutes);
 router.use('/api/tenants', tenantRoutes);
+router.use('/api/billing', billingRoutes);
 
 // Health check routes
 router.use('/api/health', healthRoutes);

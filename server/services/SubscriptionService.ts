@@ -44,11 +44,31 @@ export interface TenantSubscriptionDetails extends TenantSubscriptionRecord {
   metadata: Record<string, unknown>;
 }
 
-interface SubscriptionUpdateInput {
+export interface SubscriptionUpdateInput {
   planCode: string;
   status?: TenantSubscriptionStatus;
   currentPeriodEnd?: string;
   cancelAtPeriodEnd?: boolean;
+  provider?: string;
+  providerCustomerId?: string;
+  providerSubscriptionId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface BillingWebhookEvent {
+  provider?: string;
+  eventType: string;
+  data: {
+    tenantId?: number;
+    metadata?: Record<string, unknown>;
+    providerCustomerId?: string;
+    providerSubscriptionId?: string;
+    planCode?: string;
+    status?: string;
+    currentPeriodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
+    entitlements?: Record<string, unknown>;
+  };
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -82,6 +102,41 @@ export class SubscriptionService {
     } catch {
       return value;
     }
+  }
+
+  private normalizeSubscriptionStatus(value?: string): TenantSubscriptionStatus {
+    const normalized = (value || 'active').trim().toLowerCase();
+    const statusMap: Record<string, TenantSubscriptionStatus> = {
+      trialing: 'trialing',
+      trial: 'trialing',
+      active: 'active',
+      past_due: 'past_due',
+      pastdue: 'past_due',
+      unpaid: 'past_due',
+      suspended: 'suspended',
+      paused: 'suspended',
+      canceled: 'canceled',
+      cancelled: 'canceled',
+      terminated: 'canceled'
+    };
+    return statusMap[normalized] || 'active';
+  }
+
+  private resolveTenantIdFromWebhook(event: BillingWebhookEvent): number | null {
+    if (event.data.tenantId && Number.isInteger(event.data.tenantId) && event.data.tenantId > 0) {
+      return event.data.tenantId;
+    }
+    const metadataTenantId = event.data.metadata?.tenantId ?? event.data.metadata?.tenant_id;
+    if (typeof metadataTenantId === 'number' && Number.isInteger(metadataTenantId) && metadataTenantId > 0) {
+      return metadataTenantId;
+    }
+    if (typeof metadataTenantId === 'string') {
+      const parsed = parseInt(metadataTenantId, 10);
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    return null;
   }
 
   async getAvailablePlans(): Promise<SubscriptionPlanRecord[]> {
@@ -167,6 +222,8 @@ export class SubscriptionService {
     const status = input.status || 'active';
     const currentPeriodEnd = input.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const cancelAtPeriodEnd = input.cancelAtPeriodEnd ? 1 : 0;
+    const provider = input.provider || 'internal';
+    const metadataJson = input.metadata ? JSON.stringify(input.metadata) : null;
 
     const existing = databaseService.getOne<{ id: number }>(
       'SELECT id FROM tenant_subscriptions WHERE tenant_id = ?',
@@ -182,12 +239,33 @@ export class SubscriptionService {
             status = ?,
             current_period_end = ?,
             cancel_at_period_end = ?,
+            provider = ?,
+            provider_customer_id = COALESCE(?, provider_customer_id),
+            provider_subscription_id = COALESCE(?, provider_subscription_id),
+            metadata_json = COALESCE(?, metadata_json),
             canceled_at = CASE WHEN ? = 1 THEN COALESCE(canceled_at, datetime('now')) ELSE NULL END,
             updated_at = datetime('now')
           WHERE tenant_id = ?
         `,
-        [plan.id, status, currentPeriodEnd, cancelAtPeriodEnd, cancelAtPeriodEnd, scopedTenantId]
+        [
+          plan.id,
+          status,
+          currentPeriodEnd,
+          cancelAtPeriodEnd,
+          provider,
+          input.providerCustomerId || null,
+          input.providerSubscriptionId || null,
+          metadataJson,
+          cancelAtPeriodEnd,
+          scopedTenantId
+        ]
       );
+      if (scopedTenantId !== 1 && (status === 'suspended' || status === 'canceled')) {
+        databaseService.executeQuery(
+          "UPDATE tenants SET status = 'suspended', updated_at = datetime('now') WHERE id = ?",
+          [scopedTenantId]
+        );
+      }
       return true;
     }
 
@@ -202,12 +280,35 @@ export class SubscriptionService {
           current_period_end,
           cancel_at_period_end,
           provider,
+          provider_customer_id,
+          provider_subscription_id,
+          metadata_json,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'internal', ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
-      [scopedTenantId, plan.id, status, now, now, currentPeriodEnd, cancelAtPeriodEnd, now, now]
+      [
+        scopedTenantId,
+        plan.id,
+        status,
+        now,
+        now,
+        currentPeriodEnd,
+        cancelAtPeriodEnd,
+        provider,
+        input.providerCustomerId || null,
+        input.providerSubscriptionId || null,
+        metadataJson,
+        now,
+        now
+      ]
     );
+    if (scopedTenantId !== 1 && (status === 'suspended' || status === 'canceled')) {
+      databaseService.executeQuery(
+        "UPDATE tenants SET status = 'suspended', updated_at = datetime('now') WHERE id = ?",
+        [scopedTenantId]
+      );
+    }
     return true;
   }
 
@@ -348,6 +449,43 @@ export class SubscriptionService {
       return true;
     }
     return true;
+  }
+
+  async syncSubscriptionFromWebhook(event: BillingWebhookEvent): Promise<{ tenantId: number }> {
+    if (!event?.eventType || !event.data || !isObject(event.data)) {
+      throw new Error('Invalid webhook event payload');
+    }
+
+    const tenantId = this.resolveTenantIdFromWebhook(event);
+    if (!tenantId) {
+      throw new Error('Webhook payload missing tenant identifier');
+    }
+
+    const normalizedStatus = this.normalizeSubscriptionStatus(event.data.status);
+    const planCode = event.data.planCode || (normalizedStatus === 'trialing' ? 'trial' : 'starter');
+    await this.setTenantSubscription(tenantId, {
+      planCode,
+      status: normalizedStatus,
+      currentPeriodEnd: event.data.currentPeriodEnd,
+      cancelAtPeriodEnd: event.data.cancelAtPeriodEnd,
+      provider: event.provider || 'external',
+      providerCustomerId: event.data.providerCustomerId,
+      providerSubscriptionId: event.data.providerSubscriptionId,
+      metadata: event.data.metadata
+    });
+
+    if (event.data.entitlements && isObject(event.data.entitlements)) {
+      await this.updateTenantEntitlements(tenantId, event.data.entitlements);
+    }
+
+    if (tenantId !== 1 && (normalizedStatus === 'active' || normalizedStatus === 'trialing')) {
+      databaseService.executeQuery(
+        "UPDATE tenants SET status = CASE WHEN status = 'deleted' THEN status ELSE 'active' END, updated_at = datetime('now') WHERE id = ?",
+        [tenantId]
+      );
+    }
+
+    return { tenantId };
   }
 }
 

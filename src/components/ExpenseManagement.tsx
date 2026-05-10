@@ -321,6 +321,42 @@ export const ExpenseManagement: React.FC = () => {
     }
   };
 
+  const handleBulkApprove = async (expenseIds: number[]) => {
+    if (expenseIds.length === 0) {
+      return;
+    }
+
+    try {
+      const approvalResults = await Promise.allSettled(
+        expenseIds.map((expenseId) =>
+          apiPut(`/api/expenses/${expenseId}`, { expenseData: { status: 'approved' } })
+        )
+      );
+
+      let approvedCount = 0;
+      let failedCount = 0;
+
+      approvalResults.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value.success) {
+          approvedCount++;
+        } else {
+          failedCount++;
+        }
+      });
+
+      if (approvedCount > 0) {
+        toast.success(`${approvedCount} expense(s) approved successfully`);
+        await loadExpenses();
+      }
+
+      if (failedCount > 0) {
+        toast.error(`Failed to approve ${failedCount} expense(s)`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to approve selected expenses');
+    }
+  };
+
   const handleBulkCategorize = async (expenseIds: number[], category: string) => {
     try {
       const response = await apiPost('/api/expenses/bulk-update', { expenseIds, updates: { category } });
@@ -610,6 +646,7 @@ export const ExpenseManagement: React.FC = () => {
               onDeleteExpense={handleDeleteExpense}
               onViewExpense={handleViewExpense}
               onApproveExpense={handleApproveExpense}
+              onBulkApprove={handleBulkApprove}
               onBulkDelete={handleBulkDelete}
               onBulkCategorize={handleBulkCategorize}
               onBulkChangeMerchant={handleBulkChangeMerchant}

@@ -5,6 +5,8 @@ import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { authConfig } from '../config/index.js';
 import { authService } from '../services/AuthService.js';
+import { subscriptionService } from '../services/SubscriptionService.js';
+import { tenantService } from '../services/TenantService.js';
 import { User, UserPublic, UserRole } from '../types/index.js';
 import { hasRole as roleListHasRole, hasAnyRole } from '../auth/roles.js';
 
@@ -13,12 +15,14 @@ declare global {
   namespace Express {
     interface Request {
       user?: UserPublic;
+      tenantId?: number;
     }
   }
 }
 
 interface JWTPayload {
   userId: number;
+  tenantId?: number;
   email: string;
   role: UserRole;
   roles?: UserRole[];
@@ -28,6 +32,7 @@ interface JWTPayload {
 
 interface TokenGenerationUser {
   id: number;
+  tenant_id?: number;
   email: string;
   role: UserRole;
   roles?: UserRole[];
@@ -80,7 +85,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       
       // Check if email verification is required
       try {
-        const requireEmailVerification = await authService.isEmailVerificationRequired();
+        const requireEmailVerification = await authService.isEmailVerificationRequired(user.tenant_id || 1);
         
         if (requireEmailVerification && !user.email_verified) {
           res.status(403).json({
@@ -97,6 +102,23 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       
       // Attach user to request
       req.user = user;
+      const resolvedTenantId = user.tenant_id || 1;
+      const tenantIsActive = await tenantService.isTenantActive(resolvedTenantId);
+      if (!tenantIsActive) {
+        res.status(403).json({
+          success: false,
+          error: 'Tenant is suspended or unavailable'
+        });
+        return;
+      }
+      if (decoded.tenantId && decoded.tenantId !== resolvedTenantId) {
+        res.status(401).json({
+          success: false,
+          error: 'Invalid token - tenant mismatch'
+        });
+        return;
+      }
+      req.tenantId = resolvedTenantId;
       next();
       
     } catch (jwtError) {
@@ -206,8 +228,16 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
         const decoded = jwt.verify(token, authConfig.jwtSecret) as JWTPayload;
         const user = await authService.getUserById(decoded.userId);
         
-        if (user && (!user.account_locked_until || new Date(user.account_locked_until) <= new Date())) {
+        const tenantIsActive = user
+          ? await tenantService.isTenantActive(user.tenant_id || 1)
+          : false;
+        if (
+          user &&
+          (!user.account_locked_until || new Date(user.account_locked_until) <= new Date()) &&
+          tenantIsActive
+        ) {
           req.user = user;
+          req.tenantId = user.tenant_id || 1;
         }
       } catch (jwtError) {
         // Invalid token, but that's okay for optional auth
@@ -230,6 +260,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
 export const generateToken = (user: TokenGenerationUser): string => {
   const payload: JWTPayload = {
     userId: user.id,
+    tenantId: user.tenant_id || 1,
     email: user.email,
     role: user.role,
     ...(user.roles ? { roles: user.roles } : {}),
@@ -291,6 +322,47 @@ const PERMISSION_ROLE_MAP: Record<PermissionKey, UserRole[]> = {
 export const requirePermission = (permission: PermissionKey) => {
   const roles = PERMISSION_ROLE_MAP[permission] || PERMISSION_ROLE_MAP.all;
   return requireRole(roles);
+};
+
+export const requireEntitlement = (
+  entitlementKey: string,
+  options: { allowAdminBypass?: boolean } = {}
+) => {
+  const { allowAdminBypass = false } = options;
+
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!req.user) {
+      res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+      return;
+    }
+
+    if (allowAdminBypass && roleListHasRole(req.user.roles, 'admin')) {
+      next();
+      return;
+    }
+
+    const tenantId = req.tenantId || req.user.tenant_id || 1;
+    try {
+      const enabled = await subscriptionService.isFeatureEnabled(tenantId, entitlementKey);
+      if (!enabled) {
+        res.status(403).json({
+          success: false,
+          error: `Feature disabled by subscription entitlement: ${entitlementKey}`
+        });
+        return;
+      }
+      next();
+    } catch (error) {
+      console.error('Entitlement check error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to validate feature entitlement'
+      });
+    }
+  };
 };
 
 /**

@@ -6,6 +6,7 @@ import {
   User, 
   UserPublic, 
   UserRole,
+  Tenant,
   Client, 
   Invoice, 
   Template, 
@@ -90,6 +91,43 @@ export interface UpdateUserResponse {
     changes: number;
   };
   message: string;
+}
+
+export interface CreateTenantRequest {
+  tenantData: {
+    name: string;
+    slug?: string;
+    admin: {
+      name: string;
+      email: string;
+      password: string;
+    };
+  };
+}
+
+export interface BootstrapTenantAdminRequest {
+  admin: {
+    name: string;
+    email: string;
+    password: string;
+  };
+}
+
+export interface UpdateTenantStatusRequest {
+  status: Tenant['status'];
+}
+
+export interface UpdateTenantSubscriptionRequest {
+  subscriptionData: {
+    planCode: string;
+    status?: 'trialing' | 'active' | 'past_due' | 'suspended' | 'canceled';
+    currentPeriodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
+  };
+}
+
+export interface UpdateTenantEntitlementsRequest {
+  entitlements: Record<string, unknown>;
 }
 
 // Client API types
@@ -493,6 +531,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: UserPublic;
+      tenantId?: number;
       rateLimitInfo?: {
         limit: number;
         remaining: number;

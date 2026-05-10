@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { authConfig } from '../config/index.js';
 import { authService } from '../services/AuthService.js';
+import { tenantService } from '../services/TenantService.js';
 import { tokenService } from '../services/TokenService.js';
 import { emailProviderService } from '../services/EmailProviderService.js';
 import { 
@@ -28,6 +29,7 @@ import { User, UserPublic } from '../types/index.js';
 
 interface DecodedToken {
   userId: number;
+  tenantId?: number;
   email: string;
   exp?: number;
   iat?: number;
@@ -48,6 +50,11 @@ export const login = asyncHandler(async (req: Request<object, LoginResponse, Log
   
   if (!user) {
     throw new AuthenticationError('Invalid email or password');
+  }
+
+  const tenantIsActive = await tenantService.isTenantActive(user.tenant_id || 1);
+  if (!tenantIsActive) {
+    throw new AuthenticationError('Tenant is suspended or unavailable');
   }
 
   // Check if account is locked
@@ -71,7 +78,7 @@ export const login = asyncHandler(async (req: Request<object, LoginResponse, Log
   await authService.updateLoginAttempts(user.id, true);
 
   // Check if email verification is required
-  const requireEmailVerification = await authService.isEmailVerificationRequired();
+  const requireEmailVerification = await authService.isEmailVerificationRequired(user.tenant_id || 1);
   if (requireEmailVerification && !user.email_verified) {
     res.status(403).json({
       success: false,
@@ -174,7 +181,7 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
       </div>
     `,
     text: `Password reset request\n\nHello ${user.name || 'there'},\n\nReset your password using this link:\n${resetLink}\n\nIf you did not request this, you can ignore this email.`
-  });
+  }, { tenantId: user.tenant_id || 1 });
 
   res.json({
     success: true,
@@ -243,6 +250,11 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response): Pro
 
     if (!user) {
       throw new NotFoundError('User');
+    }
+
+    const tenantIsActive = await tenantService.isTenantActive(user.tenant_id || 1);
+    if (!tenantIsActive) {
+      throw new AuthenticationError('Tenant is suspended or unavailable');
     }
 
     if (user.email_verified) {

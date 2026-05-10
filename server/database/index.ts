@@ -44,6 +44,7 @@ export const initializeDatabase = async (includeSampleData = false): Promise<voi
     db.executeQuery(`
       CREATE TABLE IF NOT EXISTS report_schedules (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id INTEGER NOT NULL DEFAULT 1,
         name TEXT NOT NULL,
         report_type TEXT NOT NULL,
         frequency TEXT NOT NULL,
@@ -60,6 +61,13 @@ export const initializeDatabase = async (includeSampleData = false): Promise<voi
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `);
+    const reportScheduleColumns = db.getMany<{ name: string }>('PRAGMA table_info(report_schedules)');
+    const hasTenantColumn = reportScheduleColumns.some((column) => column.name === 'tenant_id');
+    if (!hasTenantColumn) {
+      db.executeQuery('ALTER TABLE report_schedules ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1');
+      db.executeQuery('UPDATE report_schedules SET tenant_id = 1 WHERE tenant_id IS NULL');
+    }
+    db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_tenant_id ON report_schedules(tenant_id)');
     db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_report_type ON report_schedules(report_type)');
     db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_is_active ON report_schedules(is_active)');
     db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_next_run_at ON report_schedules(next_run_at)');

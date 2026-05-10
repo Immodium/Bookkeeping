@@ -2,7 +2,7 @@
 // Handles report generation and management endpoints
 
 import { Router, Request, Response } from 'express';
-import { requireAuth, requireRole } from '../middleware/index.js';
+import { requireAuth, requireEntitlement, requireRole } from '../middleware/index.js';
 import {
   reportService,
   ReportData,
@@ -14,11 +14,13 @@ const router: Router = Router();
 // All report routes require authentication
 router.use(requireAuth);
 router.use(requireRole(['admin', 'client_manager', 'project_manager']));
+router.use(requireEntitlement('reports.enabled'));
 
 // Get all reports
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const reports = await reportService.getAllReports();
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const reports = await reportService.getAllReports(tenantId);
 
     res.json({
       success: true,
@@ -37,7 +39,8 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 router.get('/schedules', async (req: Request, res: Response): Promise<void> => {
   try {
     const reportType = typeof req.query.reportType === 'string' ? req.query.reportType : undefined;
-    const data = await reportService.getReportSchedules(reportType);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const data = await reportService.getReportSchedules(reportType, tenantId);
     res.json({
       success: true,
       data
@@ -79,7 +82,8 @@ router.post('/schedules', async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const result = await reportService.createReportSchedule(scheduleData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const result = await reportService.createReportSchedule(scheduleData, tenantId);
     res.status(201).json({
       success: true,
       result
@@ -106,7 +110,8 @@ router.delete('/schedules/:id', async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const result = await reportService.deleteReportSchedule(scheduleId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const result = await reportService.deleteReportSchedule(scheduleId, tenantId);
     res.json({
       success: true,
       result
@@ -134,7 +139,8 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const report = await reportService.getReportById(reportId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const report = await reportService.getReportById(reportId, tenantId);
 
     if (!report) {
       res.status(404).json({
@@ -170,7 +176,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const result = await reportService.createReport(reportData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const result = await reportService.createReport(reportData, tenantId);
 
     res.json({
       success: true,
@@ -208,7 +215,8 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const result = await reportService.updateReport(reportId, reportData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const result = await reportService.updateReport(reportId, reportData, tenantId);
 
     res.json({
       success: true,
@@ -237,7 +245,8 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const result = await reportService.deleteReport(reportId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const result = await reportService.deleteReport(reportId, tenantId);
 
     res.json({
       success: true,
@@ -265,12 +274,14 @@ router.post('/generate/profit-loss', async (req: Request, res: Response): Promis
       return;
     }
 
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
     const data = await reportService.generateProfitLossData(
       startDate,
       endDate,
       accountingMethod || 'accrual',
       preset,
-      breakdownPeriod || 'quarterly'
+      breakdownPeriod || 'quarterly',
+      tenantId
     );
 
     res.json({
@@ -299,7 +310,8 @@ router.post('/generate/expense', async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const data = await reportService.generateExpenseData(startDate, endDate);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const data = await reportService.generateExpenseData(startDate, endDate, tenantId);
 
     res.json({
       success: true,
@@ -327,7 +339,8 @@ router.post('/generate/invoice', async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    const data = await reportService.generateInvoiceData(startDate, endDate);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const data = await reportService.generateInvoiceData(startDate, endDate, tenantId);
 
     res.json({
       success: true,
@@ -346,8 +359,9 @@ router.post('/generate/invoice', async (req: Request, res: Response): Promise<vo
 router.post('/generate/client', async (req: Request, res: Response): Promise<void> => {
   try {
     const { startDate, endDate } = req.body;
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
 
-    const data = await reportService.generateClientData(startDate, endDate);
+    const data = await reportService.generateClientData(startDate, endDate, tenantId);
 
     res.json({
       success: true,

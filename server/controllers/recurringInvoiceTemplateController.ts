@@ -34,7 +34,8 @@ interface RecurringInvoiceTemplateRequest {
  * Get all recurring invoice templates
  */
 export const getAllRecurringTemplates = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const templates = await recurringInvoiceTemplateService.getAllRecurringTemplates();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const templates = await recurringInvoiceTemplateService.getAllRecurringTemplates(tenantId);
   res.json({ success: true, data: templates });
 });
 
@@ -42,7 +43,8 @@ export const getAllRecurringTemplates = asyncHandler(async (req: Request, res: R
  * Get active recurring invoice templates
  */
 export const getActiveRecurringTemplates = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const templates = await recurringInvoiceTemplateService.getActiveRecurringTemplates();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const templates = await recurringInvoiceTemplateService.getActiveRecurringTemplates(tenantId);
   res.json({ success: true, data: templates });
 });
 
@@ -50,7 +52,8 @@ export const getActiveRecurringTemplates = asyncHandler(async (req: Request, res
  * Get templates due for processing
  */
 export const getTemplatesDueForProcessing = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const templates = await recurringInvoiceTemplateService.getTemplatesDueForProcessing();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const templates = await recurringInvoiceTemplateService.getTemplatesDueForProcessing(tenantId);
   res.json({ success: true, data: templates });
 });
 
@@ -65,7 +68,8 @@ export const getRecurringTemplateById = asyncHandler(async (req: Request, res: R
   }
 
   const templateId = parseInt(id, 10);
-  const template = await recurringInvoiceTemplateService.getRecurringTemplateById(templateId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const template = await recurringInvoiceTemplateService.getRecurringTemplateById(templateId, tenantId);
 
   if (!template) {
     throw new NotFoundError('Recurring template not found');
@@ -85,7 +89,8 @@ export const getRecurringTemplatesByClientId = asyncHandler(async (req: Request,
   }
 
   const clientIdNum = parseInt(clientId, 10);
-  const templates = await recurringInvoiceTemplateService.getRecurringTemplatesByClientId(clientIdNum);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const templates = await recurringInvoiceTemplateService.getRecurringTemplatesByClientId(clientIdNum, tenantId);
 
   res.json({ success: true, data: templates });
 });
@@ -126,7 +131,8 @@ export const createRecurringTemplate = asyncHandler(async (req: Request<object, 
   }
 
   try {
-    const templateId = await recurringInvoiceTemplateService.createRecurringTemplate(templateData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const templateId = await recurringInvoiceTemplateService.createRecurringTemplate(templateData, tenantId);
     
     res.status(201).json({ 
       success: true, 
@@ -160,7 +166,8 @@ export const updateRecurringTemplate = asyncHandler(async (req: Request<{ id: st
   const templateId = parseInt(id, 10);
 
   try {
-    const updated = await recurringInvoiceTemplateService.updateRecurringTemplate(templateId, templateData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const updated = await recurringInvoiceTemplateService.updateRecurringTemplate(templateId, templateData, tenantId);
 
     if (!updated) {
       throw new NotFoundError('Recurring template not found');
@@ -195,7 +202,8 @@ export const deleteRecurringTemplate = asyncHandler(async (req: Request, res: Re
   const templateId = parseInt(id, 10);
 
   try {
-    const deleted = await recurringInvoiceTemplateService.deleteRecurringTemplate(templateId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const deleted = await recurringInvoiceTemplateService.deleteRecurringTemplate(templateId, tenantId);
 
     if (!deleted) {
       throw new NotFoundError('Recurring template not found');
@@ -234,7 +242,8 @@ export const toggleRecurringTemplate = asyncHandler(async (req: Request<{ id: st
   const templateId = parseInt(id, 10);
 
   try {
-    const updated = await recurringInvoiceTemplateService.toggleRecurringTemplate(templateId, isActive);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const updated = await recurringInvoiceTemplateService.toggleRecurringTemplate(templateId, isActive, tenantId);
 
     if (!updated) {
       throw new NotFoundError('Recurring template not found');
@@ -258,7 +267,8 @@ export const toggleRecurringTemplate = asyncHandler(async (req: Request<{ id: st
  */
 export const processRecurringTemplates = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   try {
-    const results = await recurringInvoiceProcessorService.processAllDueTemplates();
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const results = await recurringInvoiceProcessorService.processAllDueTemplates(tenantId);
     
     res.json({ 
       success: true, 
@@ -288,7 +298,8 @@ export const processSingleTemplate = asyncHandler(async (req: Request, res: Resp
   const templateId = parseInt(id, 10);
 
   try {
-    const result = await recurringInvoiceProcessorService.processSingleTemplate(templateId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const result = await recurringInvoiceProcessorService.processSingleTemplate(templateId, tenantId);
     
     if (result.success) {
       res.json({ 
@@ -310,7 +321,8 @@ export const processSingleTemplate = asyncHandler(async (req: Request, res: Resp
  */
 export const getProcessingStats = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   try {
-    const stats = await recurringInvoiceProcessorService.getProcessingStats();
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const stats = await recurringInvoiceProcessorService.getProcessingStats(tenantId);
     
     res.json({ 
       success: true, 

@@ -132,6 +132,22 @@ export {
   resetSettings
 } from './settingsController.js';
 
+// Tenant lifecycle controller
+export {
+  listTenants,
+  getTenantById,
+  createTenant,
+  getTenantSubscription,
+  updateTenantSubscription,
+  getTenantEntitlements,
+  updateTenantEntitlements,
+  bootstrapTenantAdmin,
+  updateTenantStatus,
+  suspendTenant,
+  activateTenant,
+  deleteTenant
+} from './tenantController.js';
+
 // Note: Database, Template, and PDF controllers not yet implemented
 
 // Cron controller

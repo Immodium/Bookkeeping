@@ -31,33 +31,40 @@ interface TemplateData {
  * Manages invoice design templates (layout/design templates)
  */
 export class TemplateService {
+  private normalizeTenantId(tenantId?: number): number {
+    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+  }
+
   /**
    * Get all templates
    */
-  async getAllTemplates(): Promise<Template[]> {
+  async getAllTemplates(tenantId?: number): Promise<Template[]> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getMany<Template>(
-      'SELECT * FROM invoice_design_templates ORDER BY name ASC'
+      'SELECT * FROM invoice_design_templates WHERE tenant_id = ? ORDER BY name ASC',
+      [scopedTenantId]
     );
   }
 
   /**
    * Get template by ID
    */
-  async getTemplateById(id: number): Promise<Template | null> {
+  async getTemplateById(id: number, tenantId?: number): Promise<Template | null> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid template ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getOne<Template>(
-      'SELECT * FROM invoice_design_templates WHERE id = ?',
-      [id]
+      'SELECT * FROM invoice_design_templates WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
     );
   }
 
   /**
    * Create new template
    */
-  async createTemplate(templateData: TemplateData): Promise<number> {
+  async createTemplate(templateData: TemplateData, tenantId?: number): Promise<number> {
     if (!templateData.name || typeof templateData.name !== 'string') {
       throw new Error('Template name is required');
     }
@@ -66,16 +73,19 @@ export class TemplateService {
       throw new Error('Template content is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     // If this is set as default, make sure no other template is default
     if (templateData.is_default) {
       databaseService.executeQuery(
-        'UPDATE invoice_design_templates SET is_default = 0 WHERE is_default = 1'
+        'UPDATE invoice_design_templates SET is_default = 0 WHERE tenant_id = ? AND is_default = 1',
+        [scopedTenantId]
       );
     }
 
     const result = databaseService.executeQuery(
-      'INSERT INTO invoice_design_templates (name, content, is_default, variables, created_at, updated_at) VALUES (?, ?, ?, ?, DATETIME(\'now\'), DATETIME(\'now\')),',
+      'INSERT INTO invoice_design_templates (tenant_id, name, content, is_default, variables, created_at, updated_at) VALUES (?, ?, ?, ?, ?, DATETIME(\'now\'), DATETIME(\'now\'))',
       [
+        scopedTenantId,
         templateData.name,
         templateData.content,
         templateData.is_default ? 1 : 0,
@@ -89,7 +99,7 @@ export class TemplateService {
   /**
    * Update template
    */
-  async updateTemplate(id: number, templateData: Partial<TemplateData>): Promise<boolean> {
+  async updateTemplate(id: number, templateData: Partial<TemplateData>, tenantId?: number): Promise<boolean> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid template ID is required');
     }
@@ -98,8 +108,9 @@ export class TemplateService {
       throw new Error('Template data is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     // Check if template exists
-    const existingTemplate = await this.getTemplateById(id);
+    const existingTemplate = await this.getTemplateById(id, scopedTenantId);
     if (!existingTemplate) {
       throw new Error('Template not found');
     }
@@ -107,8 +118,8 @@ export class TemplateService {
     // If this is set as default, make sure no other template is default
     if (templateData.is_default) {
       databaseService.executeQuery(
-        'UPDATE invoice_design_templates SET is_default = 0 WHERE is_default = 1 AND id != ?',
-        [id]
+        'UPDATE invoice_design_templates SET is_default = 0 WHERE tenant_id = ? AND is_default = 1 AND id != ?',
+        [scopedTenantId, id]
       );
     }
 
@@ -139,8 +150,8 @@ export class TemplateService {
     values.push(id);
 
     const result = databaseService.executeQuery(
-      `UPDATE invoice_design_templates SET ${updates.join(', ')} WHERE id = ?`,
-      values
+      `UPDATE invoice_design_templates SET ${updates.join(', ')} WHERE id = ? AND tenant_id = ?`,
+      [...values, scopedTenantId]
     );
 
     return result.changes > 0;
@@ -149,15 +160,16 @@ export class TemplateService {
   /**
    * Delete template
    */
-  async deleteTemplate(id: number): Promise<boolean> {
+  async deleteTemplate(id: number, tenantId?: number): Promise<boolean> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid template ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     // Check if template is in use by any invoices
     const inUse = databaseService.getOne<{ count: number }>(
-      'SELECT COUNT(*) as count FROM invoices WHERE design_template_id = ?',
-      [id]
+      'SELECT COUNT(*) as count FROM invoices WHERE tenant_id = ? AND design_template_id = ?',
+      [scopedTenantId, id]
     );
 
     if (inUse && inUse.count > 0) {
@@ -165,8 +177,8 @@ export class TemplateService {
     }
 
     const result = databaseService.executeQuery(
-      'DELETE FROM invoice_design_templates WHERE id = ?',
-      [id]
+      'DELETE FROM invoice_design_templates WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
     );
 
     return result.changes > 0;
@@ -175,22 +187,25 @@ export class TemplateService {
   /**
    * Get default template
    */
-  async getDefaultTemplate(): Promise<Template | null> {
+  async getDefaultTemplate(tenantId?: number): Promise<Template | null> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getOne<Template>(
-      'SELECT * FROM invoice_design_templates WHERE is_default = 1 LIMIT 1'
+      'SELECT * FROM invoice_design_templates WHERE tenant_id = ? AND is_default = 1 LIMIT 1',
+      [scopedTenantId]
     );
   }
 
   /**
    * Set default template
    */
-  async setDefaultTemplate(id: number): Promise<boolean> {
+  async setDefaultTemplate(id: number, tenantId?: number): Promise<boolean> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid template ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     // Check if template exists
-    const template = await this.getTemplateById(id);
+    const template = await this.getTemplateById(id, scopedTenantId);
     if (!template) {
       throw new Error('Template not found');
     }
@@ -198,13 +213,14 @@ export class TemplateService {
     const operations = () => {
       // Remove default from all templates
       databaseService.executeQuery(
-        'UPDATE invoice_design_templates SET is_default = 0 WHERE is_default = 1'
+        'UPDATE invoice_design_templates SET is_default = 0 WHERE tenant_id = ? AND is_default = 1',
+        [scopedTenantId]
       );
 
       // Set new default
       databaseService.executeQuery(
-        'UPDATE invoice_design_templates SET is_default = 1, updated_at = DATETIME(\'now\') WHERE id = ?',
-        [id]
+        'UPDATE invoice_design_templates SET is_default = 1, updated_at = DATETIME(\'now\') WHERE id = ? AND tenant_id = ?',
+        [id, scopedTenantId]
       );
     };
 

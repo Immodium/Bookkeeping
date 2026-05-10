@@ -9,6 +9,11 @@ import { up as migration004 } from './004_fix_expenses_table_schema.js';
 import { up as migration005 } from './005_add_name_columns_to_clients.js';
 import { up as migration006 } from './006_add_user_roles.js';
 import { up as migration007 } from './007_add_roles_json_to_users.js';
+import { up as migration008 } from './008_add_multi_tenant_foundation.js';
+import { up as migration009 } from './009_add_tenant_to_report_schedules.js';
+import { up as migration010 } from './010_add_tenant_scoped_unique_constraints.js';
+import { up as migration011 } from './011_add_subscription_and_entitlement_tables.js';
+import { up as migration012 } from './012_repair_invoice_foreign_keys.js';
 
 interface Migration {
   id: string;
@@ -54,6 +59,31 @@ const migrations: Migration[] = [
     id: '007',
     name: 'add_roles_json_to_users',
     up: migration007
+  },
+  {
+    id: '008',
+    name: 'add_multi_tenant_foundation',
+    up: migration008
+  },
+  {
+    id: '009',
+    name: 'add_tenant_to_report_schedules',
+    up: migration009
+  },
+  {
+    id: '010',
+    name: 'add_tenant_scoped_unique_constraints',
+    up: migration010
+  },
+  {
+    id: '011',
+    name: 'add_subscription_and_entitlement_tables',
+    up: migration011
+  },
+  {
+    id: '012',
+    name: 'repair_invoice_foreign_keys',
+    up: migration012
   }
 ];
 

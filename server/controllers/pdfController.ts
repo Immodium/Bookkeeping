@@ -24,18 +24,19 @@ export const downloadInvoicePDF = asyncHandler(async (req: Request, res: Respons
     throw new ValidationError('Invalid invoice ID');
   }
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   // Validate invoice exists
-  const invoice = await pdfService.getInvoiceForPDF(invoiceId);
+  const invoice = await pdfService.getInvoiceForPDF(invoiceId, tenantId);
   if (!invoice) {
     throw new NotFoundError('Invoice not found');
   }
 
   try {
     // Generate a proper JWT token for public access
-    const tokenData = await invoiceService.generatePublicInvoiceToken(invoiceId);
+    const tokenData = await invoiceService.generatePublicInvoiceToken(invoiceId, tenantId);
 
     // Generate PDF
-    const pdfBuffer = await pdfService.generateInvoicePDF(invoiceId, tokenData.token);
+    const pdfBuffer = await pdfService.generateInvoicePDF(invoiceId, tokenData.token, {}, tenantId);
 
     // Set appropriate headers for PDF download
     res.setHeader('Content-Type', 'application/pdf');
@@ -82,15 +83,15 @@ export const downloadPublicInvoicePDF = asyncHandler(async (req: Request, res: R
     throw new ValidationError('Access token is required');
   }
 
-  // Validate invoice exists
-  const invoice = await pdfService.getInvoiceForPDF(invoiceId);
-  if (!invoice) {
-    throw new NotFoundError('Invoice not found');
-  }
-
   try {
+    const publicInvoice = await invoiceService.getPublicInvoiceById(invoiceId, token);
+    const tenantId = publicInvoice.tenant_id || 1;
+    const invoice = await pdfService.getInvoiceForPDF(invoiceId, tenantId);
+    if (!invoice) {
+      throw new NotFoundError('Invoice not found');
+    }
     // Generate PDF
-    const pdfBuffer = await pdfService.generateInvoicePDF(invoiceId, token);
+    const pdfBuffer = await pdfService.generateInvoicePDF(invoiceId, token, {}, tenantId);
 
     // Set appropriate headers for PDF download
     res.setHeader('Content-Type', 'application/pdf');
@@ -204,7 +205,8 @@ export const updatePDFFormat = asyncHandler(async (req: Request, res: Response):
   }
 
   try {
-    await pdfService.updatePDFFormat(format);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    await pdfService.updatePDFFormat(format, tenantId);
 
     res.json({
       success: true,
@@ -224,7 +226,8 @@ export const updatePDFFormat = asyncHandler(async (req: Request, res: Response):
  */
 export const getPDFFormat = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   try {
-    const format = await pdfService.getPDFFormat();
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const format = await pdfService.getPDFFormat(tenantId);
 
     res.json({
       success: true,

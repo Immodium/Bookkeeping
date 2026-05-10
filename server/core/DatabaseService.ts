@@ -191,14 +191,14 @@ export class DatabaseService {
     return this.withTransaction(() => {
       // Get current value
       const counter = this.getOne<{ value: number }>(
-        'SELECT value FROM counters WHERE name = ?',
+        'SELECT value FROM counters WHERE tenant_id = 1 AND name = ?',
         [counterName]
       );
       
       if (!counter) {
         // Create counter if it doesn't exist
         this.executeQuery(
-          'INSERT INTO counters (name, value, created_at, updated_at) VALUES (?, 1, datetime(\'now\'), datetime(\'now\'))',
+          'INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (1, ?, 1, datetime(\'now\'), datetime(\'now\'))',
           [counterName]
         );
         return 1;
@@ -207,7 +207,7 @@ export class DatabaseService {
       // Increment counter
       const nextValue = counter.value + 1;
       this.executeQuery(
-        'UPDATE counters SET value = ?, updated_at = datetime(\'now\') WHERE name = ?',
+        'UPDATE counters SET value = ?, updated_at = datetime(\'now\') WHERE tenant_id = 1 AND name = ?',
         [nextValue, counterName]
       );
       

@@ -34,6 +34,10 @@ const VALID_RETAINER_STATUSES: RetainerStatus[] = ['active', 'paused', 'ended'];
 const VALID_BILLING_CYCLES: RetainerBillingCycle[] = ['weekly', 'monthly', 'quarterly', 'yearly'];
 
 export class RetainerService {
+  private normalizeTenantId(tenantId?: number): number {
+    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+  }
+
   private getRetainerSelectClause(): string {
     return `
       SELECT
@@ -68,10 +72,10 @@ export class RetainerService {
     return !isNaN(date.getTime()) && /^\d{4}-\d{2}-\d{2}$/.test(dateString);
   }
 
-  private assertClientExists(clientId: number): void {
+  private assertClientExists(clientId: number, tenantId: number): void {
     const client = databaseService.getOne<{ id: number }>(
-      'SELECT id FROM clients WHERE id = ? AND deleted_at IS NULL LIMIT 1',
-      [clientId]
+      'SELECT id FROM clients WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL LIMIT 1',
+      [clientId, tenantId]
     );
 
     if (!client?.id) {
@@ -93,7 +97,8 @@ export class RetainerService {
 
   async getAllRetainers(
     filters: RetainerFilters = {},
-    options: ServiceOptions = {}
+    options: ServiceOptions = {},
+    tenantId?: number
   ): Promise<{
     retainers: Retainer[];
     pagination: {
@@ -105,10 +110,11 @@ export class RetainerService {
   }> {
     const { limit = 50, offset = 0 } = options;
     const { status, billing_cycle, client_id, search } = filters;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     let query = this.getRetainerSelectClause();
-    const conditions: string[] = ['r.deleted_at IS NULL'];
-    const params: Array<string | number> = [];
+    const conditions: string[] = ['r.tenant_id = ?', 'r.deleted_at IS NULL'];
+    const params: Array<string | number> = [scopedTenantId];
 
     if (status) {
       conditions.push('r.status = ?');
@@ -160,18 +166,19 @@ export class RetainerService {
     };
   }
 
-  async getRetainerById(id: number): Promise<Retainer | null> {
+  async getRetainerById(id: number, tenantId?: number): Promise<Retainer | null> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid retainer ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getOne<Retainer>(
       `
         ${this.getRetainerSelectClause()}
-        WHERE r.id = ? AND r.deleted_at IS NULL
+        WHERE r.id = ? AND r.tenant_id = ? AND r.deleted_at IS NULL
         LIMIT 1
       `,
-      [id]
+      [id, scopedTenantId]
     );
   }
 
@@ -188,7 +195,7 @@ export class RetainerService {
     status?: RetainerStatus;
     auto_renew?: boolean | number;
     notes?: string;
-  }): Promise<number> {
+  }, tenantId?: number): Promise<number> {
     if (
       !retainerData ||
       !retainerData.client_id ||
@@ -211,7 +218,8 @@ export class RetainerService {
       throw new Error('Invalid date format');
     }
 
-    this.assertClientExists(retainerData.client_id);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    this.assertClientExists(retainerData.client_id, scopedTenantId);
 
     const billingCycle = retainerData.billing_cycle || 'monthly';
     this.assertBillingCycle(billingCycle);
@@ -232,12 +240,13 @@ export class RetainerService {
     databaseService.executeQuery(
       `
         INSERT INTO retainers (
-          id, client_id, name, description, amount, currency, billing_cycle, start_date,
+          id, tenant_id, client_id, name, description, amount, currency, billing_cycle, start_date,
           next_invoice_date, end_date, status, auto_renew, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         nextId,
+        scopedTenantId,
         retainerData.client_id,
         retainerData.name.trim(),
         retainerData.description || null,
@@ -273,7 +282,8 @@ export class RetainerService {
       status: RetainerStatus;
       auto_renew: boolean | number;
       notes: string;
-    }>
+    }>,
+    tenantId?: number
   ): Promise<number> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid retainer ID is required');
@@ -283,13 +293,14 @@ export class RetainerService {
       throw new Error('Retainer data is required');
     }
 
-    const existingRetainer = await this.getRetainerById(id);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const existingRetainer = await this.getRetainerById(id, scopedTenantId);
     if (!existingRetainer) {
       throw new Error('Retainer not found');
     }
 
     if (retainerData.client_id !== undefined) {
-      this.assertClientExists(retainerData.client_id);
+      this.assertClientExists(retainerData.client_id, scopedTenantId);
     }
 
     if (retainerData.amount !== undefined) {
@@ -345,25 +356,36 @@ export class RetainerService {
       throw new Error('No valid fields to update');
     }
 
-    const success = databaseService.updateById('retainers', id, updateData);
-    return success ? 1 : 0;
+    const keys = Object.keys(updateData);
+    const values = Object.values(updateData);
+    const setClause = keys.map((key) => `${key} = ?`).join(', ');
+    const result = databaseService.executeQuery(
+      `UPDATE retainers SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+      [...values, id, scopedTenantId]
+    );
+    return result.changes;
   }
 
-  async deleteRetainer(id: number): Promise<number> {
+  async deleteRetainer(id: number, tenantId?: number): Promise<number> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid retainer ID is required');
     }
 
-    const existingRetainer = await this.getRetainerById(id);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const existingRetainer = await this.getRetainerById(id, scopedTenantId);
     if (!existingRetainer) {
       throw new Error('Retainer not found');
     }
 
-    const success = databaseService.softDelete('retainers', id);
-    return success ? 1 : 0;
+    const result = databaseService.executeQuery(
+      "UPDATE retainers SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL",
+      [id, scopedTenantId]
+    );
+    return result.changes;
   }
 
-  async getRetainerStats(): Promise<RetainerStats> {
+  async getRetainerStats(tenantId?: number): Promise<RetainerStats> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const summary = databaseService.getOne<RetainerStats['summary']>(
       `
         SELECT
@@ -385,8 +407,9 @@ export class RetainerService {
             0
           ) AS monthly_value
         FROM retainers
-        WHERE deleted_at IS NULL
-      `
+        WHERE tenant_id = ? AND deleted_at IS NULL
+      `,
+      [scopedTenantId]
     );
 
     const byBillingCycle = databaseService.getMany<RetainerStats['by_billing_cycle'][number]>(
@@ -396,21 +419,23 @@ export class RetainerService {
           COUNT(*) AS count,
           COALESCE(SUM(amount), 0) AS total_amount
         FROM retainers
-        WHERE deleted_at IS NULL
+        WHERE tenant_id = ? AND deleted_at IS NULL
         GROUP BY billing_cycle
         ORDER BY count DESC
-      `
+      `,
+      [scopedTenantId]
     );
 
     const upcomingResult = databaseService.getOne<{ count: number }>(
       `
         SELECT COUNT(*) AS count
         FROM retainers
-        WHERE deleted_at IS NULL
+        WHERE tenant_id = ? AND deleted_at IS NULL
           AND status = 'active'
           AND next_invoice_date >= date('now')
           AND next_invoice_date <= date('now', '+30 days')
-      `
+      `,
+      [scopedTenantId]
     );
 
     return {

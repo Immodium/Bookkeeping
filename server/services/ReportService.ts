@@ -64,6 +64,9 @@ export interface ReportSchedule extends Omit<DatabaseReportSchedule, 'config'> {
  */
 export class ReportService {
   private readonly tableColumnCache = new Map<string, Set<string>>();
+  private normalizeTenantId(tenantId?: number): number {
+    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+  }
 
   private getTableColumns(tableName: string): Set<string> {
     const cached = this.tableColumnCache.get(tableName);
@@ -137,27 +140,30 @@ export class ReportService {
   /**
    * Get all reports ordered by creation date
    */
-  async getAllReports(): Promise<DatabaseReport[]> {
+  async getAllReports(tenantId?: number): Promise<DatabaseReport[]> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getMany<DatabaseReport>(`
       SELECT id, name, type, date_range_start, date_range_end, data, created_at
       FROM reports
+      WHERE tenant_id = ?
       ORDER BY created_at DESC
-    `);
+    `, [scopedTenantId]);
   }
 
   /**
    * Get report by ID with parsed data field
    */
-  async getReportById(id: number): Promise<DatabaseReport | null> {
+  async getReportById(id: number, tenantId?: number): Promise<DatabaseReport | null> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid report ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const report = databaseService.getOne<DatabaseReport>(`
       SELECT id, name, type, date_range_start, date_range_end, data, created_at
       FROM reports
-      WHERE id = ?
-    `, [id]);
+      WHERE id = ? AND tenant_id = ?
+    `, [id, scopedTenantId]);
 
     if (!report) {
       return null;
@@ -180,7 +186,7 @@ export class ReportService {
   /**
    * Create new report
    */
-  async createReport(reportData: ReportData): Promise<{ id: number; changes: number }> {
+  async createReport(reportData: ReportData, tenantId?: number): Promise<{ id: number; changes: number }> {
     if (!reportData || !reportData.name || !reportData.type) {
       throw new Error('Report name and type are required');
     }
@@ -189,11 +195,13 @@ export class ReportService {
     const nextId = databaseService.getNextId('reports');
     const now = new Date().toISOString();
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const result = databaseService.executeQuery(`
-      INSERT INTO reports (id, name, type, date_range_start, date_range_end, data, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO reports (id, tenant_id, name, type, date_range_start, date_range_end, data, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       nextId,
+      scopedTenantId,
       reportData.name,
       reportData.type,
       reportData.date_range_start || '',
@@ -211,7 +219,7 @@ export class ReportService {
   /**
    * Update existing report
    */
-  async updateReport(id: number, reportData: ReportData): Promise<{ id: number; changes: number }> {
+  async updateReport(id: number, reportData: ReportData, tenantId?: number): Promise<{ id: number; changes: number }> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid report ID is required');
     }
@@ -220,17 +228,19 @@ export class ReportService {
       throw new Error('Report data is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const result = databaseService.executeQuery(`
       UPDATE reports
       SET name = ?, type = ?, date_range_start = ?, date_range_end = ?, data = ?
-      WHERE id = ?
+      WHERE id = ? AND tenant_id = ?
     `, [
       reportData.name,
       reportData.type,
       reportData.date_range_start || '',
       reportData.date_range_end || '',
       reportData.data ? JSON.stringify(reportData.data) : null,
-      id
+      id,
+      scopedTenantId
     ]);
 
     if (result.changes === 0) {
@@ -243,7 +253,7 @@ export class ReportService {
     };
   }
 
-  async createReportSchedule(scheduleData: ReportScheduleData): Promise<{ id: number; changes: number }> {
+  async createReportSchedule(scheduleData: ReportScheduleData, tenantId?: number): Promise<{ id: number; changes: number }> {
     if (!scheduleData || !scheduleData.name || !scheduleData.report_type) {
       throw new Error('Schedule name and report type are required');
     }
@@ -254,8 +264,30 @@ export class ReportService {
     const timeOfDay = scheduleData.time_of_day || '09:00';
     const nextRunAt = this.calculateNextRunAt(frequency, scheduleData.start_date, timeOfDay);
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const hasTenantColumn = this.tableHasColumn('report_schedules', 'tenant_id');
     const result = databaseService.executeQuery(
+      hasTenantColumn
+        ? `
+        INSERT INTO report_schedules (
+          tenant_id,
+          name,
+          report_type,
+          frequency,
+          start_date,
+          time_of_day,
+          timezone,
+          date_range_start,
+          date_range_end,
+          config,
+          is_active,
+          next_run_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
       `
+        : `
         INSERT INTO report_schedules (
           name,
           report_type,
@@ -273,7 +305,22 @@ export class ReportService {
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
       `,
-      [
+      hasTenantColumn
+        ? [
+        scopedTenantId,
+        scheduleData.name,
+        reportType,
+        frequency,
+        scheduleData.start_date,
+        timeOfDay,
+        timezone,
+        scheduleData.date_range_start || null,
+        scheduleData.date_range_end || null,
+        scheduleData.config ? JSON.stringify(scheduleData.config) : null,
+        scheduleData.is_active === false ? 0 : 1,
+        nextRunAt
+      ]
+        : [
         scheduleData.name,
         reportType,
         frequency,
@@ -294,12 +341,20 @@ export class ReportService {
     };
   }
 
-  async getReportSchedules(reportType?: string): Promise<ReportSchedule[]> {
+  async getReportSchedules(reportType?: string, tenantId?: number): Promise<ReportSchedule[]> {
     const params: unknown[] = [];
-    const whereClause = reportType ? 'WHERE report_type = ?' : '';
+    const hasTenantColumn = this.tableHasColumn('report_schedules', 'tenant_id');
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const whereClauses: string[] = [];
+    if (hasTenantColumn) {
+      whereClauses.push('tenant_id = ?');
+      params.push(scopedTenantId);
+    }
     if (reportType) {
+      whereClauses.push('report_type = ?');
       params.push(this.normalizeReportType(reportType));
     }
+    const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
     const schedules = databaseService.getMany<DatabaseReportSchedule>(
       `
@@ -341,14 +396,18 @@ export class ReportService {
     });
   }
 
-  async deleteReportSchedule(id: number): Promise<{ id: number; changes: number }> {
+  async deleteReportSchedule(id: number, tenantId?: number): Promise<{ id: number; changes: number }> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid schedule ID is required');
     }
 
+    const hasTenantColumn = this.tableHasColumn('report_schedules', 'tenant_id');
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const result = databaseService.executeQuery(
-      'DELETE FROM report_schedules WHERE id = ?',
-      [id]
+      hasTenantColumn
+        ? 'DELETE FROM report_schedules WHERE id = ? AND tenant_id = ?'
+        : 'DELETE FROM report_schedules WHERE id = ?',
+      hasTenantColumn ? [id, scopedTenantId] : [id]
     );
 
     if (result.changes === 0) {
@@ -364,12 +423,13 @@ export class ReportService {
   /**
    * Delete report by ID
    */
-  async deleteReport(id: number): Promise<{ id: number; changes: number }> {
+  async deleteReport(id: number, tenantId?: number): Promise<{ id: number; changes: number }> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid report ID is required');
     }
 
-    const result = databaseService.executeQuery('DELETE FROM reports WHERE id = ?', [id]);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const result = databaseService.executeQuery('DELETE FROM reports WHERE id = ? AND tenant_id = ?', [id, scopedTenantId]);
 
     if (result.changes === 0) {
       throw new Error('Report not found');
@@ -384,52 +444,57 @@ export class ReportService {
   /**
    * Check if report exists
    */
-  async reportExists(id: number): Promise<boolean> {
+  async reportExists(id: number, tenantId?: number): Promise<boolean> {
     if (!id || typeof id !== 'number') {
       return false;
     }
-
-    return databaseService.exists('reports', 'id', id);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const report = databaseService.getOne<{ id: number }>('SELECT id FROM reports WHERE id = ? AND tenant_id = ?', [id, scopedTenantId]);
+    return Boolean(report);
   }
 
   /**
    * Get reports by type
    */
-  async getReportsByType(type: string): Promise<DatabaseReport[]> {
+  async getReportsByType(type: string, tenantId?: number): Promise<DatabaseReport[]> {
     if (!type || typeof type !== 'string') {
       throw new Error('Valid report type is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getMany<DatabaseReport>(`
       SELECT id, name, type, date_range_start, date_range_end, data, created_at
       FROM reports
-      WHERE type = ?
+      WHERE tenant_id = ? AND type = ?
       ORDER BY created_at DESC
-    `, [type]);
+    `, [scopedTenantId, type]);
   }
 
   /**
    * Get reports within date range
    */
-  async getReportsByDateRange(startDate: string, endDate: string): Promise<DatabaseReport[]> {
+  async getReportsByDateRange(startDate: string, endDate: string, tenantId?: number): Promise<DatabaseReport[]> {
     if (!startDate || !endDate) {
       throw new Error('Valid date range is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     return databaseService.getMany<DatabaseReport>(`
       SELECT id, name, type, date_range_start, date_range_end, data, created_at
       FROM reports
-      WHERE created_at >= ? AND created_at <= ?
+      WHERE tenant_id = ? AND created_at >= ? AND created_at <= ?
       ORDER BY created_at DESC
-    `, [startDate, endDate]);
+    `, [scopedTenantId, startDate, endDate]);
   }
 
   /**
    * Get report count
    */
-  async getReportCount(): Promise<number> {
+  async getReportCount(tenantId?: number): Promise<number> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const result = databaseService.getOne<{count: number}>(
-      'SELECT COUNT(*) as count FROM reports'
+      'SELECT COUNT(*) as count FROM reports WHERE tenant_id = ?',
+      [scopedTenantId]
     );
     return result?.count || 0;
   }
@@ -437,14 +502,15 @@ export class ReportService {
   /**
    * Get report count by type
    */
-  async getReportCountByType(type: string): Promise<number> {
+  async getReportCountByType(type: string, tenantId?: number): Promise<number> {
     if (!type || typeof type !== 'string') {
       throw new Error('Valid report type is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const result = databaseService.getOne<{count: number}>(
-      'SELECT COUNT(*) as count FROM reports WHERE type = ?',
-      [type]
+      'SELECT COUNT(*) as count FROM reports WHERE tenant_id = ? AND type = ?',
+      [scopedTenantId, type]
     );
     return result?.count || 0;
   }
@@ -457,14 +523,16 @@ export class ReportService {
     endDate: string,
     accountingMethod: 'cash' | 'accrual' = 'accrual',
     preset?: string,
-    breakdownPeriod: 'monthly' | 'quarterly' = 'quarterly'
+    breakdownPeriod: 'monthly' | 'quarterly' = 'quarterly',
+    tenantId?: number
   ): Promise<any> {
-    const invoicesWhere = ['i.created_at >= ?', 'i.created_at <= ?'];
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const invoicesWhere = ['i.tenant_id = ?', 'i.created_at >= ?', 'i.created_at <= ?'];
     if (this.tableHasColumn('invoices', 'deleted_at')) {
       invoicesWhere.push('i.deleted_at IS NULL');
     }
 
-    const expensesWhere = ['date >= ?', 'date <= ?'];
+    const expensesWhere = ['tenant_id = ?', 'date >= ?', 'date <= ?'];
     if (this.tableHasColumn('expenses', 'deleted_at')) {
       expensesWhere.push('deleted_at IS NULL');
     }
@@ -476,7 +544,7 @@ export class ReportService {
       LEFT JOIN clients c ON i.client_id = c.id
       WHERE ${invoicesWhere.join(' AND ')}
       ORDER BY i.created_at DESC
-    `, [startDate, endDate + 'T23:59:59.999Z']);
+    `, [scopedTenantId, startDate, endDate + 'T23:59:59.999Z']);
 
     // Get expenses in date range
     const expenses = databaseService.getMany<any>(`
@@ -484,7 +552,7 @@ export class ReportService {
       FROM expenses
       WHERE ${expensesWhere.join(' AND ')}
       ORDER BY date DESC
-    `, [startDate, endDate]);
+    `, [scopedTenantId, startDate, endDate]);
 
     const toNumber = (value: unknown): number => {
       if (value === null || value === undefined) return 0;
@@ -542,8 +610,9 @@ export class ReportService {
   /**
    * Generate Expense Report Data
    */
-  async generateExpenseData(startDate: string, endDate: string): Promise<any> {
-    const expensesWhere = ['date >= ?', 'date <= ?'];
+  async generateExpenseData(startDate: string, endDate: string, tenantId?: number): Promise<any> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const expensesWhere = ['tenant_id = ?', 'date >= ?', 'date <= ?'];
     if (this.tableHasColumn('expenses', 'deleted_at')) {
       expensesWhere.push('deleted_at IS NULL');
     }
@@ -553,7 +622,7 @@ export class ReportService {
       FROM expenses
       WHERE ${expensesWhere.join(' AND ')}
       ORDER BY date DESC
-    `, [startDate, endDate]);
+    `, [scopedTenantId, startDate, endDate]);
 
     const toNumber = (value: unknown): number => {
       if (value === null || value === undefined) return 0;
@@ -586,8 +655,9 @@ export class ReportService {
   /**
    * Generate Invoice Report Data
    */
-  async generateInvoiceData(startDate: string, endDate: string): Promise<any> {
-    const invoicesWhere = ['i.created_at >= ?', 'i.created_at <= ?'];
+  async generateInvoiceData(startDate: string, endDate: string, tenantId?: number): Promise<any> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const invoicesWhere = ['i.tenant_id = ?', 'i.created_at >= ?', 'i.created_at <= ?'];
     if (this.tableHasColumn('invoices', 'deleted_at')) {
       invoicesWhere.push('i.deleted_at IS NULL');
     }
@@ -598,7 +668,7 @@ export class ReportService {
       LEFT JOIN clients c ON i.client_id = c.id
       WHERE ${invoicesWhere.join(' AND ')}
       ORDER BY i.created_at DESC
-    `, [startDate, endDate + 'T23:59:59.999Z']);
+    `, [scopedTenantId, startDate, endDate + 'T23:59:59.999Z']);
 
     const toNumber = (value: unknown): number => {
       if (value === null || value === undefined) return 0;
@@ -644,20 +714,21 @@ export class ReportService {
   /**
    * Generate Client Report Data
    */
-  async generateClientData(startDate?: string, endDate?: string): Promise<any> {
+  async generateClientData(startDate?: string, endDate?: string, tenantId?: number): Promise<any> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const clientsWhere = this.tableHasColumn('clients', 'deleted_at')
-      ? 'WHERE deleted_at IS NULL'
-      : '';
+      ? 'WHERE tenant_id = ? AND deleted_at IS NULL'
+      : 'WHERE tenant_id = ?';
 
     const clients = databaseService.getMany<any>(`
       SELECT *
       FROM clients
       ${clientsWhere}
       ORDER BY name ASC
-    `);
+    `, [scopedTenantId]);
 
-    const invoiceFilters: string[] = [];
-    const params: string[] = [];
+    const invoiceFilters: string[] = ['i.tenant_id = ?'];
+    const params: string[] = [String(scopedTenantId)];
 
     if (startDate && endDate) {
       invoiceFilters.push('i.created_at >= ?', 'i.created_at <= ?');

@@ -54,10 +54,11 @@ export const getAllRetainers = asyncHandler(async (req: Request, res: Response):
     filters.search = search as string;
   }
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const results = await retainerService.getAllRetainers(filters, {
     limit: parsedLimit,
     offset: parsedOffset
-  });
+  }, tenantId);
 
   res.json({
     success: true,
@@ -77,7 +78,8 @@ export const getRetainerById = asyncHandler(async (req: Request, res: Response):
     throw new ValidationError('Invalid retainer ID');
   }
 
-  const retainer = await retainerService.getRetainerById(retainerId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const retainer = await retainerService.getRetainerById(retainerId, tenantId);
   if (!retainer) {
     throw new NotFoundError('Retainer');
   }
@@ -97,8 +99,9 @@ export const createRetainer = asyncHandler(
     }
 
     try {
-      const retainerId = await retainerService.createRetainer(retainerData);
-      const createdRetainer = await retainerService.getRetainerById(retainerId);
+      const tenantId = req.tenantId || req.user?.tenant_id || 1;
+      const retainerId = await retainerService.createRetainer(retainerData, tenantId);
+      const createdRetainer = await retainerService.getRetainerById(retainerId, tenantId);
 
       res.status(201).json({
         success: true,
@@ -144,8 +147,9 @@ export const updateRetainer = asyncHandler(
     }
 
     try {
-      const changes = await retainerService.updateRetainer(retainerId, retainerData);
-      const updatedRetainer = await retainerService.getRetainerById(retainerId);
+      const tenantId = req.tenantId || req.user?.tenant_id || 1;
+      const changes = await retainerService.updateRetainer(retainerId, retainerData, tenantId);
+      const updatedRetainer = await retainerService.getRetainerById(retainerId, tenantId);
 
       res.json({
         success: true,
@@ -188,7 +192,8 @@ export const deleteRetainer = asyncHandler(async (req: Request, res: Response): 
   }
 
   try {
-    const changes = await retainerService.deleteRetainer(retainerId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await retainerService.deleteRetainer(retainerId, tenantId);
     res.json({
       success: true,
       data: { changes },
@@ -203,8 +208,9 @@ export const deleteRetainer = asyncHandler(async (req: Request, res: Response): 
   }
 });
 
-export const getRetainerStats = asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-  const stats = await retainerService.getRetainerStats();
+export const getRetainerStats = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const stats = await retainerService.getRetainerStats(tenantId);
   res.json({
     success: true,
     data: stats

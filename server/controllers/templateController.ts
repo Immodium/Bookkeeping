@@ -23,7 +23,8 @@ interface TemplateRequest {
  * Get all templates
  */
 export const getAllTemplates = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const templates = await templateService.getAllTemplates();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const templates = await templateService.getAllTemplates(tenantId);
   res.json({ success: true, data: templates });
 });
 
@@ -38,7 +39,8 @@ export const getTemplateById = asyncHandler(async (req: Request, res: Response):
   }
 
   const templateId = parseInt(id, 10);
-  const template = await templateService.getTemplateById(templateId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const template = await templateService.getTemplateById(templateId, tenantId);
 
   if (!template) {
     throw new NotFoundError('Template not found');
@@ -58,7 +60,8 @@ export const createTemplate = asyncHandler(async (req: Request<object, object, {
   }
 
   try {
-    const templateId = await templateService.createTemplate(templateData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const templateId = await templateService.createTemplate(templateData, tenantId);
     
     res.status(201).json({ 
       success: true, 
@@ -94,7 +97,8 @@ export const updateTemplate = asyncHandler(async (req: Request<{ id: string }, o
   const templateId = parseInt(id, 10);
 
   try {
-    const updated = await templateService.updateTemplate(templateId, templateData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const updated = await templateService.updateTemplate(templateId, templateData, tenantId);
 
     if (!updated) {
       throw new NotFoundError('Template not found');
@@ -126,7 +130,8 @@ export const deleteTemplate = asyncHandler(async (req: Request, res: Response): 
   const templateId = parseInt(id, 10);
 
   try {
-    const deleted = await templateService.deleteTemplate(templateId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const deleted = await templateService.deleteTemplate(templateId, tenantId);
 
     if (!deleted) {
       throw new NotFoundError('Template not found');

@@ -3,12 +3,14 @@
 
 import { databaseService } from '../core/DatabaseService.js';
 import { recurringInvoiceTemplateService } from './RecurringInvoiceTemplateService.js';
+import { invoiceNumberService } from './InvoiceNumberService.js';
 
 /**
  * Invoice creation data interface
  */
 interface InvoiceCreationData {
   invoice_number: string;
+  tenant_id: number;
   client_id: number;
   recurring_template_id: number;
   amount: number;
@@ -29,17 +31,22 @@ interface InvoiceCreationData {
  * Handles the creation of invoices from recurring templates
  */
 export class RecurringInvoiceProcessorService {
+  private normalizeTenantId(tenantId?: number): number {
+    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+  }
+
   /**
    * Process all due recurring templates and create invoices
    */
-  async processAllDueTemplates(): Promise<{ created: number; errors: string[] }> {
+  async processAllDueTemplates(tenantId?: number): Promise<{ created: number; errors: string[] }> {
     const results = {
       created: 0,
       errors: [] as string[]
     };
 
     try {
-      const dueTemplates = await recurringInvoiceTemplateService.getTemplatesDueForProcessing();
+      const scopedTenantId = tenantId ? this.normalizeTenantId(tenantId) : undefined;
+      const dueTemplates = await recurringInvoiceTemplateService.getTemplatesDueForProcessing(scopedTenantId);
 
       for (const template of dueTemplates) {
         try {
@@ -51,7 +58,7 @@ export class RecurringInvoiceProcessorService {
             template.next_invoice_date,
             template.frequency
           );
-          await recurringInvoiceTemplateService.updateNextInvoiceDate(template.id, nextDate);
+          await recurringInvoiceTemplateService.updateNextInvoiceDate(template.id, nextDate, template.tenant_id);
 
         } catch (error) {
           const errorMessage = `Template ID ${template.id}: ${(error as Error).message}`;
@@ -68,9 +75,10 @@ export class RecurringInvoiceProcessorService {
   /**
    * Process a specific recurring template
    */
-  async processSingleTemplate(templateId: number): Promise<{ success: boolean; invoiceId?: number; error?: string }> {
+  async processSingleTemplate(templateId: number, tenantId?: number): Promise<{ success: boolean; invoiceId?: number; error?: string }> {
     try {
-      const template = await recurringInvoiceTemplateService.getRecurringTemplateById(templateId);
+      const scopedTenantId = this.normalizeTenantId(tenantId);
+      const template = await recurringInvoiceTemplateService.getRecurringTemplateById(templateId, scopedTenantId);
       
       if (!template) {
         return { success: false, error: 'Recurring template not found' };
@@ -87,7 +95,7 @@ export class RecurringInvoiceProcessorService {
         template.next_invoice_date,
         template.frequency
       );
-      await recurringInvoiceTemplateService.updateNextInvoiceDate(template.id, nextDate);
+      await recurringInvoiceTemplateService.updateNextInvoiceDate(template.id, nextDate, template.tenant_id);
 
       return { success: true, invoiceId };
 
@@ -101,6 +109,7 @@ export class RecurringInvoiceProcessorService {
    */
   private async createInvoiceFromTemplate(template: {
     id: number;
+    tenant_id: number;
     name: string;
     client_id: number;
     amount: number;
@@ -117,7 +126,7 @@ export class RecurringInvoiceProcessorService {
     notes?: string | null;
   }): Promise<number> {
     // Generate invoice number
-    const invoiceNumber = await this.generateInvoiceNumber();
+    const invoiceNumber = await this.generateInvoiceNumber(template.tenant_id);
 
     // Calculate due date based on payment terms
     const issueDate: string = new Date().toISOString().split('T')[0]!;
@@ -128,6 +137,7 @@ export class RecurringInvoiceProcessorService {
 
     const invoiceData: InvoiceCreationData = {
       invoice_number: invoiceNumber,
+      tenant_id: template.tenant_id,
       client_id: template.client_id,
       recurring_template_id: template.id,
       amount: template.amount,
@@ -146,11 +156,12 @@ export class RecurringInvoiceProcessorService {
     // Insert invoice into database
     const result = databaseService.executeQuery(
       `INSERT INTO invoices (
-        invoice_number, client_id, recurring_template_id, amount, tax_amount, 
+        tenant_id, invoice_number, client_id, recurring_template_id, amount, tax_amount, 
         total_amount, status, due_date, issue_date, description, line_items, 
         notes, payment_terms, shipping_amount, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'), DATETIME('now'))`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATETIME('now'), DATETIME('now'))`,
       [
+        invoiceData.tenant_id,
         invoiceData.invoice_number,
         invoiceData.client_id,
         invoiceData.recurring_template_id,
@@ -174,35 +185,8 @@ export class RecurringInvoiceProcessorService {
   /**
    * Generate a unique invoice number
    */
-  private async generateInvoiceNumber(): Promise<string> {
-    // Get current counter value
-    const counter = await databaseService.getOne<{ value: number }>(
-      'SELECT value FROM counters WHERE name = ?',
-      ['invoice_counter']
-    );
-
-    let nextNumber = 1;
-    if (counter) {
-      nextNumber = counter.value + 1;
-      // Update counter
-      databaseService.executeQuery(
-        'UPDATE counters SET value = ?, updated_at = DATETIME(\'now\') WHERE name = ?',
-        [nextNumber, 'invoice_counter']
-      );
-    } else {
-      // Create counter if it doesn't exist
-      databaseService.executeQuery(
-        'INSERT INTO counters (name, value, created_at, updated_at) VALUES (?, ?, DATETIME(\'now\'), DATETIME(\'now\'))',
-        ['invoice_counter', nextNumber]
-      );
-    }
-
-    // Format as INV-YYYYMM-XXXX
-    const date = new Date();
-    const yearMonth = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
-    const paddedNumber = String(nextNumber).padStart(4, '0');
-    
-    return `INV-${yearMonth}-${paddedNumber}`;
+  private async generateInvoiceNumber(tenantId: number): Promise<string> {
+    return invoiceNumberService.generateInvoiceNumber(tenantId);
   }
 
   /**
@@ -238,31 +222,33 @@ export class RecurringInvoiceProcessorService {
   /**
    * Get processing statistics
    */
-  async getProcessingStats(): Promise<{
+  async getProcessingStats(tenantId?: number): Promise<{
     totalActiveTemplates: number;
     templatesDueToday: number;
     templatesOverdue: number;
     nextProcessingDate?: string | undefined;
   }> {
     const today = new Date().toISOString().split('T')[0];
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const activeTemplates = await databaseService.getOne<{ count: number }>(
-      'SELECT COUNT(*) as count FROM recurring_invoice_templates WHERE is_active = 1'
+      'SELECT COUNT(*) as count FROM recurring_invoice_templates WHERE tenant_id = ? AND is_active = 1',
+      [scopedTenantId]
     );
 
     const dueToday = await databaseService.getOne<{ count: number }>(
-      'SELECT COUNT(*) as count FROM recurring_invoice_templates WHERE is_active = 1 AND next_invoice_date = ?',
-      [today]
+      'SELECT COUNT(*) as count FROM recurring_invoice_templates WHERE tenant_id = ? AND is_active = 1 AND next_invoice_date = ?',
+      [scopedTenantId, today]
     );
 
     const overdue = await databaseService.getOne<{ count: number }>(
-      'SELECT COUNT(*) as count FROM recurring_invoice_templates WHERE is_active = 1 AND next_invoice_date < ?',
-      [today]
+      'SELECT COUNT(*) as count FROM recurring_invoice_templates WHERE tenant_id = ? AND is_active = 1 AND next_invoice_date < ?',
+      [scopedTenantId, today]
     );
 
     const nextProcessing = await databaseService.getOne<{ next_date: string }>(
-      'SELECT next_invoice_date as next_date FROM recurring_invoice_templates WHERE is_active = 1 AND next_invoice_date > ? ORDER BY next_invoice_date ASC LIMIT 1',
-      [today]
+      'SELECT next_invoice_date as next_date FROM recurring_invoice_templates WHERE tenant_id = ? AND is_active = 1 AND next_invoice_date > ? ORDER BY next_invoice_date ASC LIMIT 1',
+      [scopedTenantId, today]
     );
 
     return {

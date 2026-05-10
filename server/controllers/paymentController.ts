@@ -32,10 +32,11 @@ export const getAllPayments = asyncHandler(async (req: Request, res: Response): 
     date_to: date_to as string
   };
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const results = await paymentService.getAllPayments(filters, { 
     limit: parsedLimit, 
     offset: parsedOffset 
-  });
+  }, tenantId);
   
   res.json({ 
     success: true, 
@@ -59,7 +60,8 @@ export const getPaymentById = asyncHandler(async (req: Request, res: Response): 
     throw new ValidationError('Invalid payment ID');
   }
   
-  const payment = await paymentService.getPaymentById(paymentId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const payment = await paymentService.getPaymentById(paymentId, tenantId);
 
   if (!payment) {
     throw new NotFoundError('Payment');
@@ -79,8 +81,9 @@ export const createPayment = asyncHandler(async (req: Request<object, object, { 
   }
 
   try {
-    const paymentId = await paymentService.createPayment(paymentData);
-    const createdPayment = await paymentService.getPaymentById(paymentId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const paymentId = await paymentService.createPayment(paymentData, tenantId);
+    const createdPayment = await paymentService.getPaymentById(paymentId, tenantId);
     
     res.status(201).json({ 
       success: true, 
@@ -125,8 +128,9 @@ export const updatePayment = asyncHandler(async (req: Request<{ id: string }, Re
   }
 
   try {
-    const changes = await paymentService.updatePayment(paymentId, paymentData);
-    const updatedPayment = await paymentService.getPaymentById(paymentId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await paymentService.updatePayment(paymentId, paymentData, tenantId);
+    const updatedPayment = await paymentService.getPaymentById(paymentId, tenantId);
     
     res.json({ 
       success: true, 
@@ -169,7 +173,8 @@ export const deletePayment = asyncHandler(async (req: Request, res: Response): P
   }
   
   try {
-    const changes = await paymentService.deletePayment(paymentId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await paymentService.deletePayment(paymentId, tenantId);
     
     res.json({ 
       success: true, 
@@ -196,7 +201,8 @@ export const bulkDeletePayments = asyncHandler(async (req: Request<object, objec
   }
 
   try {
-    const changes = await paymentService.bulkDeletePayments(payment_ids);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await paymentService.bulkDeletePayments(payment_ids, tenantId);
     
     res.json({ 
       success: true, 
@@ -219,7 +225,8 @@ export const getPaymentStats = asyncHandler(async (req: Request, res: Response):
     month: month as string
   };
 
-  const stats = await paymentService.getPaymentStats(filters);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const stats = await paymentService.getPaymentStats(filters, tenantId);
 
   res.json({ 
     success: true, 
@@ -251,10 +258,11 @@ export const getPaymentsByInvoiceId = asyncHandler(async (req: Request, res: Res
     throw new ValidationError('Invalid limit or offset');
   }
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const payments = await paymentService.getPaymentsByInvoiceId(invoiceId, { 
     limit: parsedLimit, 
     offset: parsedOffset 
-  });
+  }, tenantId);
   
   res.json({ success: true, data: payments });
 });
@@ -277,10 +285,11 @@ export const getPaymentsByClientName = asyncHandler(async (req: Request, res: Re
     throw new ValidationError('Invalid limit or offset');
   }
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const payments = await paymentService.getPaymentsByClientName(client_name, { 
     limit: parsedLimit, 
     offset: parsedOffset 
-  });
+  }, tenantId);
   
   res.json({ success: true, data: payments });
 });
@@ -303,10 +312,12 @@ export const getPaymentsByDateRange = asyncHandler(async (req: Request, res: Res
   }
 
   try {
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
     const result = await paymentService.getPaymentsByDateRange(
       start_date as string, 
       end_date as string, 
-      { limit: parsedLimit, offset: parsedOffset }
+      { limit: parsedLimit, offset: parsedOffset },
+      tenantId
     );
     res.json({ 
       success: true, 
@@ -328,7 +339,8 @@ export const getRecentPayments = asyncHandler(async (req: Request, res: Response
     throw new ValidationError('Invalid limit');
   }
 
-  const payments = await paymentService.getRecentPayments(parsedLimit);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const payments = await paymentService.getRecentPayments(parsedLimit, tenantId);
   res.json({ success: true, data: payments });
 });
 
@@ -345,7 +357,8 @@ export const getTotalPaymentsAmount = asyncHandler(async (req: Request, res: Res
     date_to: date_to as string
   };
 
-  const total = await paymentService.getTotalPaymentsAmount(filters);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const total = await paymentService.getTotalPaymentsAmount(filters, tenantId);
   res.json({ success: true, data: { total } });
 });
 
@@ -366,7 +379,8 @@ export const updatePaymentStatus = asyncHandler(async (req: Request<{ id: string
   }
 
   try {
-    const changes = await paymentService.updatePaymentStatus(paymentId, status);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await paymentService.updatePaymentStatus(paymentId, status, tenantId);
     
     res.json({ 
       success: true, 
@@ -388,7 +402,8 @@ export const updatePaymentStatus = asyncHandler(async (req: Request<{ id: string
  * Get payment methods statistics
  */
 export const getPaymentMethodsStats = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const stats = await paymentService.getPaymentMethodsStats();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const stats = await paymentService.getPaymentMethodsStats(tenantId);
   res.json({ success: true, data: stats });
 });
 
@@ -409,10 +424,11 @@ export const searchPayments = asyncHandler(async (req: Request, res: Response): 
     throw new ValidationError('Invalid limit or offset');
   }
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const results = await paymentService.searchPayments(q, { 
     limit: parsedLimit, 
     offset: parsedOffset 
-  });
+  }, tenantId);
   
   res.json({ success: true, data: results });
 });

@@ -32,7 +32,8 @@ interface ClientRequest {
  * Get all clients
  */
 export const getAllClients = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const clients = await clientService.getAllClients();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const clients = await clientService.getAllClients({}, tenantId);
   res.json({ success: true, data: clients });
 });
 
@@ -52,7 +53,8 @@ export const getClientById = asyncHandler(async (req: Request, res: Response): P
     throw new ValidationError('Invalid client ID');
   }
   
-  const client = await clientService.getClientById(clientId);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const client = await clientService.getClientById(clientId, tenantId);
 
   if (!client) {
     throw new NotFoundError('Client');
@@ -72,7 +74,8 @@ export const createClient = asyncHandler(async (req: Request<object, object, { c
   }
 
   try {
-    const clientId = await clientService.createClient(clientData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const clientId = await clientService.createClient(clientData, tenantId);
     
     res.status(201).json({ 
       success: true, 
@@ -109,7 +112,8 @@ export const updateClient = asyncHandler(async (req: Request<{ id: string }, obj
   }
 
   try {
-    const changes = await clientService.updateClient(clientId, clientData);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await clientService.updateClient(clientId, clientData, tenantId);
     
     res.json({ 
       success: true, 
@@ -148,7 +152,8 @@ export const deleteClient = asyncHandler(async (req: Request, res: Response): Pr
   }
   
   try {
-    const changes = await clientService.deleteClient(clientId);
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const changes = await clientService.deleteClient(clientId, tenantId);
     
     res.json({ 
       success: true, 
@@ -170,7 +175,8 @@ export const deleteClient = asyncHandler(async (req: Request, res: Response): Pr
  * Get client statistics
  */
 export const getClientStats = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const stats = await clientService.getClientStats();
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const stats = await clientService.getClientStats(tenantId);
   res.json({ success: true, data: stats });
 });
 
@@ -192,7 +198,8 @@ export const searchClients = asyncHandler(async (req: Request, res: Response): P
   }
   
   try {
-    const results = await clientService.searchClients(q, { limit: parsedLimit, offset: parsedOffset });
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const results = await clientService.searchClients(q, { limit: parsedLimit, offset: parsedOffset }, tenantId);
     res.json({ success: true, data: results });
   } catch (error) {
     throw new ValidationError((error as Error).message);
@@ -212,7 +219,8 @@ export const getActiveClients = asyncHandler(async (req: Request, res: Response)
     throw new ValidationError('Invalid limit or offset');
   }
 
-  const clients = await clientService.getActiveClients({ limit: parsedLimit, offset: parsedOffset });
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const clients = await clientService.getActiveClients({ limit: parsedLimit, offset: parsedOffset }, tenantId);
   res.json({ success: true, data: clients });
 });
 
@@ -262,10 +270,11 @@ export const getClientsWithRecentActivity = asyncHandler(async (req: Request, re
     throw new ValidationError('Invalid days, limit, or offset');
   }
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const clients = await clientService.getClientsWithRecentActivity(parsedDays, { 
     limit: parsedLimit, 
     offset: parsedOffset 
-  });
+  }, tenantId);
   
   res.json({ success: true, data: clients });
 });
@@ -288,10 +297,11 @@ export const getClientsByCountry = asyncHandler(async (req: Request, res: Respon
     throw new ValidationError('Invalid limit or offset');
   }
 
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
   const clients = await clientService.getClientsByCountry(country, { 
     limit: parsedLimit, 
     offset: parsedOffset 
-  });
+  }, tenantId);
   
   res.json({ success: true, data: clients });
 });
@@ -315,6 +325,7 @@ export const checkEmailExists = asyncHandler(async (req: Request, res: Response)
     }
   }
 
-  const exists = await clientService.emailExists(email, excludeIdNum);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+  const exists = await clientService.emailExists(email, excludeIdNum, tenantId);
   res.json({ success: true, data: { exists } });
 });

@@ -12,7 +12,11 @@ if ! command -v curl &> /dev/null; then
 fi
 
 # Create the cron job entry
-CRON_JOB="0 * * * * curl -X POST http://localhost:3002/api/cron/recurring-invoices >/dev/null 2>&1"
+if [ -n "$CRON_JOB_SECRET" ]; then
+    CRON_JOB="0 * * * * curl -H \"x-cron-secret: $CRON_JOB_SECRET\" -X POST http://localhost:3002/api/cron/recurring-invoices >/dev/null 2>&1"
+else
+    CRON_JOB="0 * * * * curl -X POST http://localhost:3002/api/cron/recurring-invoices >/dev/null 2>&1"
+fi
 
 # Check if cron job already exists
 if crontab -l 2>/dev/null | grep -q "api/cron/recurring-invoices"; then
@@ -41,4 +45,8 @@ echo "Then delete the line containing 'api/cron/recurring-invoices'"
 
 echo ""
 echo "To test the endpoint manually:"
-echo "  curl -X POST http://localhost:3002/api/cron/recurring-invoices"
+if [ -n "$CRON_JOB_SECRET" ]; then
+    echo "  curl -H \"x-cron-secret: \$CRON_JOB_SECRET\" -X POST http://localhost:3002/api/cron/recurring-invoices"
+else
+    echo "  curl -X POST http://localhost:3002/api/cron/recurring-invoices"
+fi

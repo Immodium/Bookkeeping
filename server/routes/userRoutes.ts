@@ -24,6 +24,7 @@ import {
   validateRequest,
   validationSets
 } from '../middleware/index.js';
+import { serverConfig } from '../config/index.js';
 
 const router: Router = Router();
 
@@ -34,6 +35,13 @@ const requireUsersResetPassword = requirePermission('users.reset_password');
 // Check if admin user exists (public endpoint for initialization)
 router.get('/admin-exists', async (req: Request, res: Response) => {
   try {
+    if (serverConfig.saasMode) {
+      res.status(404).json({
+        success: false,
+        error: 'Endpoint unavailable in SaaS mode'
+      });
+      return;
+    }
     const { userService } = await import('../services/UserService.js');
     const adminUser = await userService.getUserByEmail('admin@slimbooks.app');
     const adminExists = adminUser && adminUser.role === 'admin';
@@ -73,7 +81,7 @@ router.get('/email/:email', async (req: Request, res: Response, next: NextFuncti
   const { email } = req.params;
 
   // Allow public access for admin user check during initialization
-  if (email === 'admin@slimbooks.app') {
+  if (!serverConfig.saasMode && email === 'admin@slimbooks.app') {
     try {
       const { userService } = await import('../services/UserService.js');
       const user = await userService.getUserByEmail(email);
@@ -164,21 +172,29 @@ router.delete('/:id',
 
 // Update user login attempts (internal use)
 router.post('/update-login-attempts', 
+  requireAuth,
+  requireUsersWrite,
   updateUserLoginAttempts
 );
 
 // Update user last login (internal use)
 router.post('/update-last-login', 
+  requireAuth,
+  requireUsersWrite,
   updateUserLastLogin
 );
 
 // Update user login attempts by ID (public for login process)
 router.put('/:id/login-attempts',
+  requireAuth,
+  requireUsersWrite,
   updateLoginAttemptsByUserId
 );
 
 // Update user last login by ID (public for login process)
 router.put('/:id/last-login',
+  requireAuth,
+  requireUsersWrite,
   updateLastLoginByUserId
 );
 

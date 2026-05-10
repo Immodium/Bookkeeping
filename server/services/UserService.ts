@@ -10,6 +10,10 @@ import { getPrimaryRole, normalizeRoles } from '../auth/roles.js';
  * Handles user lifecycle management, profile updates, and administrative operations
  */
 export class UserService {
+  private normalizeTenantId(tenantId?: number): number {
+    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+  }
+
   private reserveNextUserId(): number {
     const counterNextId = databaseService.getNextId('users');
     const maxUserIdRow = databaseService.getOne<{ maxId: number }>(
@@ -24,9 +28,9 @@ export class UserService {
     const reconciledNextId = maxUserId + 1;
     databaseService.executeQuery(
       `
-        INSERT INTO counters (name, value)
-        VALUES ('users', ?)
-        ON CONFLICT(name) DO UPDATE SET value = excluded.value
+        INSERT INTO counters (tenant_id, name, value, created_at, updated_at)
+        VALUES (1, 'users', ?, datetime('now'), datetime('now'))
+        ON CONFLICT(tenant_id, name) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
       `,
       [reconciledNextId]
     );
@@ -58,16 +62,18 @@ export class UserService {
   /**
    * Get all users with pagination
    */
-  async getAllUsers(options: ServiceOptions = {}): Promise<UserPublic[]> {
+  async getAllUsers(options: ServiceOptions = {}, tenantId?: number): Promise<UserPublic[]> {
     const { limit = 100, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     
     const rows = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
              roles, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
+      WHERE tenant_id = ?
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
-    `, [limit, offset]);
+    `, [scopedTenantId, limit, offset]);
 
     return rows.map((row) => this.mapUserPublic(row));
   }
@@ -75,17 +81,18 @@ export class UserService {
   /**
    * Get user by ID
    */
-  async getUserById(id: number): Promise<UserPublic | null> {
+  async getUserById(id: number, tenantId?: number): Promise<UserPublic | null> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid user ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const user = databaseService.getOne<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
              roles, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
-      WHERE id = ?
-    `, [id]);
+      WHERE id = ? AND tenant_id = ?
+    `, [id, scopedTenantId]);
 
     return user ? this.mapUserPublic(user) : null;
   }
@@ -93,26 +100,27 @@ export class UserService {
   /**
    * Get user by email
    */
-  async getUserByEmail(email: string): Promise<User | null> {
+  async getUserByEmail(email: string, tenantId?: number): Promise<User | null> {
     if (!email || typeof email !== 'string') {
       throw new Error('Valid email is required');
     }
-
-    const user = databaseService.getOne<User>('SELECT * FROM users WHERE email = ?', [email]);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const user = databaseService.getOne<User>('SELECT * FROM users WHERE email = ? AND tenant_id = ?', [email, scopedTenantId]);
     return this.mapUserWithRoles(user);
   }
 
   /**
    * Get user by Google ID
    */
-  async getUserByGoogleId(googleId: string): Promise<User | null> {
+  async getUserByGoogleId(googleId: string, tenantId?: number): Promise<User | null> {
     if (!googleId || typeof googleId !== 'string') {
       throw new Error('Valid Google ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const user = databaseService.getOne<User>(
-      'SELECT * FROM users WHERE google_id = ?', 
-      [decodeURIComponent(googleId)]
+      'SELECT * FROM users WHERE google_id = ? AND tenant_id = ?', 
+      [decodeURIComponent(googleId), scopedTenantId]
     );
     return this.mapUserWithRoles(user);
   }
@@ -121,6 +129,7 @@ export class UserService {
    * Create new user
    */
   async createUser(userData: {
+    tenant_id?: number;
     name: string;
     email: string;
     username?: string;
@@ -134,6 +143,7 @@ export class UserService {
     account_locked_until?: string;
   }): Promise<number> {
     const { 
+      tenant_id,
       name, 
       email, 
       username, 
@@ -156,8 +166,13 @@ export class UserService {
       throw new Error('Valid email is required');
     }
 
-    // Check if user already exists
-    if (databaseService.exists('users', 'email', email)) {
+    const scopedTenantId = this.normalizeTenantId(tenant_id);
+    // Check if user already exists for tenant
+    const existingUser = databaseService.getOne<{ id: number }>(
+      'SELECT id FROM users WHERE tenant_id = ? AND email = ?',
+      [scopedTenantId, email]
+    );
+    if (existingUser) {
       throw new Error('User with this email already exists');
     }
 
@@ -172,11 +187,12 @@ export class UserService {
     try {
       databaseService.executeQuery(`
         INSERT INTO users (
-          id, name, email, username, password_hash, role, roles, email_verified,
+          id, tenant_id, name, email, username, password_hash, role, roles, email_verified,
           google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         nextId, 
+        scopedTenantId,
         name, 
         email, 
         username || email, 
@@ -200,11 +216,12 @@ export class UserService {
       const fallbackId = this.reserveNextUserId();
       databaseService.executeQuery(`
         INSERT INTO users (
-          id, name, email, username, password_hash, role, roles, email_verified,
+          id, tenant_id, name, email, username, password_hash, role, roles, email_verified,
           google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         fallbackId,
+        scopedTenantId,
         name,
         email,
         username || email,
@@ -237,7 +254,7 @@ export class UserService {
     email_verified: boolean;
     google_id: string;
     password_hash: string;
-  }>): Promise<number> {
+  }>, tenantId?: number): Promise<number> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid user ID is required');
     }
@@ -246,8 +263,9 @@ export class UserService {
       throw new Error('User data is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     // Check if user exists
-    const existingUser = await this.getUserById(id);
+    const existingUser = await this.getUserById(id, scopedTenantId);
     if (!existingUser) {
       throw new Error('User not found');
     }
@@ -275,8 +293,8 @@ export class UserService {
       // Check email uniqueness if email is being changed
       if (updateData.email !== existingUser.email) {
         const emailExists = databaseService.getOne<{id: number}>(
-          'SELECT id FROM users WHERE email = ? AND id != ?', 
-          [updateData.email, id]
+          'SELECT id FROM users WHERE tenant_id = ? AND email = ? AND id != ?', 
+          [scopedTenantId, updateData.email, id]
         );
         if (emailExists) {
           throw new Error('Email is already in use');
@@ -299,27 +317,35 @@ export class UserService {
       updateData.email_verified = updateData.email_verified ? 1 : 0;
     }
 
-    const success = databaseService.updateById('users', id, updateData);
-    return success ? 1 : 0;
+    const keys = Object.keys(updateData);
+    const values = Object.values(updateData);
+    const setClause = keys.map((key) => `${key} = ?`).join(', ');
+    const result = databaseService.executeQuery(
+      `UPDATE users SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+      [...values, id, scopedTenantId]
+    );
+    return result.changes;
   }
 
   /**
    * Delete user
    */
-  async deleteUser(id: number): Promise<number> {
+  async deleteUser(id: number, tenantId?: number): Promise<number> {
     if (!id || typeof id !== 'number') {
       throw new Error('Valid user ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     // Check if user exists
-    const existingUser = await this.getUserById(id);
+    const existingUser = await this.getUserById(id, scopedTenantId);
     if (!existingUser) {
       throw new Error('User not found');
     }
 
     // Don't allow deletion of the last admin
     const adminCount = databaseService.getOne<{count: number}>(
-      "SELECT COUNT(*) as count FROM users WHERE role = 'admin' OR roles LIKE '%\"admin\"%'"
+      "SELECT COUNT(*) as count FROM users WHERE tenant_id = ? AND (role = 'admin' OR roles LIKE '%\"admin\"%')",
+      [scopedTenantId]
     );
     
     const existingRoles = normalizeRoles(existingUser.roles);
@@ -327,8 +353,11 @@ export class UserService {
       throw new Error('Cannot delete the last administrator');
     }
 
-    const success = databaseService.deleteById('users', id);
-    return success ? 1 : 0;
+    const result = databaseService.executeQuery(
+      'DELETE FROM users WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    );
+    return result.changes;
   }
 
   /**
@@ -337,7 +366,8 @@ export class UserService {
   async updateUserLoginAttempts(
     userId: number, 
     attempts: number, 
-    lockedUntil: string | null = null
+    lockedUntil: string | null = null,
+    tenantId?: number
   ): Promise<boolean> {
     if (!userId || typeof userId !== 'number') {
       throw new Error('Valid user ID is required');
@@ -347,9 +377,10 @@ export class UserService {
       throw new Error('Valid attempts count is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const changes = databaseService.executeQuery(
-      "UPDATE users SET failed_login_attempts = ?, account_locked_until = ?, updated_at = datetime('now') WHERE id = ?",
-      [attempts, lockedUntil, userId]
+      "UPDATE users SET failed_login_attempts = ?, account_locked_until = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+      [attempts, lockedUntil, userId, scopedTenantId]
     );
 
     return changes.changes > 0;
@@ -358,14 +389,15 @@ export class UserService {
   /**
    * Update user last login
    */
-  async updateUserLastLogin(userId: number): Promise<boolean> {
+  async updateUserLastLogin(userId: number, tenantId?: number): Promise<boolean> {
     if (!userId || typeof userId !== 'number') {
       throw new Error('Valid user ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const changes = databaseService.executeQuery(
-      "UPDATE users SET last_login = datetime('now'), updated_at = datetime('now') WHERE id = ?",
-      [userId]
+      "UPDATE users SET last_login = datetime('now'), updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+      [userId, scopedTenantId]
     );
 
     return changes.changes > 0;
@@ -374,14 +406,15 @@ export class UserService {
   /**
    * Verify user email
    */
-  async verifyUserEmail(userId: number): Promise<boolean> {
+  async verifyUserEmail(userId: number, tenantId?: number): Promise<boolean> {
     if (!userId || typeof userId !== 'number') {
       throw new Error('Valid user ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const changes = databaseService.executeQuery(
-      "UPDATE users SET email_verified = 1, email_verified_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
-      [userId]
+      "UPDATE users SET email_verified = 1, email_verified_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+      [userId, scopedTenantId]
     );
 
     return changes.changes > 0;
@@ -390,47 +423,57 @@ export class UserService {
   /**
    * Check if user exists by ID
    */
-  async userExists(id: number): Promise<boolean> {
+  async userExists(id: number, tenantId?: number): Promise<boolean> {
     if (!id || typeof id !== 'number') {
       return false;
     }
-
-    return databaseService.exists('users', 'id', id);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const user = databaseService.getOne<{ id: number }>(
+      'SELECT id FROM users WHERE id = ? AND tenant_id = ?',
+      [id, scopedTenantId]
+    );
+    return Boolean(user);
   }
 
   /**
    * Check if email is already in use
    */
-  async emailExists(email: string, excludeId?: number): Promise<boolean> {
+  async emailExists(email: string, excludeId?: number, tenantId?: number): Promise<boolean> {
     if (!email || typeof email !== 'string') {
       return false;
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     if (excludeId) {
       const user = databaseService.getOne<{id: number}>(
-        'SELECT id FROM users WHERE email = ? AND id != ?', 
-        [email, excludeId]
+        'SELECT id FROM users WHERE tenant_id = ? AND email = ? AND id != ?', 
+        [scopedTenantId, email, excludeId]
       );
       return !!user;
     }
     
-    return databaseService.exists('users', 'email', email);
+    const user = databaseService.getOne<{ id: number }>(
+      'SELECT id FROM users WHERE tenant_id = ? AND email = ?',
+      [scopedTenantId, email]
+    );
+    return Boolean(user);
   }
 
   /**
    * Get users by role
    */
-  async getUsersByRole(role: UserRole, options: ServiceOptions = {}): Promise<UserPublic[]> {
+  async getUsersByRole(role: UserRole, options: ServiceOptions = {}, tenantId?: number): Promise<UserPublic[]> {
     const { limit = 100, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const rows = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
              roles, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
-      WHERE role = ? OR roles LIKE ?
+      WHERE tenant_id = ? AND (role = ? OR roles LIKE ?)
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
-    `, [role, `%"${role}"%`, limit, offset]);
+    `, [scopedTenantId, role, `%"${role}"%`, limit, offset]);
 
     return rows.map((row) => this.mapUserPublic(row));
   }
@@ -438,17 +481,18 @@ export class UserService {
   /**
    * Get locked users
    */
-  async getLockedUsers(options: ServiceOptions = {}): Promise<UserPublic[]> {
+  async getLockedUsers(options: ServiceOptions = {}, tenantId?: number): Promise<UserPublic[]> {
     const { limit = 100, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const rows = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
              roles, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
-      WHERE account_locked_until IS NOT NULL AND account_locked_until > datetime('now')
+      WHERE tenant_id = ? AND account_locked_until IS NOT NULL AND account_locked_until > datetime('now')
       ORDER BY account_locked_until DESC
       LIMIT ? OFFSET ?
-    `, [limit, offset]);
+    `, [scopedTenantId, limit, offset]);
 
     return rows.map((row) => this.mapUserPublic(row));
   }
@@ -456,14 +500,15 @@ export class UserService {
   /**
    * Unlock user account
    */
-  async unlockUser(userId: number): Promise<boolean> {
+  async unlockUser(userId: number, tenantId?: number): Promise<boolean> {
     if (!userId || typeof userId !== 'number') {
       throw new Error('Valid user ID is required');
     }
 
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const changes = databaseService.executeQuery(
-      "UPDATE users SET failed_login_attempts = 0, account_locked_until = NULL, updated_at = datetime('now') WHERE id = ?",
-      [userId]
+      "UPDATE users SET failed_login_attempts = 0, account_locked_until = NULL, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+      [userId, scopedTenantId]
     );
 
     return changes.changes > 0;
@@ -472,19 +517,20 @@ export class UserService {
   /**
    * Search users by name or email
    */
-  async searchUsers(searchTerm: string, options: ServiceOptions = {}): Promise<UserPublic[]> {
+  async searchUsers(searchTerm: string, options: ServiceOptions = {}, tenantId?: number): Promise<UserPublic[]> {
     if (!searchTerm || typeof searchTerm !== 'string') {
       return [];
     }
 
     const { limit = 50, offset = 0 } = options;
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const searchPattern = `%${searchTerm}%`;
 
     const rows = databaseService.getMany<UserPublic>(`
       SELECT id, name, email, username, role, email_verified,
              roles, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
-      WHERE (name LIKE ? OR email LIKE ? OR username LIKE ?)
+      WHERE tenant_id = ? AND (name LIKE ? OR email LIKE ? OR username LIKE ?)
       ORDER BY 
         CASE 
           WHEN name = ? THEN 1
@@ -495,7 +541,7 @@ export class UserService {
         created_at DESC
       LIMIT ? OFFSET ?
     `, [
-      searchPattern, searchPattern, searchPattern,
+      scopedTenantId, searchPattern, searchPattern, searchPattern,
       searchTerm, searchTerm, searchTerm,
       limit, offset
     ]);
@@ -506,7 +552,7 @@ export class UserService {
   /**
    * Get user statistics
    */
-  async getUserStats(): Promise<{
+  async getUserStats(tenantId?: number): Promise<{
     total: number;
     admins: number;
     regular: number;
@@ -514,28 +560,35 @@ export class UserService {
     locked: number;
     recentLogins: number;
   }> {
+    const scopedTenantId = this.normalizeTenantId(tenantId);
     const total = databaseService.getOne<{count: number}>(
-      'SELECT COUNT(*) as count FROM users'
+      'SELECT COUNT(*) as count FROM users WHERE tenant_id = ?',
+      [scopedTenantId]
     )?.count || 0;
 
     const admins = databaseService.getOne<{count: number}>(
-      "SELECT COUNT(*) as count FROM users WHERE role = 'admin' OR roles LIKE '%\"admin\"%'"
+      "SELECT COUNT(*) as count FROM users WHERE tenant_id = ? AND (role = 'admin' OR roles LIKE '%\"admin\"%')",
+      [scopedTenantId]
     )?.count || 0;
 
     const regular = databaseService.getOne<{count: number}>(
-      "SELECT COUNT(*) as count FROM users WHERE role = 'user'"
+      "SELECT COUNT(*) as count FROM users WHERE tenant_id = ? AND role = 'user'",
+      [scopedTenantId]
     )?.count || 0;
 
     const verified = databaseService.getOne<{count: number}>(
-      'SELECT COUNT(*) as count FROM users WHERE email_verified = 1'
+      'SELECT COUNT(*) as count FROM users WHERE tenant_id = ? AND email_verified = 1',
+      [scopedTenantId]
     )?.count || 0;
 
     const locked = databaseService.getOne<{count: number}>(
-      "SELECT COUNT(*) as count FROM users WHERE account_locked_until IS NOT NULL AND account_locked_until > datetime('now')"
+      "SELECT COUNT(*) as count FROM users WHERE tenant_id = ? AND account_locked_until IS NOT NULL AND account_locked_until > datetime('now')",
+      [scopedTenantId]
     )?.count || 0;
 
     const recentLogins = databaseService.getOne<{count: number}>(
-      "SELECT COUNT(*) as count FROM users WHERE last_login > datetime('now', '-7 days')"
+      "SELECT COUNT(*) as count FROM users WHERE tenant_id = ? AND last_login > datetime('now', '-7 days')",
+      [scopedTenantId]
     )?.count || 0;
 
     return {
@@ -548,12 +601,13 @@ export class UserService {
     };
   }
 
-  async setUserRoles(userId: number, roles: UserRole[]): Promise<void> {
+  async setUserRoles(userId: number, roles: UserRole[], tenantId?: number): Promise<void> {
     if (!userId || typeof userId !== 'number') {
       throw new Error('Valid user ID is required');
     }
 
-    const existingUser = await this.getUserById(userId);
+    const scopedTenantId = this.normalizeTenantId(tenantId);
+    const existingUser = await this.getUserById(userId, scopedTenantId);
     if (!existingUser) {
       throw new Error('User not found');
     }
@@ -561,10 +615,10 @@ export class UserService {
     const normalizedRoles = normalizeRoles(roles);
     const primaryRole = getPrimaryRole(normalizedRoles, existingUser.role);
 
-    databaseService.updateById('users', userId, {
-      role: primaryRole,
-      roles: JSON.stringify(normalizedRoles)
-    });
+    databaseService.executeQuery(
+      "UPDATE users SET role = ?, roles = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+      [primaryRole, JSON.stringify(normalizedRoles), userId, scopedTenantId]
+    );
   }
 
   /**

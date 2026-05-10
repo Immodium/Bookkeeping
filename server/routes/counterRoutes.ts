@@ -19,6 +19,7 @@ router.use(requireAuth);
 router.get('/:counterName/next', async (req: Request, res: Response): Promise<void> => {
   try {
     const { counterName } = req.params;
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
     
     if (!counterName) {
       res.status(400).json({
@@ -28,7 +29,7 @@ router.get('/:counterName/next', async (req: Request, res: Response): Promise<vo
       return;
     }
     
-    const nextId = await counterService.getNextCounterId(counterName);
+    const nextId = await counterService.getNextCounterId(counterName, tenantId);
     
     res.json({
       success: true,
@@ -47,8 +48,9 @@ router.get('/:counterName/next', async (req: Request, res: Response): Promise<vo
 router.get('/:counterName', async (req: Request, res: Response): Promise<void> => {
   try {
     const { counterName } = req.params;
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
     
-    const counter = await counterService.getCurrentCounterValue(counterName!);
+    const counter = await counterService.getCurrentCounterValue(counterName!, tenantId);
     
     if (!counter) {
       res.status(404).json({
@@ -76,6 +78,7 @@ router.put('/:counterName/reset', async (req: AuthenticatedRequest, res: Respons
   try {
     const { counterName } = req.params;
     const { value = 0 } = req.body;
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
     
     // Check if user has admin role
     if (!userHasRole(req.user?.roles, 'admin')) {
@@ -86,7 +89,7 @@ router.put('/:counterName/reset', async (req: AuthenticatedRequest, res: Respons
       return;
     }
     
-    await counterService.resetCounter(counterName!, value);
+    await counterService.resetCounter(counterName!, value, tenantId);
     
     res.json({
       success: true,

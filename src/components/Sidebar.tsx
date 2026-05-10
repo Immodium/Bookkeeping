@@ -188,7 +188,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
                   className={cn(
                     'group flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                     parentActive && !item.subItems
-                      ? 'bg-accent text-accent-foreground border border-border'
+                      ? 'bg-accent text-foreground dark:text-accent-foreground border border-border'
                       : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                   )}
                 >
@@ -196,7 +196,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
                     className={cn(
                       'mr-3 h-5 w-5 flex-shrink-0',
                       parentActive && !item.subItems 
-                        ? 'text-accent-foreground' 
+                        ? 'text-foreground dark:text-accent-foreground' 
                         : 'text-muted-foreground group-hover:text-muted-foreground'
                     )}
                   />
@@ -215,7 +215,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
                           className={cn(
                             'group flex w-full items-center rounded-lg px-3 py-2 text-sm transition-colors',
                             subActive
-                              ? 'bg-accent text-accent-foreground border border-border'
+                              ? 'bg-accent text-foreground dark:text-accent-foreground border border-border'
                               : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                           )}
                         >

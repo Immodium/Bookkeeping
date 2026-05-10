@@ -18,6 +18,152 @@ const CATEGORY_HINTS: Array<{ category: string; keywords: string[] }> = [
   { category: 'Marketing', keywords: ['ads', 'advertising', 'campaign', 'marketing', 'promotion'] }
 ];
 
+const TOTAL_LABEL_PATTERN =
+  /\b(grand\s*total|total\s*due|amount\s*due|balance\s*due|subtotal|sub\s*total|total|totl|toll|amount|balance)\b/i;
+const CURRENCY_VALUE_PATTERN =
+  /[$€£]?\s*-?\d{1,3}(?:[,\s.]\d{3})*(?:[.,]\d{1,2})|[$€£]?\s*-?\d+(?:[.,]\d{1,2})/gi;
+const IMPLIED_CENTS_PATTERN = /(?:^|[^\d])(\d{3,6})(?:[^\d]|$)/g;
+
+type ParseCurrencyAmountOptions = {
+  allowImpliedCents?: boolean;
+};
+
+export const parseCurrencyAmount = (
+  rawValue: string,
+  options: ParseCurrencyAmountOptions = {}
+): number | undefined => {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const compact = trimmed.replace(/\s+/g, '').replace(/[^\d,.-]/g, '');
+  if (!compact) {
+    return undefined;
+  }
+
+  const lastComma = compact.lastIndexOf(',');
+  const lastDot = compact.lastIndexOf('.');
+  const hasDecimalSeparator = lastComma !== -1 || lastDot !== -1;
+  let normalized = compact;
+
+  if (lastComma !== -1 && lastDot !== -1) {
+    const decimalSeparator = lastComma > lastDot ? ',' : '.';
+    const thousandsSeparator = decimalSeparator === ',' ? '.' : ',';
+    normalized = normalized.split(thousandsSeparator).join('');
+    if (decimalSeparator === ',') {
+      normalized = normalized.replace(',', '.');
+    }
+  } else if (lastComma !== -1) {
+    const decimalDigits = compact.length - lastComma - 1;
+    normalized = decimalDigits >= 1 && decimalDigits <= 2 ? compact.replace(',', '.') : compact.replace(/,/g, '');
+  } else if (lastDot !== -1) {
+    const decimalDigits = compact.length - lastDot - 1;
+    normalized = decimalDigits >= 1 && decimalDigits <= 2 ? compact : compact.replace(/\./g, '');
+  }
+
+  if (options.allowImpliedCents) {
+    const digitsOnly = compact.replace(/[^\d-]/g, '');
+    if (!hasDecimalSeparator && /^\d{3,6}$/.test(digitsOnly)) {
+      const impliedCents = Number.parseInt(digitsOnly, 10) / 100;
+      if (Number.isFinite(impliedCents) && impliedCents > 0) {
+        return impliedCents;
+      }
+    }
+  }
+
+  const parsed = Number.parseFloat(normalized);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  return undefined;
+};
+
+const extractImpliedCentsAmounts = (line: string): number[] => {
+  const matches: number[] = [];
+  for (const match of line.matchAll(IMPLIED_CENTS_PATTERN)) {
+    const candidate = match[1];
+    if (!candidate) continue;
+    const amount = parseCurrencyAmount(candidate, { allowImpliedCents: true });
+    if (amount) {
+      matches.push(amount);
+    }
+  }
+  return matches;
+};
+
+export const extractAmountFromReceiptText = (text: string): number | undefined => {
+  if (!text.trim()) {
+    return undefined;
+  }
+
+  const labeledMatches: number[] = [];
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line) continue;
+
+    const hasTotalLabel = TOTAL_LABEL_PATTERN.test(line);
+    TOTAL_LABEL_PATTERN.lastIndex = 0;
+
+    if (!hasTotalLabel) {
+      continue;
+    }
+
+    const inlineMatches = line.match(CURRENCY_VALUE_PATTERN) ?? [];
+    for (const candidate of inlineMatches) {
+      const amount = parseCurrencyAmount(candidate);
+      if (amount) {
+        labeledMatches.push(amount);
+      }
+    }
+
+    if (inlineMatches.length === 0) {
+      const impliedCentsMatches = extractImpliedCentsAmounts(line);
+      labeledMatches.push(...impliedCentsMatches);
+    }
+
+    if (inlineMatches.length === 0 && index + 1 < lines.length) {
+      const nextLine = lines[index + 1];
+      const nextLineMatches = nextLine?.match(CURRENCY_VALUE_PATTERN) ?? [];
+      for (const candidate of nextLineMatches) {
+        const amount = parseCurrencyAmount(candidate);
+        if (amount) {
+          labeledMatches.push(amount);
+        }
+      }
+
+      if (nextLineMatches.length === 0 && nextLine) {
+        const impliedCentsMatches = extractImpliedCentsAmounts(nextLine);
+        labeledMatches.push(...impliedCentsMatches);
+      }
+    }
+  }
+
+  if (labeledMatches.length > 0) {
+    return Math.max(...labeledMatches);
+  }
+
+  const fallbackMatches = text.match(CURRENCY_VALUE_PATTERN) ?? [];
+  const fallbackAmounts = fallbackMatches
+    .map((candidate) => parseCurrencyAmount(candidate))
+    .filter((amount): amount is number => typeof amount === 'number');
+
+  const impliedFallbackAmounts = lines.flatMap((line) => extractImpliedCentsAmounts(line));
+  const allFallbackAmounts = [...fallbackAmounts, ...impliedFallbackAmounts];
+
+  if (allFallbackAmounts.length > 0) {
+    return Math.max(...allFallbackAmounts);
+  }
+
+  return undefined;
+};
+
 export class ReceiptOCRService {
   async parseReceipt(filePath: string): Promise<ParsedReceiptData> {
     const { data } = await Tesseract.recognize(filePath, 'eng');
@@ -48,30 +194,7 @@ export class ReceiptOCRService {
   }
 
   private extractAmount(text: string): number | undefined {
-    const amountPattern = /(total|amount|balance)[^\d]{0,10}(\d{1,4}(?:[.,]\d{2})?)/gi;
-    let match: RegExpExecArray | null = null;
-    let lastAmount: number | undefined;
-
-    while ((match = amountPattern.exec(text)) !== null) {
-      const amountText = match[2];
-      if (!amountText) continue;
-      const parsed = parseFloat(amountText.replace(',', '.'));
-      if (!Number.isNaN(parsed) && parsed > 0) {
-        lastAmount = parsed;
-      }
-    }
-
-    if (lastAmount) return lastAmount;
-
-    const anyAmountPattern = /\b(\d{1,4}(?:[.,]\d{2}))\b/g;
-    const amounts = Array.from(text.matchAll(anyAmountPattern))
-      .map((m) => {
-        const amountText = m[1];
-        return amountText ? parseFloat(amountText.replace(',', '.')) : Number.NaN;
-      })
-      .filter((num) => !Number.isNaN(num) && num > 0);
-
-    return amounts.length ? Math.max(...amounts) : undefined;
+    return extractAmountFromReceiptText(text);
   }
 
   private extractDate(text: string): string | undefined {

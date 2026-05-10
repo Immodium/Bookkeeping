@@ -9,6 +9,43 @@ import { ExpenseFormProps } from '@/types/components/expense.types';
 import { authenticatedFetch } from '@/utils/api';
 import { toast } from 'sonner';
 
+const parseExtractedAmount = (rawValue: unknown): number | null => {
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue) && rawValue > 0) {
+    return rawValue;
+  }
+
+  if (typeof rawValue !== 'string') {
+    return null;
+  }
+
+  const compact = rawValue.trim().replace(/\s+/g, '').replace(/[^\d,.-]/g, '');
+  if (!compact) {
+    return null;
+  }
+
+  const lastComma = compact.lastIndexOf(',');
+  const lastDot = compact.lastIndexOf('.');
+  let normalized = compact;
+
+  if (lastComma !== -1 && lastDot !== -1) {
+    const decimalSeparator = lastComma > lastDot ? ',' : '.';
+    const thousandsSeparator = decimalSeparator === ',' ? '.' : ',';
+    normalized = normalized.split(thousandsSeparator).join('');
+    if (decimalSeparator === ',') {
+      normalized = normalized.replace(',', '.');
+    }
+  } else if (lastComma !== -1) {
+    const decimalDigits = compact.length - lastComma - 1;
+    normalized = decimalDigits >= 1 && decimalDigits <= 2 ? compact.replace(',', '.') : compact.replace(/,/g, '');
+  } else if (lastDot !== -1) {
+    const decimalDigits = compact.length - lastDot - 1;
+    normalized = decimalDigits >= 1 && decimalDigits <= 2 ? compact : compact.replace(/\./g, '');
+  }
+
+  const parsedAmount = Number.parseFloat(normalized);
+  return Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : null;
+};
+
 export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
     date: expense?.date || new Date().toISOString().split('T')[0],
@@ -97,16 +134,15 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
       });
       const payload = await response.json();
       const parsed = payload?.data || {};
-      const normalizedAmountRaw = parsed.amount ?? parsed.total ?? parsed.total_amount;
-      const normalizedAmount = Number.parseFloat(String(normalizedAmountRaw ?? ''));
-      const hasAmount = Number.isFinite(normalizedAmount) && normalizedAmount > 0;
+      const normalizedAmountRaw = parsed.amount ?? parsed.total ?? parsed.total_amount ?? parsed.grand_total;
+      const normalizedAmount = parseExtractedAmount(normalizedAmountRaw);
 
       setFormData((prev) => ({
         ...prev,
         date: parsed.date || prev.date,
         vendor: parsed.vendor || prev.vendor,
         category: parsed.category || prev.category,
-        amount: hasAmount ? normalizedAmount.toFixed(2) : prev.amount,
+        amount: normalizedAmount ? normalizedAmount.toFixed(2) : prev.amount,
         description: parsed.description || prev.description,
         receipt_url: parsed.receipt_url || prev.receipt_url
       }));

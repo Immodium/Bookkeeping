@@ -23,6 +23,7 @@ export interface ExpensesListProps {
   onDeleteExpense: (id: number) => void;
   onViewExpense: (expense: Expense) => void;
   onApproveExpense?: (id: number) => void;
+  onBulkApprove?: (ids: number[]) => void;
   onBulkDelete?: (ids: number[]) => void;
   onBulkCategorize?: (ids: number[], category: string) => void;
   onBulkChangeMerchant?: (ids: number[], merchant: string) => void;

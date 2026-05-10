@@ -12,6 +12,7 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
   onDeleteExpense, 
   onViewExpense,
   onApproveExpense,
+  onBulkApprove,
   onBulkDelete,
   onBulkCategorize,
   onBulkChangeMerchant,
@@ -78,8 +79,25 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
     setShowBulkActions(false);
   };
 
+  const handleBulkApprove = () => {
+    if (selectedExpenses.length === 0 || !onBulkApprove) return;
+
+    const pendingExpenseIds = expenses
+      .filter((expense) => selectedExpenses.includes(expense.id) && (expense.status || 'pending') === 'pending')
+      .map((expense) => expense.id);
+
+    if (pendingExpenseIds.length === 0) return;
+
+    onBulkApprove(pendingExpenseIds);
+    setSelectedExpenses([]);
+    setShowBulkActions(false);
+  };
+
   const isAllSelected = expenses.length > 0 && selectedExpenses.length === expenses.length;
   const isPartialSelected = selectedExpenses.length > 0 && selectedExpenses.length < expenses.length;
+  const selectedPendingCount = expenses.filter(
+    (expense) => selectedExpenses.includes(expense.id) && (expense.status || 'pending') === 'pending'
+  ).length;
 
   return (
     <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
@@ -91,6 +109,19 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
               {selectedExpenses.length} expense(s) selected
             </span>
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Bulk Approve */}
+              {onBulkApprove && (
+                <button
+                  onClick={handleBulkApprove}
+                  disabled={selectedPendingCount === 0}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={selectedPendingCount === 0 ? 'No pending expenses selected' : `Approve ${selectedPendingCount} pending expense(s)`}
+                >
+                  <Check className="h-4 w-4" />
+                  Approve Selected
+                </button>
+              )}
+
               {/* Bulk Delete */}
               {onBulkDelete && (
                 <button

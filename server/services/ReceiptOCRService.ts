@@ -18,11 +18,20 @@ const CATEGORY_HINTS: Array<{ category: string; keywords: string[] }> = [
   { category: 'Marketing', keywords: ['ads', 'advertising', 'campaign', 'marketing', 'promotion'] }
 ];
 
-const TOTAL_LABEL_PATTERN = /\b(grand\s*total|total\s*due|amount\s*due|balance\s*due|total|amount|balance)\b/i;
+const TOTAL_LABEL_PATTERN =
+  /\b(grand\s*total|total\s*due|amount\s*due|balance\s*due|subtotal|sub\s*total|total|totl|toll|amount|balance)\b/i;
 const CURRENCY_VALUE_PATTERN =
   /[$€£]?\s*-?\d{1,3}(?:[,\s.]\d{3})*(?:[.,]\d{1,2})|[$€£]?\s*-?\d+(?:[.,]\d{1,2})/gi;
+const IMPLIED_CENTS_PATTERN = /(?:^|[^\d])(\d{3,6})(?:[^\d]|$)/g;
 
-export const parseCurrencyAmount = (rawValue: string): number | undefined => {
+type ParseCurrencyAmountOptions = {
+  allowImpliedCents?: boolean;
+};
+
+export const parseCurrencyAmount = (
+  rawValue: string,
+  options: ParseCurrencyAmountOptions = {}
+): number | undefined => {
   const trimmed = rawValue.trim();
   if (!trimmed) {
     return undefined;
@@ -35,6 +44,7 @@ export const parseCurrencyAmount = (rawValue: string): number | undefined => {
 
   const lastComma = compact.lastIndexOf(',');
   const lastDot = compact.lastIndexOf('.');
+  const hasDecimalSeparator = lastComma !== -1 || lastDot !== -1;
   let normalized = compact;
 
   if (lastComma !== -1 && lastDot !== -1) {
@@ -52,8 +62,35 @@ export const parseCurrencyAmount = (rawValue: string): number | undefined => {
     normalized = decimalDigits >= 1 && decimalDigits <= 2 ? compact : compact.replace(/\./g, '');
   }
 
+  if (options.allowImpliedCents) {
+    const digitsOnly = compact.replace(/[^\d-]/g, '');
+    if (!hasDecimalSeparator && /^\d{3,6}$/.test(digitsOnly)) {
+      const impliedCents = Number.parseInt(digitsOnly, 10) / 100;
+      if (Number.isFinite(impliedCents) && impliedCents > 0) {
+        return impliedCents;
+      }
+    }
+  }
+
   const parsed = Number.parseFloat(normalized);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  return undefined;
+};
+
+const extractImpliedCentsAmounts = (line: string): number[] => {
+  const matches: number[] = [];
+  for (const match of line.matchAll(IMPLIED_CENTS_PATTERN)) {
+    const candidate = match[1];
+    if (!candidate) continue;
+    const amount = parseCurrencyAmount(candidate, { allowImpliedCents: true });
+    if (amount) {
+      matches.push(amount);
+    }
+  }
+  return matches;
 };
 
 export const extractAmountFromReceiptText = (text: string): number | undefined => {
@@ -86,6 +123,11 @@ export const extractAmountFromReceiptText = (text: string): number | undefined =
       }
     }
 
+    if (inlineMatches.length === 0) {
+      const impliedCentsMatches = extractImpliedCentsAmounts(line);
+      labeledMatches.push(...impliedCentsMatches);
+    }
+
     if (inlineMatches.length === 0 && index + 1 < lines.length) {
       const nextLine = lines[index + 1];
       const nextLineMatches = nextLine?.match(CURRENCY_VALUE_PATTERN) ?? [];
@@ -94,6 +136,11 @@ export const extractAmountFromReceiptText = (text: string): number | undefined =
         if (amount) {
           labeledMatches.push(amount);
         }
+      }
+
+      if (nextLineMatches.length === 0 && nextLine) {
+        const impliedCentsMatches = extractImpliedCentsAmounts(nextLine);
+        labeledMatches.push(...impliedCentsMatches);
       }
     }
   }
@@ -107,8 +154,11 @@ export const extractAmountFromReceiptText = (text: string): number | undefined =
     .map((candidate) => parseCurrencyAmount(candidate))
     .filter((amount): amount is number => typeof amount === 'number');
 
-  if (fallbackAmounts.length > 0) {
-    return Math.max(...fallbackAmounts);
+  const impliedFallbackAmounts = lines.flatMap((line) => extractImpliedCentsAmounts(line));
+  const allFallbackAmounts = [...fallbackAmounts, ...impliedFallbackAmounts];
+
+  if (allFallbackAmounts.length > 0) {
+    return Math.max(...allFallbackAmounts);
   }
 
   return undefined;

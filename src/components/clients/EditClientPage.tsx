@@ -6,6 +6,7 @@ import { authenticatedFetch } from '@/utils/api';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { InternationalAddressForm } from '@/components/ui/InternationalAddressForm';
 import { ClientFormData } from '@/types';
+import { formatUsPhoneNumber } from '@/utils/formatting';
 
 export const EditClientPage = () => {
   const navigate = useNavigate();
@@ -59,7 +60,7 @@ export const EditClientPage = () => {
               first_name,
               last_name,
               email: client.email || '',
-              phone: client.phone || '',
+              phone: formatUsPhoneNumber(client.phone || ''),
               company: client.company || '',
               companyEmail: '',
               companyPhone: '',
@@ -162,7 +163,9 @@ export const EditClientPage = () => {
   };
 
   const handleInputChange = (field: keyof ClientFormData, value: string) => {
-    setFormData({ ...formData, [field]: value });
+    const normalizedValue =
+      field === 'phone' || field === 'companyPhone' ? formatUsPhoneNumber(value) : value;
+    setFormData({ ...formData, [field]: normalizedValue });
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors({ ...errors, [field]: '' });
@@ -177,15 +180,15 @@ export const EditClientPage = () => {
           <div className="flex items-center space-x-4">
             <button
               onClick={() => confirmNavigation('/clients')}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 rounded-lg transition-colors hover:bg-accent"
             >
-              <ArrowLeft className="h-5 w-5 text-gray-600" />
+              <ArrowLeft className="h-5 w-5 text-muted-foreground" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-2xl font-bold text-foreground">
                 {isEditing ? 'Edit Client' : 'New Client'}
               </h1>
-              <p className="text-gray-600">
+              <p className="text-muted-foreground">
                 {isEditing ? 'Update client information' : 'Add a new client to your database'}
               </p>
             </div>
@@ -209,18 +212,18 @@ export const EditClientPage = () => {
           <div className="mb-8">
             <div className="flex items-center mb-4">
               <User className="h-5 w-5 text-blue-600 mr-2" />
-              <h3 className="text-lg font-medium text-gray-900">Personal Information</h3>
+              <h3 className="text-lg font-medium text-foreground">Personal Information</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-muted-foreground mb-2">
                   First Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.first_name}
                   onChange={(e) => handleInputChange('first_name', e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  className={`w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring ${
                     errors.first_name ? 'border-red-300 dark:border-red-500' : 'border-input'
                   }`}
                 />
@@ -229,7 +232,7 @@ export const EditClientPage = () => {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">Last Name</label>
                 <input
                   type="text"
                   value={formData.last_name}
@@ -240,16 +243,16 @@ export const EditClientPage = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-muted-foreground mb-2">
                   Email <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    className={`w-full pl-10 pr-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring ${
                       errors.email ? 'border-red-300 dark:border-red-500' : 'border-input'
                     }`}
                   />
@@ -259,9 +262,9 @@ export const EditClientPage = () => {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">Phone</label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
                     type="tel"
                     value={formData.phone}
@@ -277,11 +280,11 @@ export const EditClientPage = () => {
           <div className="mb-8">
             <div className="flex items-center mb-4">
               <Building className="h-5 w-5 text-blue-600 mr-2" />
-              <h3 className="text-lg font-medium text-gray-900">Company Information</h3>
+              <h3 className="text-lg font-medium text-foreground">Company Information</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">Company Name</label>
                 <input
                   type="text"
                   value={formData.company}
@@ -290,9 +293,9 @@ export const EditClientPage = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company Email</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">Company Email</label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
                     type="email"
                     value={formData.companyEmail}
@@ -303,14 +306,14 @@ export const EditClientPage = () => {
               </div>
             </div>
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Company Phone</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-2">Company Phone</label>
               <div className="relative">
-                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
                   type="tel"
                   value={formData.companyPhone}
                   onChange={(e) => handleInputChange('companyPhone', e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground"
                 />
               </div>
             </div>
@@ -320,11 +323,11 @@ export const EditClientPage = () => {
           <div>
             <div className="flex items-center mb-4">
               <MapPin className="h-5 w-5 text-blue-600 mr-2" />
-              <h3 className="text-lg font-medium text-gray-900">Address Information</h3>
+              <h3 className="text-lg font-medium text-foreground">Address Information</h3>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">Country</label>
                 <select
                   value={formData.country}
                   onChange={(e) => handleInputChange('country', e.target.value)}

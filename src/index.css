@@ -99,16 +99,16 @@
     --popover-foreground: 220 14.3% 95.9%;
 
     --primary: var(--dark-primary, 210 40% 98%);
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary-foreground: var(--dark-primary-foreground, 222.2 47.4% 11.2%);
 
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
 
     --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 220 8.9% 46.1%;
+    --muted-foreground: 220 10% 72%;
 
     --accent: var(--dark-accent, 217.2 32.6% 17.5%);
-    --accent-foreground: 210 40% 98%;
+    --accent-foreground: var(--dark-accent-foreground, 210 40% 98%);
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;

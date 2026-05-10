@@ -34,6 +34,43 @@ import { FormattedCurrency } from '@/components/ui/FormattedCurrency';
 import { Expense } from '@/types';
 import { TimePeriod, DateRange } from '@/types';
 
+const parseExtractedAmount = (rawValue: unknown): number | null => {
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue) && rawValue > 0) {
+    return rawValue;
+  }
+
+  if (typeof rawValue !== 'string') {
+    return null;
+  }
+
+  const compact = rawValue.trim().replace(/\s+/g, '').replace(/[^\d,.-]/g, '');
+  if (!compact) {
+    return null;
+  }
+
+  const lastComma = compact.lastIndexOf(',');
+  const lastDot = compact.lastIndexOf('.');
+  let normalized = compact;
+
+  if (lastComma !== -1 && lastDot !== -1) {
+    const decimalSeparator = lastComma > lastDot ? ',' : '.';
+    const thousandsSeparator = decimalSeparator === ',' ? '.' : ',';
+    normalized = normalized.split(thousandsSeparator).join('');
+    if (decimalSeparator === ',') {
+      normalized = normalized.replace(',', '.');
+    }
+  } else if (lastComma !== -1) {
+    const decimalDigits = compact.length - lastComma - 1;
+    normalized = decimalDigits >= 1 && decimalDigits <= 2 ? compact.replace(',', '.') : compact.replace(/,/g, '');
+  } else if (lastDot !== -1) {
+    const decimalDigits = compact.length - lastDot - 1;
+    normalized = decimalDigits >= 1 && decimalDigits <= 2 ? compact : compact.replace(/\./g, '');
+  }
+
+  const parsedAmount = Number.parseFloat(normalized);
+  return Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : null;
+};
+
 export const ExpenseManagement: React.FC = () => {
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const [uiState, setUiState] = useState({
@@ -167,8 +204,10 @@ export const ExpenseManagement: React.FC = () => {
         throw new Error('Receipt OCR did not return expense data');
       }
 
-      const parsedAmount = Number.parseFloat(String(extracted.amount ?? ''));
-      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      const parsedAmount = parseExtractedAmount(
+        extracted.amount ?? extracted.total ?? extracted.total_amount ?? extracted.grand_total
+      );
+      if (!parsedAmount) {
         throw new Error('Could not extract a valid amount from the receipt');
       }
 

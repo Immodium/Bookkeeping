@@ -14,6 +14,8 @@ let isUserSetTheme = false; // Track if theme was explicitly set by user
 
 const DEFAULT_ACCENT = '#1d4ed8';
 const LOCAL_STORAGE_ACCENT_KEY = 'accent_color';
+const LOCAL_STORAGE_THEME_KEY = 'theme';
+const VALID_THEMES: ThemeType[] = ['light', 'dark', 'system'];
 
 const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
 
@@ -72,6 +74,21 @@ const normalizeHexColor = (value: string | undefined | null): string | null => {
   return validHex.test(hex) ? hex : null;
 };
 
+const normalizeTheme = (value: string | null | undefined): ThemeType | null => {
+  if (!value) return null;
+  return VALID_THEMES.includes(value as ThemeType) ? (value as ThemeType) : null;
+};
+
+const getStoredTheme = (): ThemeType | null => {
+  if (typeof window === 'undefined') return null;
+  return normalizeTheme(localStorage.getItem(LOCAL_STORAGE_THEME_KEY));
+};
+
+const getStoredAccent = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  return normalizeHexColor(localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY));
+};
+
 const hslToCssValue = ({ h, s, l }: { h: number; s: number; l: number }): string => `${h} ${s}% ${l}%`;
 
 const applyAccentColor = (accentColor: string): void => {
@@ -84,10 +101,18 @@ const applyAccentColor = (accentColor: string): void => {
   const lightAccentL = clamp(hsl.l + 40, 0, 98);
   const darkAccentL = clamp(hsl.l - 18, 10, 90);
   const darkAccentS = clamp(hsl.s + 6, 0, 100);
+  const primaryForeground = hsl.l > 56 ? '222.2 47.4% 11.2%' : '210 40% 98%';
+  const lightAccentForeground = lightAccentL > 58 ? '222.2 47.4% 11.2%' : '210 40% 98%';
+  const darkAccentForeground = darkAccentL > 50 ? '222.2 47.4% 11.2%' : '210 40% 98%';
 
   root.style.setProperty('--primary', hslToCssValue(hsl));
+  root.style.setProperty('--primary-foreground', primaryForeground);
+  root.style.setProperty('--dark-primary-foreground', primaryForeground);
   root.style.setProperty('--ring', `${hsl.h} ${ringS}% ${ringL}%`);
   root.style.setProperty('--accent', `${hsl.h} ${clamp(hsl.s, 10, 100)}% ${lightAccentL}%`);
+  root.style.setProperty('--accent-foreground', lightAccentForeground);
+  root.style.setProperty('--dark-accent', `${hsl.h} ${darkAccentS}% ${darkAccentL}%`);
+  root.style.setProperty('--dark-accent-foreground', darkAccentForeground);
   root.style.setProperty('--sidebar-primary', hslToCssValue(hsl));
   root.style.setProperty('--sidebar-ring', `${hsl.h} ${ringS}% ${ringL}%`);
   root.style.setProperty('--dashboard-stat-blue-foreground', hslToCssValue(hsl));
@@ -174,8 +199,8 @@ export const useTheme = () => {
           if (!authToken) {
             log('useTheme: No auth token found, using localStorage fallback');
             // Use localStorage immediately if not authenticated
-            const localTheme = (localStorage.getItem('theme') as ThemeType) || 'system';
-            const localAccent = normalizeHexColor(localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY));
+            const localTheme = getStoredTheme() || 'system';
+            const localAccent = getStoredAccent();
             log('useTheme: LocalStorage theme:', localTheme);
             
             globalTheme = localTheme;
@@ -193,16 +218,26 @@ export const useTheme = () => {
           await sqliteService.initialize();
           
           const settings = await sqliteService.getAllSettings('appearance');
-          const dbTheme = (settings?.theme as ThemeType) || 'system';
+          const dbTheme = normalizeTheme(settings?.theme as string);
+          const localTheme = getStoredTheme();
+          const preferredTheme = localTheme || dbTheme || 'system';
+          const localAccent = getStoredAccent();
           const dbAccent = normalizeHexColor((settings?.accent_color as string) || '');
+          const preferredAccent = localAccent || dbAccent || DEFAULT_ACCENT;
           
-          globalTheme = dbTheme;
-          setTheme(dbTheme);
-          applyTheme(dbTheme);
-          applyAccentColor(dbAccent || DEFAULT_ACCENT);
+          globalTheme = preferredTheme;
+          setTheme(preferredTheme);
+          applyTheme(preferredTheme);
+          applyAccentColor(preferredAccent);
+          if (!localTheme && dbTheme) {
+            localStorage.setItem(LOCAL_STORAGE_THEME_KEY, dbTheme);
+          }
+          if (!localAccent && dbAccent) {
+            localStorage.setItem(LOCAL_STORAGE_ACCENT_KEY, dbAccent);
+          }
           isThemeInitialized = true;
           isUserSetTheme = false; // This is a database load, not user action
-          log('useTheme: Theme initialization completed successfully from database');
+          log('useTheme: Theme initialization completed successfully from storage/database');
         } catch (error) {
           console.error('useTheme: Failed to load theme from database:', error);
           console.error('useTheme: Database error details:', {
@@ -213,8 +248,8 @@ export const useTheme = () => {
           
           // Fallback to localStorage for migration
           log('useTheme: Falling back to localStorage...');
-          const localTheme = (localStorage.getItem('theme') as ThemeType) || 'system';
-          const localAccent = normalizeHexColor(localStorage.getItem(LOCAL_STORAGE_ACCENT_KEY));
+          const localTheme = getStoredTheme() || 'system';
+          const localAccent = getStoredAccent();
           log('useTheme: LocalStorage theme:', localTheme);
           
           globalTheme = localTheme;
@@ -254,6 +289,9 @@ export const useTheme = () => {
     globalTheme = newTheme;
     setTheme(newTheme);
     applyTheme(newTheme);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(LOCAL_STORAGE_THEME_KEY, newTheme);
+    }
     
     // Mark as initialized and user-set to prevent reloading from database
     isThemeInitialized = true;

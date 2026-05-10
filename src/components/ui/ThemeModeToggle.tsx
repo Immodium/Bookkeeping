@@ -1,56 +1,55 @@
-import React from 'react';
 import { Moon, Sun } from 'lucide-react';
-import { useTheme } from '@/hooks/useTheme.hook';
 import { cn } from '@/utils/themeUtils.util';
+import { useTheme } from '@/hooks/useTheme.hook';
 
 interface ThemeModeToggleProps {
   className?: string;
-  compact?: boolean;
 }
 
-export const ThemeModeToggle: React.FC<ThemeModeToggleProps> = ({ className, compact = false }) => {
+export const ThemeModeToggle = ({ className }: ThemeModeToggleProps) => {
   const { effectiveTheme, setTheme } = useTheme();
-  const isDarkMode = effectiveTheme === 'dark';
+  const isDark = effectiveTheme === 'dark';
 
-  const handleToggle = async () => {
-    await setTheme(isDarkMode ? 'light' : 'dark');
+  const handleToggle = () => {
+    void setTheme(isDark ? 'light' : 'dark');
   };
 
   return (
     <button
       type="button"
       onClick={handleToggle}
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       className={cn(
-        'flex w-full items-center rounded-lg border border-border bg-muted/30 p-2 transition hover:bg-accent',
-        compact && 'justify-center p-1.5',
+        'relative inline-flex h-10 w-20 items-center rounded-full border transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        isDark
+          ? 'border-slate-600 bg-gradient-to-r from-slate-700 to-slate-800'
+          : 'border-sky-300 bg-gradient-to-r from-sky-400 to-blue-500',
         className
       )}
-      aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-      title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
     >
-      {!compact && (
-        <span className="mr-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Theme
-        </span>
-      )}
-
       <span
         className={cn(
-          'relative inline-flex h-6 w-12 items-center rounded-full border border-border bg-background transition-colors',
-          compact && 'h-5 w-10'
+          'absolute left-1 flex h-8 w-8 items-center justify-center rounded-full shadow-md transition-transform duration-300',
+          isDark
+            ? 'translate-x-10 bg-slate-900 text-slate-100'
+            : 'translate-x-0 bg-white text-amber-500'
         )}
       >
-        <span
-          className={cn(
-            'absolute left-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform',
-            isDarkMode ? 'translate-x-6' : 'translate-x-0',
-            compact && 'h-4 w-4',
-            compact && (isDarkMode ? 'translate-x-5' : 'translate-x-0')
-          )}
-        >
-          {isDarkMode ? <Moon className="h-3 w-3" /> : <Sun className="h-3 w-3" />}
-        </span>
+        {isDark ? <Moon className="h-4 w-4 fill-current" /> : <Sun className="h-4 w-4 fill-current" />}
       </span>
+      <span
+        className={cn(
+          'absolute h-1.5 w-1.5 rounded-full bg-white/85 transition-opacity',
+          isDark ? 'left-3 top-3 opacity-100' : 'right-4 top-3 opacity-60'
+        )}
+      />
+      <span
+        className={cn(
+          'absolute h-1 w-1 rounded-full bg-white/75 transition-opacity',
+          isDark ? 'left-5 top-6 opacity-100' : 'right-6 top-6 opacity-60'
+        )}
+      />
     </button>
   );
 };

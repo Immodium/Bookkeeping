@@ -97,20 +97,20 @@ export const InvoiceManagement = () => {
               <nav className="-mb-px flex space-x-8">
                 <button
                   onClick={() => handleTabChange('invoices')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  className={`rounded-t-md py-2 px-3 border-b-2 font-medium text-sm transition-colors ${
                     activeTab === 'invoices'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                      ? 'border-accent bg-accent text-accent-foreground'
+                      : 'border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-accent/70'
                   }`}
                 >
                   Sent Invoices
                 </button>
                 <button
                   onClick={() => handleTabChange('templates')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  className={`rounded-t-md py-2 px-3 border-b-2 font-medium text-sm transition-colors ${
                     activeTab === 'templates'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                      ? 'border-accent bg-accent text-accent-foreground'
+                      : 'border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:border-accent/70'
                   }`}
                 >
                   Recurring Templates

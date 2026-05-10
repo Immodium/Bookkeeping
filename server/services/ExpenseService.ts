@@ -2,7 +2,24 @@
 // Handles all expense-related business logic and database operations
 
 import { databaseService } from '../core/DatabaseService.js';
+import { appendFileSync } from 'fs';
 import { Expense, ServiceOptions } from '../types/index.js';
+
+const DEBUG_LOG_PATH = '/opt/cursor/logs/debug.log';
+
+const writeDebugLog = (payload: {
+  hypothesisId: 'A' | 'B' | 'C' | 'D' | 'E';
+  location: string;
+  message: string;
+  data: Record<string, unknown>;
+}): void => {
+  // #region agent log
+  appendFileSync(
+    DEBUG_LOG_PATH,
+    `${JSON.stringify({ ...payload, timestamp: Date.now() })}\n`
+  );
+  // #endregion
+};
 
 /**
  * Expense Service
@@ -112,6 +129,20 @@ export class ExpenseService {
     client_id: number | undefined;
     project?: string;
   }): Promise<number> {
+    // #region agent log
+    writeDebugLog({
+      hypothesisId: 'A',
+      location: 'ExpenseService.ts:createExpense:entry',
+      message: 'ExpenseService createExpense invoked',
+      data: {
+        amount: expenseData?.amount ?? null,
+        amountType: typeof expenseData?.amount,
+        hasDescription: Boolean(expenseData?.description),
+        date: expenseData?.date ?? null,
+        isBillableType: typeof expenseData?.is_billable
+      }
+    });
+    // #endregion
     if (!expenseData) {
       throw new Error('Expense data is required');
     }

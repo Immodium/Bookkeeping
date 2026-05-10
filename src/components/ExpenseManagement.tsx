@@ -167,13 +167,23 @@ export const ExpenseManagement: React.FC = () => {
         throw new Error('Receipt OCR did not return expense data');
       }
 
+      const parsedAmount = Number.parseFloat(String(extracted.amount ?? ''));
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        throw new Error('Could not extract a valid amount from the receipt');
+      }
+
+      const normalizedDate =
+        typeof extracted.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(extracted.date)
+          ? extracted.date
+          : new Date().toISOString().split('T')[0];
+
       const payload = {
         expenseData: {
-          date: extracted.date,
-          vendor: extracted.vendor,
-          category: extracted.category,
-          amount: Number(extracted.amount),
-          description: extracted.description,
+          date: normalizedDate,
+          vendor: extracted.vendor || 'Unknown Vendor',
+          category: extracted.category || 'Other',
+          amount: parsedAmount,
+          description: extracted.description || 'Imported from receipt OCR',
           receipt_url: result.data?.receipt_url || ''
         }
       };
@@ -306,8 +316,8 @@ export const ExpenseManagement: React.FC = () => {
         >
           <div className="flex justify-between items-start mb-4">
             <div>
-              <h3 className="font-semibold text-foreground">{expense.merchant}</h3>
-              <p className="text-sm text-muted-foreground">{expense.category}</p>
+              <h3 className="font-semibold text-foreground">{expense.vendor || expense.merchant || 'Unknown Vendor'}</h3>
+              <p className="text-sm text-muted-foreground">{expense.category || 'Other'}</p>
             </div>
             <div className="flex space-x-2">
               <button
@@ -348,8 +358,8 @@ export const ExpenseManagement: React.FC = () => {
 
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Status</span>
-              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(expense.status)}`}>
-                {expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}
+              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(expense.status || 'pending')}`}>
+                {(expense.status || 'pending').charAt(0).toUpperCase() + (expense.status || 'pending').slice(1)}
               </span>
             </div>
 

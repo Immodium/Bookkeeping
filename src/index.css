@@ -54,7 +54,7 @@
 
     /* Status colors for light mode */
     --status-success: 142.1 76.2% 36.3%;
-    --status-success-foreground: 355.7 100% 97.3%;
+    --status-success-foreground: 142.8 64.2% 24.1%;
     --status-success-background: 138.5 76.5% 96.7%;
 
     --status-warning: 32.1 94.6% 43.7%;
@@ -62,11 +62,11 @@
     --status-warning-background: 54.5 91.7% 95.3%;
 
     --status-error: 0 84.2% 60.2%;
-    --status-error-foreground: 210 40% 98%;
+    --status-error-foreground: 0 74% 35%;
     --status-error-background: 0 93.3% 94.1%;
 
     --status-info: 221.2 83.2% 53.3%;
-    --status-info-foreground: 210 40% 98%;
+    --status-info-foreground: 221.2 83.2% 30%;
     --status-info-background: 214.3 31.8% 91.4%;
 
     --status-neutral: 215.4 16.3% 46.9%;

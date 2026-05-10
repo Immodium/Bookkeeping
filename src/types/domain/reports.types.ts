@@ -134,7 +134,7 @@ export interface ReportGenerationOptions {
 
 // Report Export Options
 export interface ReportExportOptions {
-  format: 'pdf' | 'csv' | 'xlsx';
+  format: 'pdf' | 'csv';
   includeCharts: boolean;
   includeSummary: boolean;
   filename?: string;

@@ -61,6 +61,7 @@ export {
   getExpenseById,
   createExpense,
   uploadReceiptAndExtractExpenseData,
+  uploadReceiptFile,
   parseReceiptOCR,
   updateExpense,
   deleteExpense,

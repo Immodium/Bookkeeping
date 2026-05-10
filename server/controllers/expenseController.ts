@@ -2,7 +2,6 @@
 // Handles all expense-related business logic
 
 import { Request, Response } from 'express';
-import { appendFileSync } from 'fs';
 import { expenseService } from '../services/ExpenseService.js';
 import { extractReceiptDataFromFile } from '../services/ReceiptOCRService.js';
 import { convertReceiptToPdfIfNeeded } from '../services/ReceiptPdfService.js';
@@ -25,22 +24,6 @@ export interface ExpenseFilters {
   client_id?: number;
 }
 import { ExpenseRequest } from '../types/api.types.js';
-
-const DEBUG_LOG_PATH = '/opt/cursor/logs/debug.log';
-
-const writeDebugLog = (payload: {
-  hypothesisId: 'A' | 'B' | 'C' | 'D' | 'E';
-  location: string;
-  message: string;
-  data: Record<string, unknown>;
-}): void => {
-  // #region agent log
-  appendFileSync(
-    DEBUG_LOG_PATH,
-    `${JSON.stringify({ ...payload, timestamp: Date.now() })}\n`
-  );
-  // #endregion
-};
 
 /**
  * Get all expenses
@@ -68,17 +51,6 @@ export const getAllExpenses = asyncHandler(async (req: Request, res: Response): 
     limit: parsedLimit, 
     offset: parsedOffset 
   });
-  // #region agent log
-  writeDebugLog({
-    hypothesisId: 'E',
-    location: 'expenseController.ts:getAllExpenses',
-    message: 'Fetched expenses for list/panel rendering',
-    data: {
-      count: Array.isArray(results.data) ? results.data.length : 0,
-      firstVendor: results.data?.[0]?.vendor ?? null
-    }
-  });
-  // #endregion
   
   res.json({ 
     success: true, 
@@ -116,20 +88,6 @@ export const getExpenseById = asyncHandler(async (req: Request, res: Response): 
  */
 export const createExpense = asyncHandler(async (req: Request<object, object, { expenseData: ExpenseRequest }>, res: Response): Promise<void> => {
   const { expenseData } = req.body;
-  // #region agent log
-  writeDebugLog({
-    hypothesisId: 'D',
-    location: 'expenseController.ts:createExpense:entry',
-    message: 'Create expense request received',
-    data: {
-      hasExpenseData: Boolean(expenseData),
-      amount: expenseData?.amount ?? null,
-      hasDescription: Boolean(expenseData?.description),
-      hasIsBillable: typeof expenseData?.is_billable === 'boolean',
-      vendor: expenseData?.vendor ?? null
-    }
-  });
-  // #endregion
 
   if (!expenseData) {
     throw new ValidationError('Expense data is required');
@@ -144,19 +102,6 @@ export const createExpense = asyncHandler(async (req: Request<object, object, { 
       message: 'Expense created successfully'
     });
   } catch (error) {
-    // #region agent log
-    writeDebugLog({
-      hypothesisId: 'A',
-      location: 'expenseController.ts:createExpense:catch',
-      message: 'Create expense failed',
-      data: {
-        errorName: error instanceof Error ? error.name : typeof error,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        amount: expenseData?.amount ?? null,
-        hasDescription: Boolean(expenseData?.description)
-      }
-    });
-    // #endregion
     const errorMessage = (error as Error).message;
     if (errorMessage.includes('amount') && errorMessage.includes('required')) {
       throw new ValidationError('Valid expense amount is required');
@@ -180,18 +125,6 @@ export const uploadReceiptAndExtractExpenseData = asyncHandler(async (req: Reque
   if (!req.file) {
     throw new ValidationError('Receipt file is required');
   }
-  // #region agent log
-  writeDebugLog({
-    hypothesisId: 'A',
-    location: 'expenseController.ts:uploadReceiptAndExtractExpenseData:entry',
-    message: 'Receipt OCR upload received',
-    data: {
-      mimetype: req.file.mimetype,
-      size: req.file.size,
-      originalname: req.file.originalname
-    }
-  });
-  // #endregion
 
   try {
     const isPdfUpload =
@@ -209,21 +142,6 @@ export const uploadReceiptAndExtractExpenseData = asyncHandler(async (req: Reque
       req.file.mimetype
     );
     const receiptUrl = `/uploads/receipts/${normalizedReceipt.filename}`;
-    // #region agent log
-    writeDebugLog({
-      hypothesisId: 'B',
-      location: 'expenseController.ts:uploadReceiptAndExtractExpenseData:parsed',
-      message: 'Receipt OCR parsed payload',
-      data: {
-        amount: parsed?.amount ?? null,
-        date: parsed?.date ?? null,
-        vendor: parsed?.vendor ?? null,
-        category: parsed?.category ?? null,
-        hasDescription: Boolean(parsed?.description),
-        receiptUrl
-      }
-    });
-    // #endregion
 
     res.json({
       success: true,

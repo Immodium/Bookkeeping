@@ -17,6 +17,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
     amount: expense?.amount?.toString() || '',
     description: expense?.description || '',
     receipt_url: expense?.receipt_url || '',
+    is_billable: expense?.is_billable ?? false,
     status: expense?.status || 'pending' as const
   });
 
@@ -53,6 +54,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
       amount: expense?.amount?.toString() || '',
       description: expense?.description || '',
       receipt_url: expense?.receipt_url || '',
+      is_billable: expense?.is_billable ?? false,
       status: expense?.status || 'pending' as const
     };
     setOriginalFormData(initialData);
@@ -68,6 +70,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
       amount: parseFloat(formData.amount),
       description: formData.description,
       receipt_url: formData.receipt_url,
+      is_billable: formData.is_billable,
       status: formData.status
     };
     
@@ -94,13 +97,16 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
       });
       const payload = await response.json();
       const parsed = payload?.data || {};
+      const normalizedAmountRaw = parsed.amount ?? parsed.total ?? parsed.total_amount;
+      const normalizedAmount = Number.parseFloat(String(normalizedAmountRaw ?? ''));
+      const hasAmount = Number.isFinite(normalizedAmount) && normalizedAmount > 0;
 
       setFormData((prev) => ({
         ...prev,
         date: parsed.date || prev.date,
         vendor: parsed.vendor || prev.vendor,
         category: parsed.category || prev.category,
-        amount: parsed.amount ? String(parsed.amount) : prev.amount,
+        amount: hasAmount ? normalizedAmount.toFixed(2) : prev.amount,
         description: parsed.description || prev.description,
         receipt_url: parsed.receipt_url || prev.receipt_url
       }));
@@ -278,6 +284,20 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
                     {status.charAt(0).toUpperCase() + status.slice(1)}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={themeClasses.label}>
+                Billable
+              </label>
+              <select
+                className={themeClasses.select}
+                value={formData.is_billable ? 'yes' : 'no'}
+                onChange={(e) => setFormData({ ...formData, is_billable: e.target.value === 'yes' })}
+              >
+                <option value="no">Non-billable</option>
+                <option value="yes">Billable</option>
               </select>
             </div>
 

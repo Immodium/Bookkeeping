@@ -193,7 +193,7 @@ export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigati
                 className={cn(
                   'group flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                   itemActive
-                    ? 'bg-accent text-accent-foreground border border-border'
+                    ? 'bg-accent text-foreground dark:text-accent-foreground border border-border'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                   isCollapsed && 'justify-center px-2'
                 )}
@@ -204,7 +204,7 @@ export const ResponsiveSidebar: React.FC<ResponsiveSidebarProps> = ({ onNavigati
                     'h-5 w-5 flex-shrink-0',
                     !isCollapsed && 'mr-3',
                     itemActive 
-                      ? 'text-accent-foreground' 
+                      ? 'text-foreground dark:text-accent-foreground' 
                       : 'text-muted-foreground group-hover:text-muted-foreground'
                   )}
                 />

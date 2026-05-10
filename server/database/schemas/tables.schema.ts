@@ -277,6 +277,7 @@ const expensesSchema: TableSchema = {
     { name: 'is_billable', type: 'INTEGER', constraints: ['DEFAULT 0'] },
     { name: 'client_id', type: 'INTEGER' },
     { name: 'project', type: 'TEXT' },
+    { name: 'status', type: 'TEXT', constraints: ['NOT NULL DEFAULT \'pending\''] },
     { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
     { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
   ],

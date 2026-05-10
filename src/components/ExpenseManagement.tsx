@@ -246,6 +246,23 @@ export const ExpenseManagement: React.FC = () => {
     updateUiState({ showCreateForm: true });
   };
 
+  const handleApproveExpense = async (id: number) => {
+    try {
+      const response = await apiPut(`/api/expenses/${id}`, {
+        expenseData: { status: 'approved' }
+      });
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to approve expense');
+      }
+
+      toast.success('Expense approved successfully');
+      await loadExpenses();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to approve expense');
+    }
+  };
+
   const handleViewExpense = (expense: Expense) => {
     setActiveItem(prev => ({ ...prev, viewing: expense }));
     updateUiState({ isViewModalOpen: true });
@@ -592,6 +609,7 @@ export const ExpenseManagement: React.FC = () => {
               onEditExpense={handleEditExpense}
               onDeleteExpense={handleDeleteExpense}
               onViewExpense={handleViewExpense}
+              onApproveExpense={handleApproveExpense}
               onBulkDelete={handleBulkDelete}
               onBulkCategorize={handleBulkCategorize}
               onBulkChangeMerchant={handleBulkChangeMerchant}

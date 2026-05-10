@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { Edit, Receipt, Trash2, Delete, Tag, Building } from 'lucide-react';
+import { Edit, Receipt, Trash2, Delete, Tag, Building, Check } from 'lucide-react';
 import { formatDateSync } from '@/components/ui/FormattedDate';
 import { FormattedCurrency } from '@/components/ui/FormattedCurrency';
 import { ExpensesListProps } from '@/types/components/expense.types';
+import { getStatusColor } from '@/utils/themeUtils.util';
 
 export const ExpensesList: React.FC<ExpensesListProps> = ({ 
   expenses, 
   onEditExpense, 
   onDeleteExpense, 
   onViewExpense,
+  onApproveExpense,
   onBulkDelete,
   onBulkCategorize,
   onBulkChangeMerchant,
@@ -180,6 +182,9 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                 Type
               </th>
               <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Status
+              </th>
+              <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Receipt
               </th>
               <th className="text-left py-3 px-6 text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -229,6 +234,11 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                   </span>
                 </td>
                 <td className="py-4 px-6">
+                  <span className={getStatusColor(expense.status || 'pending')}>
+                    {(expense.status || 'pending').charAt(0).toUpperCase() + (expense.status || 'pending').slice(1)}
+                  </span>
+                </td>
+                <td className="py-4 px-6">
                   {expense.receipt_url ? (
                     <button
                       onClick={(event) => {
@@ -246,6 +256,19 @@ export const ExpensesList: React.FC<ExpensesListProps> = ({
                 </td>
                 <td className="py-4 px-6">
                   <div className="flex space-x-2">
+                    {onApproveExpense && (expense.status || 'pending') === 'pending' && (
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onApproveExpense(expense.id);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="p-1 text-muted-foreground hover:text-green-600"
+                        title="Approve expense"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                    )}
                     <button
                       onClick={(event) => {
                         event.stopPropagation();

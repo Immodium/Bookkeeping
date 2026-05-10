@@ -513,7 +513,7 @@ export interface ExpenseRequest {
   is_billable: boolean | undefined;
   client_id: number | undefined;
   project?: string;
-  status?: 'pending' | 'approved' | 'reimbursed';
+  status?: 'pending' | 'approved' | 'rejected' | 'reimbursed';
 }
 
 export interface ReceiptOCRResult {

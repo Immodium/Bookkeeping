@@ -130,6 +130,7 @@ export interface Expense extends BaseEntity {
   is_billable?: boolean;
   client_id?: number;
   project?: string;
+  status?: string;
 }
 
 export interface Payment extends BaseEntity {

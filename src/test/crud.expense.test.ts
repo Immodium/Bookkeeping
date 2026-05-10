@@ -125,11 +125,11 @@ describe('Expense CRUD Operations', () => {
       // Frontend might have merchant for compatibility, but database uses vendor
     });
 
-    it('should not have status field in database', () => {
+    it('should include status field for approval workflow', () => {
       const expense = mockData.expense(1);
 
-      // Status is a frontend-only field, not in database
-      expect(expense).not.toHaveProperty('status');
+      expect(expense).toHaveProperty('status');
+      expect(expense.status).toBe('pending');
     });
   });
 });

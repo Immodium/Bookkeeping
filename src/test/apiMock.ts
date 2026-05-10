@@ -143,6 +143,7 @@ export const mockData = {
     amount: 150,
     description: 'Office chairs',
     currency: 'USD',
+    status: 'pending',
     created_at: '2026-02-16T00:00:00Z',
     updated_at: '2026-02-16T00:00:00Z'
   })

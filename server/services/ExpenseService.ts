@@ -9,6 +9,8 @@ import { Expense, ServiceOptions } from '../types/index.js';
  * Manages expense-related operations with proper validation and security
  */
 export class ExpenseService {
+  private readonly validStatuses = new Set(['pending', 'approved', 'rejected', 'reimbursed']);
+
   private normalizeTenantId(tenantId?: number): number {
     return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
   }
@@ -122,6 +124,7 @@ export class ExpenseService {
     is_billable: boolean | undefined;
     client_id: number | undefined;
     project?: string;
+    status?: string;
   }, tenantId?: number): Promise<number> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!expenseData) {
@@ -151,6 +154,11 @@ export class ExpenseService {
       throw new Error('Specified client does not exist');
     }
 
+    const normalizedStatus = (expenseData.status || 'pending').toLowerCase();
+    if (!this.validStatuses.has(normalizedStatus)) {
+      throw new Error('Invalid expense status');
+    }
+
     // Get next expense ID
     const nextId = databaseService.getNextId('expenses');
     
@@ -169,6 +177,7 @@ export class ExpenseService {
       is_billable: expenseData.is_billable ? 1 : 0,
       client_id: expenseData.client_id || null,
       project: expenseData.project || null,
+      status: normalizedStatus,
       created_at: now,
       updated_at: now
     };
@@ -177,13 +186,13 @@ export class ExpenseService {
     databaseService.executeQuery(`
       INSERT INTO expenses (
         id, tenant_id, amount, description, category, date, vendor, notes, receipt_url,
-        is_billable, client_id, project, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_billable, client_id, project, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       expenseRecord.id, expenseRecord.tenant_id, expenseRecord.amount, expenseRecord.description, 
       expenseRecord.category, expenseRecord.date, expenseRecord.vendor,
       expenseRecord.notes, expenseRecord.receipt_url, expenseRecord.is_billable,
-      expenseRecord.client_id, expenseRecord.project, expenseRecord.created_at,
+      expenseRecord.client_id, expenseRecord.project, expenseRecord.status, expenseRecord.created_at,
       expenseRecord.updated_at
     ]);
 
@@ -204,6 +213,7 @@ export class ExpenseService {
     is_billable: boolean;
     client_id: number;
     project: string;
+    status: string;
   }>, tenantId?: number): Promise<number> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     if (!id || typeof id !== 'number') {
@@ -236,10 +246,18 @@ export class ExpenseService {
       throw new Error('Specified client does not exist');
     }
 
+    if (expenseData.status !== undefined) {
+      const normalizedStatus = expenseData.status.toLowerCase();
+      if (!this.validStatuses.has(normalizedStatus)) {
+        throw new Error('Invalid expense status');
+      }
+      expenseData.status = normalizedStatus;
+    }
+
     // Filter allowed fields
     const allowedFields = [
       'amount', 'description', 'category', 'date', 'vendor', 'notes',
-      'receipt_url', 'is_billable', 'client_id', 'project'
+      'receipt_url', 'is_billable', 'client_id', 'project', 'status'
     ];
     
     const updateData: Record<string, any> = {};

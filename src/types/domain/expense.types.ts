@@ -35,6 +35,7 @@ export interface ExpenseFormData {
   is_billable?: boolean;
   client_id?: number;
   project?: string;
+  status?: ExpenseStatus;
 }
 
 // For expense statistics and reports

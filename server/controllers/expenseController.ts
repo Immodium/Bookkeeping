@@ -224,6 +224,7 @@ export const updateExpense = asyncHandler(async (req: Request<{ id: string }, ob
       is_billable: boolean;
       client_id: number;
       project: string;
+      status: string;
     }> = {};
     
     // Copy all defined properties except is_billable
@@ -255,6 +256,8 @@ export const updateExpense = asyncHandler(async (req: Request<{ id: string }, ob
       throw new ValidationError('Valid expense amount is required');
     } else if (errorMessage.includes('Invalid date format')) {
       throw new ValidationError('Invalid date format');
+    } else if (errorMessage.includes('Invalid expense status')) {
+      throw new ValidationError('Invalid expense status');
     } else if (errorMessage.includes('client does not exist')) {
       throw new ValidationError('Specified client does not exist');
     }

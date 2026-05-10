@@ -14,6 +14,7 @@ import { up as migration009 } from './009_add_tenant_to_report_schedules.js';
 import { up as migration010 } from './010_add_tenant_scoped_unique_constraints.js';
 import { up as migration011 } from './011_add_subscription_and_entitlement_tables.js';
 import { up as migration012 } from './012_repair_invoice_foreign_keys.js';
+import { up as migration013 } from './013_add_status_to_expenses.js';
 
 interface Migration {
   id: string;
@@ -84,6 +85,11 @@ const migrations: Migration[] = [
     id: '012',
     name: 'repair_invoice_foreign_keys',
     up: migration012
+  },
+  {
+    id: '013',
+    name: 'add_status_to_expenses',
+    up: migration013
   }
 ];
 

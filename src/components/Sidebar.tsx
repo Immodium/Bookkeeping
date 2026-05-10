@@ -20,6 +20,7 @@ import { useCompanySettings } from '@/hooks/useSettings.hook';
 import { usePermissions } from '@/contexts/AuthContext';
 import { getRoleDisplayName } from '@/auth/roles';
 import slimbooksLogo from '@/assets/slimbooks_logo.png';
+import { ThemeModeToggle } from '@/components/ui/ThemeModeToggle';
 
 const navigation = [
   { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
@@ -231,6 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigationAttempt }) => {
 
         {/* User Section */}
         <div className="border-t border-border p-4">
+          <ThemeModeToggle className="mb-3" />
           <div className="flex items-center mb-3">
             <div className="flex-1">
               <p className="text-sm font-medium text-card-foreground">Welcome, {user?.username || user?.name || 'User'}</p>

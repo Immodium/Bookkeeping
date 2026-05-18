@@ -17,6 +17,7 @@ import { up as migration012 } from './012_repair_invoice_foreign_keys.js';
 import { up as migration013 } from './013_add_status_to_expenses.js';
 import { up as migration014 } from './014_add_token_version_to_users.js';
 import { up as migration015 } from './015_add_dunning_events.js';
+import { up as migration016 } from './016_add_audit_log.js';
 
 interface Migration {
   id: string;
@@ -42,7 +43,8 @@ const migrations: Migration[] = [
   { id: '012', name: 'repair_invoice_foreign_keys', up: migration012 },
   { id: '013', name: 'add_status_to_expenses', up: migration013 },
   { id: '014', name: 'add_token_version_to_users', up: migration014 },
-  { id: '015', name: 'add_dunning_events', up: migration015 }
+  { id: '015', name: 'add_dunning_events', up: migration015 },
+  { id: '016', name: 'add_audit_log', up: migration016 }
 ];
 
 /**

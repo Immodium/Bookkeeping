@@ -452,6 +452,28 @@ const countersSchema: TableSchema = {
 };
 
 /**
+ * Audit log table for tracking user actions and system events
+ */
+const auditLogSchema: TableSchema = {
+  name: 'audit_log',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER' },
+    { name: 'user_id', type: 'INTEGER' },
+    { name: 'action', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'resource_type', type: 'TEXT' },
+    { name: 'resource_id', type: 'TEXT' },
+    { name: 'ip_address', type: 'TEXT' },
+    { name: 'user_agent', type: 'TEXT' },
+    { name: 'metadata_json', type: 'TEXT' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE SET NULL'
+  ]
+};
+
+/**
  * Dunning events table for tracking payment failure follow-up emails
  */
 const dunningEventsSchema: TableSchema = {
@@ -487,7 +509,8 @@ export const tableSchemas: TableSchema[] = [
   settingsSchema,
   projectSettingsSchema,
   countersSchema,
-  dunningEventsSchema
+  dunningEventsSchema,
+  auditLogSchema
 ];
 
 /**

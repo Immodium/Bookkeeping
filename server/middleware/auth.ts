@@ -405,4 +405,20 @@ const getAccountLockoutSettings = (): AccountLockoutSettings => {
   }
 };
 
+/**
+ * Middleware to require platform admin access (tenant_id === 1).
+ * Must be used after requireAuth.
+ */
+export const requirePlatformAdmin = (req: Request, res: Response, next: NextFunction): void => {
+  const tenantId = req.tenantId ?? req.user?.tenant_id ?? 1;
+  if (tenantId !== 1) {
+    res.status(403).json({
+      success: false,
+      error: 'Platform admin access required'
+    });
+    return;
+  }
+  next();
+};
+
 // updateLoginAttempts has been removed - use authService.updateLoginAttempts directly

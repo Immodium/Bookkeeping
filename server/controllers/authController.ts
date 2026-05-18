@@ -18,15 +18,16 @@ import {
   asyncHandler,
   generateToken
 } from '../middleware/index.js';
-import { 
-  LoginRequest, 
-  LoginResponse, 
-  RegisterRequest, 
+import {
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest,
   RegisterResponse,
   RefreshTokenRequest,
-  RefreshTokenResponse 
+  RefreshTokenResponse
 } from '../types/api.types.js';
 import { User, UserPublic } from '../types/index.js';
+import { auditService } from '../services/AuditService.js';
 
 interface DecodedToken {
   userId: number;
@@ -50,6 +51,13 @@ export const login = asyncHandler(async (req: Request<object, LoginResponse, Log
   const user = await authService.getUserForAuthentication(email);
   
   if (!user) {
+    // Fire-and-forget audit for failed login (unknown user)
+    auditService.log({
+      action: 'auth.login.failure',
+      ipAddress: req.ip ?? undefined,
+      userAgent: req.get('user-agent') ?? undefined,
+      metadata: { reason: 'user_not_found', email }
+    });
     throw new AuthenticationError('Invalid email or password');
   }
 
@@ -68,10 +76,19 @@ export const login = asyncHandler(async (req: Request<object, LoginResponse, Log
     throw new AuthenticationError('Invalid email or password');
   }
   const isValidPassword = await bcrypt.compare(password, user.password_hash);
-  
+
   if (!isValidPassword) {
     // Update failed login attempts
     await authService.updateLoginAttempts(user.id, false);
+    // Fire-and-forget audit for failed login
+    auditService.log({
+      action: 'auth.login.failure',
+      tenantId: user.tenant_id || 1,
+      userId: user.id,
+      ipAddress: req.ip ?? undefined,
+      userAgent: req.get('user-agent') ?? undefined,
+      metadata: { reason: 'invalid_password' }
+    });
     throw new AuthenticationError('Invalid email or password');
   }
 
@@ -92,6 +109,15 @@ export const login = asyncHandler(async (req: Request<object, LoginResponse, Log
 
   // Generate JWT token
   const token = generateToken(user);
+
+  // Fire-and-forget audit for successful login
+  auditService.log({
+    action: 'auth.login.success',
+    tenantId: user.tenant_id || 1,
+    userId: user.id,
+    ipAddress: req.ip ?? undefined,
+    userAgent: req.get('user-agent') ?? undefined
+  });
 
   // Remove sensitive data from response
   const { password_hash, two_factor_secret, backup_codes, ...userResponse } = user;
@@ -392,6 +418,15 @@ export const logout = asyncHandler(async (req: Request, res: Response): Promise<
     [user.id]
   );
 
+  // Fire-and-forget audit for logout
+  auditService.log({
+    action: 'auth.logout',
+    tenantId: req.tenantId,
+    userId: user.id,
+    ipAddress: req.ip ?? undefined,
+    userAgent: req.get('user-agent') ?? undefined
+  });
+
   res.json({
     success: true,
     message: 'Logged out successfully'
@@ -503,6 +538,15 @@ export const changePassword = asyncHandler(async (req: Request, res: Response): 
 
   // Update password using service
   await authService.updateUserPassword(user.id, hashedPassword);
+
+  // Fire-and-forget audit for password change
+  auditService.log({
+    action: 'auth.password_changed',
+    tenantId: req.tenantId,
+    userId: user.id,
+    ipAddress: req.ip ?? undefined,
+    userAgent: req.get('user-agent') ?? undefined
+  });
 
   res.json({
     success: true,

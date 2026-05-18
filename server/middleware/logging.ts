@@ -3,6 +3,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { loggingConfig } from '../config/index.js';
+import { auditService } from '../services/AuditService.js';
 
 interface RequestInfo {
   timestamp: string;
@@ -239,23 +240,66 @@ export const performanceMonitor = () => {
 };
 
 /**
- * User activity logging
- * Logs user actions for audit trails
+ * Derive an audit action string from HTTP method and request path.
+ * e.g. POST /api/invoices -> 'invoices.create'
  */
-export const userActivityLogger = (action: string, userId: number, details: Record<string, unknown> = {}): void => {
-  const logEntry: UserActivityLogEntry = {
-    timestamp: new Date().toISOString(),
-    action,
-    userId,
-    details,
-    level: 'USER_ACTIVITY'
-  };
-  
-  console.log(`👤 USER: ${action} by user ${userId}`, details);
-  
-  // TODO: Store in audit log table
-  // storeUserActivity(logEntry);
-};
+function deriveAction(method: string, path: string): string {
+  const resource = path.replace(/^\/api\//, '').split('/')[0].replace(/-/g, '_');
+  const verb = ({ POST: 'create', PUT: 'update', PATCH: 'update', DELETE: 'delete' } as Record<string, string>)[method] ?? 'mutate';
+  return `${resource}.${verb}`;
+}
+
+/**
+ * User activity logging middleware
+ * Persists audit events for mutating requests that succeed (status < 400).
+ * Also exposes a manual call signature for legacy callers.
+ */
+export function userActivityLogger(req: Request, res: Response, next: NextFunction): void;
+export function userActivityLogger(action: string, userId: number, details?: Record<string, unknown>): void;
+export function userActivityLogger(
+  reqOrAction: Request | string,
+  resOrUserId?: Response | number,
+  nextOrDetails?: NextFunction | Record<string, unknown>
+): void {
+  // Legacy call: userActivityLogger(action, userId, details?)
+  if (typeof reqOrAction === 'string') {
+    const action = reqOrAction;
+    const userId = resOrUserId as number;
+    const details = (nextOrDetails as Record<string, unknown> | undefined) ?? {};
+    const logEntry: UserActivityLogEntry = {
+      timestamp: new Date().toISOString(),
+      action,
+      userId,
+      details,
+      level: 'USER_ACTIVITY'
+    };
+    console.log(`👤 USER: ${action} by user ${userId}`, details);
+    // Persist to audit log (fire-and-forget)
+    auditService.log({ action, userId, metadata: details });
+    return;
+  }
+
+  // Middleware call: userActivityLogger(req, res, next)
+  const req = reqOrAction as Request;
+  const res = resOrUserId as Response;
+  const next = nextOrDetails as NextFunction;
+
+  res.on('finish', () => {
+    const method = req.method;
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return;
+    if (res.statusCode >= 400) return;
+
+    const action = deriveAction(method, req.path);
+    const tenantId = req.tenantId;
+    const userId = (req.user as { id?: number } | undefined)?.id;
+    const ipAddress = req.ip ?? undefined;
+    const userAgent = req.get('user-agent') ?? undefined;
+
+    auditService.log({ tenantId, userId, action, ipAddress, userAgent });
+  });
+
+  next();
+}
 
 /**
  * API endpoint usage tracking

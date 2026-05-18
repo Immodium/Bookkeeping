@@ -451,6 +451,23 @@ const countersSchema: TableSchema = {
   ]
 };
 
+/**
+ * Dunning events table for tracking payment failure follow-up emails
+ */
+const dunningEventsSchema: TableSchema = {
+  name: 'dunning_events',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'event_type', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'sent_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'metadata_json', type: 'TEXT' }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
+  ]
+};
+
 // Export all schemas
 export const tableSchemas: TableSchema[] = [
   tenantsSchema,
@@ -469,7 +486,8 @@ export const tableSchemas: TableSchema[] = [
   reportsSchema,
   settingsSchema,
   projectSettingsSchema,
-  countersSchema
+  countersSchema,
+  dunningEventsSchema
 ];
 
 /**

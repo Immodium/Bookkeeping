@@ -399,6 +399,74 @@ export const logout = asyncHandler(async (req: Request, res: Response): Promise<
 });
 
 /**
+ * Tenant self-service registration
+ */
+export const registerTenant = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { tenantName, name, email, password } = req.body as {
+    tenantName?: string;
+    name?: string;
+    email?: string;
+    password?: string;
+  };
+
+  if (!tenantName || !name || !email || !password) {
+    throw new ValidationError('tenantName, name, email, and password are required');
+  }
+
+  if (password.length < 8) {
+    throw new ValidationError('Password must be at least 8 characters');
+  }
+
+  const { tenantId, adminUserId } = await tenantService.createTenant({
+    name: tenantName,
+    admin: { name, email, password }
+  });
+
+  // Fetch the newly created admin user to generate a token
+  const newUser = await authService.getUserById(adminUserId);
+  if (!newUser) {
+    throw new AppError('Failed to retrieve newly created user', 500);
+  }
+
+  const token = generateToken(newUser as User);
+
+  // Send welcome email (fire-and-forget — don't fail registration if email fails)
+  const appUrl = process.env.APP_URL || 'http://localhost:5173';
+  emailProviderService.sendEmail({
+    to: email,
+    subject: 'Welcome to Slimbooks — your 14-day trial has started',
+    text: `Hello ${name},\n\nWelcome to Slimbooks! Your 14-day free trial has started.\n\nGet started at ${appUrl}\n\nThank you for choosing Slimbooks!\nThe Slimbooks Team`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
+        <h2>Welcome to Slimbooks!</h2>
+        <p>Hello ${name},</p>
+        <p>Your 14-day free trial has started. You can log in and start managing your finances right away.</p>
+        <p style="margin: 24px 0;">
+          <a href="${appUrl}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">
+            Go to Slimbooks
+          </a>
+        </p>
+        <p>Thank you for choosing Slimbooks!</p>
+        <p>The Slimbooks Team</p>
+      </div>
+    `
+  }, { tenantId }).catch(() => {
+    // Ignore email errors — don't fail registration
+  });
+
+  const { password_hash, two_factor_secret, backup_codes, ...userResponse } = newUser;
+
+  res.status(201).json({
+    success: true,
+    data: {
+      user: userResponse as UserPublic,
+      token
+    },
+    message: 'Tenant registered successfully'
+  });
+});
+
+/**
  * Change password
  */
 export const changePassword = asyncHandler(async (req: Request, res: Response): Promise<void> => {

@@ -12,7 +12,8 @@ import {
   getProfile,
   updateProfile,
   changePassword,
-  logout
+  logout,
+  registerTenant
 } from '../controllers/index.js';
 import {
   requireAuth,
@@ -35,11 +36,14 @@ router.post('/login',
 );
 
 // User registration
-router.post('/register', 
+router.post('/register',
   validationSets.register,
   validateRequest,
   register
 );
+
+// Tenant self-service registration (public)
+router.post('/register-tenant', registerTenant);
 
 // Request password reset email
 router.post('/forgot-password',

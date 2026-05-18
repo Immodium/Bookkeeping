@@ -1,4 +1,6 @@
 import { databaseService } from '../core/DatabaseService.js';
+import { emailProviderService } from './EmailProviderService.js';
+import { tenantService } from './TenantService.js';
 
 export type TenantSubscriptionStatus =
   | 'trialing'
@@ -510,7 +512,138 @@ export class SubscriptionService {
       );
     }
 
+    // Record a payment_failed dunning event when a payment fails
+    if (event.eventType === 'invoice.payment_failed') {
+      const dunningTableExists = await databaseService.tableExists('dunning_events');
+      if (dunningTableExists) {
+        await databaseService.executeQuery(
+          `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'payment_failed', datetime('now'))`,
+          [tenantId]
+        );
+      }
+    }
+
     return { tenantId };
+  }
+
+  /**
+   * Process dunning workflow for all tenants with past_due subscriptions.
+   * Schedule: Day 1, Day 5, Day 14 after first payment failure → suspend
+   */
+  async processDunning(): Promise<number> {
+    const dunningTableExists = await databaseService.tableExists('dunning_events');
+    if (!dunningTableExists) {
+      return 0;
+    }
+
+    // Get all tenants with past_due subscriptions
+    const pastDueTenants = await databaseService.getMany<{ tenant_id: number; email: string; name: string }>(
+      `
+        SELECT ts.tenant_id, u.email, u.name
+        FROM tenant_subscriptions ts
+        LEFT JOIN users u ON u.tenant_id = ts.tenant_id AND u.role = 'admin'
+        WHERE ts.status = 'past_due'
+        GROUP BY ts.tenant_id
+      `
+    );
+
+    let processed = 0;
+
+    for (const tenant of pastDueTenants) {
+      const acted = await this.processDunningForTenant(tenant.tenant_id, tenant.email, tenant.name);
+      if (acted) {
+        processed++;
+      }
+    }
+
+    return processed;
+  }
+
+  private async processDunningForTenant(tenantId: number, email: string, name: string): Promise<boolean> {
+    // Get the first payment_failed event to determine when the failure occurred
+    const failureEvent = await databaseService.getOne<{ sent_at: string }>(
+      `SELECT sent_at FROM dunning_events WHERE tenant_id = ? AND event_type = 'payment_failed' ORDER BY sent_at ASC LIMIT 1`,
+      [tenantId]
+    );
+
+    if (!failureEvent) {
+      return false;
+    }
+
+    const failureDate = new Date(failureEvent.sent_at);
+    const now = new Date();
+    const daysElapsed = Math.floor((now.getTime() - failureDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Check which dunning events have already been sent
+    const sentEvents = await databaseService.getMany<{ event_type: string }>(
+      `SELECT event_type FROM dunning_events WHERE tenant_id = ? AND event_type IN ('reminder_1', 'reminder_2', 'final_notice', 'suspended')`,
+      [tenantId]
+    );
+    const sentTypes = new Set(sentEvents.map(e => e.event_type));
+
+    // If already suspended via dunning, skip
+    if (sentTypes.has('suspended')) {
+      return false;
+    }
+
+    const appUrl = process.env.APP_URL || 'http://localhost:5173';
+
+    // Day 14+: if final_notice already sent → suspend
+    if (daysElapsed >= 14 && sentTypes.has('final_notice')) {
+      await tenantService.updateTenantStatus(tenantId, 'suspended');
+      await databaseService.executeQuery(
+        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'suspended', datetime('now'))`,
+        [tenantId]
+      );
+      return true;
+    }
+
+    // Day 14+: send final notice (if not yet sent)
+    if (daysElapsed >= 14 && !sentTypes.has('final_notice')) {
+      await emailProviderService.sendEmail({
+        to: email,
+        subject: 'Final notice — your account will be suspended today',
+        text: `Hello ${name || 'there'},\n\nThis is a final notice that your payment has failed and your Slimbooks account will be suspended today unless payment is updated.\n\nPlease update your payment method at ${appUrl} to avoid suspension.\n\nThank you,\nThe Slimbooks Team`,
+        html: `<p>Hello ${name || 'there'},</p><p>This is a final notice that your payment has failed and your Slimbooks account will be suspended today unless payment is updated.</p><p><a href="${appUrl}">Update your payment method</a></p><p>Thank you,<br>The Slimbooks Team</p>`
+      }, { tenantId });
+      await databaseService.executeQuery(
+        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'final_notice', datetime('now'))`,
+        [tenantId]
+      );
+      return true;
+    }
+
+    // Day 5+: send reminder_2 (if not yet sent)
+    if (daysElapsed >= 5 && !sentTypes.has('reminder_2')) {
+      await emailProviderService.sendEmail({
+        to: email,
+        subject: 'Action required — your account will be suspended in 9 days',
+        text: `Hello ${name || 'there'},\n\nYour payment has failed and your Slimbooks account will be suspended in 9 days unless payment is updated.\n\nPlease update your payment method at ${appUrl}.\n\nThank you,\nThe Slimbooks Team`,
+        html: `<p>Hello ${name || 'there'},</p><p>Your payment has failed and your Slimbooks account will be suspended in 9 days unless payment is updated.</p><p><a href="${appUrl}">Update your payment method</a></p><p>Thank you,<br>The Slimbooks Team</p>`
+      }, { tenantId });
+      await databaseService.executeQuery(
+        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'reminder_2', datetime('now'))`,
+        [tenantId]
+      );
+      return true;
+    }
+
+    // Day 1+: send reminder_1 (if not yet sent)
+    if (daysElapsed >= 1 && !sentTypes.has('reminder_1')) {
+      await emailProviderService.sendEmail({
+        to: email,
+        subject: 'Payment failed — please update your payment method',
+        text: `Hello ${name || 'there'},\n\nYour recent payment for Slimbooks has failed. Please update your payment method to keep your account active.\n\nUpdate your payment method at ${appUrl}.\n\nThank you,\nThe Slimbooks Team`,
+        html: `<p>Hello ${name || 'there'},</p><p>Your recent payment for Slimbooks has failed. Please update your payment method to keep your account active.</p><p><a href="${appUrl}">Update your payment method</a></p><p>Thank you,<br>The Slimbooks Team</p>`
+      }, { tenantId });
+      await databaseService.executeQuery(
+        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'reminder_1', datetime('now'))`,
+        [tenantId]
+      );
+      return true;
+    }
+
+    return false;
   }
 }
 

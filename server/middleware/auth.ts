@@ -10,6 +10,8 @@ import { tenantService } from '../services/TenantService.js';
 import { databaseService } from '../core/DatabaseService.js';
 import { User, UserPublic, UserRole } from '../types/index.js';
 import { hasRole as roleListHasRole, hasAnyRole } from '../auth/roles.js';
+import { apiKeyService } from '../services/ApiKeyService.js';
+import { usageService } from '../services/UsageService.js';
 
 // Extend the Request interface to include user property
 declare global {
@@ -52,8 +54,45 @@ interface AccountLockoutSettings {
  */
 export const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const apiKeyHeader = req.headers['x-api-key'] as string | undefined;
     const token = req.headers.authorization?.replace('Bearer ', '');
-    
+
+    // --- API Key authentication (only if no Bearer token present) ---
+    if (!token && apiKeyHeader) {
+      try {
+        const keyResult = await apiKeyService.verifyKey(apiKeyHeader);
+        if (!keyResult) {
+          res.status(401).json({ success: false, error: 'Invalid API key' });
+          return;
+        }
+
+        const user = await authService.getUserById(keyResult.userId);
+        if (!user) {
+          res.status(401).json({ success: false, error: 'Invalid API key - user not found' });
+          return;
+        }
+
+        const resolvedTenantId = keyResult.tenantId;
+        const tenantIsActive = await tenantService.isTenantActive(resolvedTenantId);
+        if (!tenantIsActive) {
+          res.status(403).json({ success: false, error: 'Tenant is suspended or unavailable' });
+          return;
+        }
+
+        req.user = user;
+        req.tenantId = resolvedTenantId;
+
+        // Increment api_calls usage (fire-and-forget)
+        usageService.increment(resolvedTenantId, 'api_calls').catch(() => {});
+
+        next();
+        return;
+      } catch {
+        res.status(401).json({ success: false, error: 'Invalid API key' });
+        return;
+      }
+    }
+
     if (!token) {
       res.status(401).json({
         success: false,
@@ -61,7 +100,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       });
       return;
     }
-    
+
     // Verify JWT token
     try {
       const decoded = jwt.verify(token, authConfig.jwtSecret) as JWTPayload;

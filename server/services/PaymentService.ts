@@ -3,6 +3,8 @@
 
 import { databaseService } from '../core/DatabaseService.js';
 import { Payment, ServiceOptions, PaymentStatus, PaymentMethod } from '../types/index.js';
+import { outboundWebhookService } from './OutboundWebhookService.js';
+import { usageService } from './UsageService.js';
 
 /**
  * Payment Service
@@ -282,6 +284,15 @@ export class PaymentService {
       paymentRecord.transaction_id, paymentRecord.notes, paymentRecord.status,
       paymentRecord.created_at, paymentRecord.updated_at
     ]);
+
+    // Fire-and-forget: usage metering + webhook dispatch
+    usageService.increment(scopedTenantId, 'payments_recorded').catch(() => {});
+    outboundWebhookService.dispatch(scopedTenantId, 'payment.recorded', {
+      payment_id: nextId,
+      invoice_id: paymentRecord.invoice_id,
+      amount: paymentRecord.amount,
+      tenant_id: scopedTenantId
+    }).catch(() => {});
 
     return nextId;
   }

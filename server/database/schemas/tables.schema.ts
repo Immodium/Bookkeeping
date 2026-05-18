@@ -490,6 +490,96 @@ const dunningEventsSchema: TableSchema = {
   ]
 };
 
+/**
+ * API keys table for programmatic access
+ */
+const apiKeysSchema: TableSchema = {
+  name: 'api_keys',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'user_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'key_hash', type: 'TEXT', constraints: ['NOT NULL UNIQUE'] },
+    { name: 'key_prefix', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'scopes', type: 'TEXT', constraints: ["NOT NULL DEFAULT '[\"read\",\"write\"]'"] },
+    { name: 'last_used_at', type: 'TEXT' },
+    { name: 'expires_at', type: 'TEXT' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
+    'FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE'
+  ]
+};
+
+/**
+ * Outbound webhook endpoints table
+ */
+const webhookEndpointsSchema: TableSchema = {
+  name: 'webhook_endpoints',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'url', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'secret', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'events', type: 'TEXT', constraints: ["NOT NULL DEFAULT '[\"*\"]'"] },
+    { name: 'is_active', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
+    { name: 'description', type: 'TEXT' },
+    { name: 'last_triggered_at', type: 'TEXT' },
+    { name: 'failure_count', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
+  ]
+};
+
+/**
+ * Webhook delivery log table
+ */
+const webhookDeliveriesSchema: TableSchema = {
+  name: 'webhook_deliveries',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'endpoint_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'event_type', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'payload_json', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'response_status', type: 'INTEGER' },
+    { name: 'response_body', type: 'TEXT' },
+    { name: 'attempt_count', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
+    { name: 'delivered_at', type: 'TEXT' },
+    { name: 'failed_at', type: 'TEXT' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (endpoint_id) REFERENCES webhook_endpoints (id) ON DELETE CASCADE'
+  ]
+};
+
+/**
+ * Usage records for metering per-tenant usage by month
+ */
+const usageRecordsSchema: TableSchema = {
+  name: 'usage_records',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'metric', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'value', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
+    { name: 'period', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'period_type', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'monthly'"] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
+    'UNIQUE (tenant_id, metric, period)'
+  ]
+};
+
 // Export all schemas
 export const tableSchemas: TableSchema[] = [
   tenantsSchema,
@@ -510,7 +600,11 @@ export const tableSchemas: TableSchema[] = [
   projectSettingsSchema,
   countersSchema,
   dunningEventsSchema,
-  auditLogSchema
+  auditLogSchema,
+  apiKeysSchema,
+  webhookEndpointsSchema,
+  webhookDeliveriesSchema,
+  usageRecordsSchema
 ];
 
 /**

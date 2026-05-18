@@ -7,6 +7,7 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 import { databaseService } from '../core/DatabaseService.js';
 import { auditService } from '../services/AuditService.js';
 import { serverConfig } from '../config/index.js';
+import { usageService } from '../services/UsageService.js';
 
 const router: Router = Router();
 
@@ -91,6 +92,29 @@ router.get(
         recentActivity
       }
     });
+  })
+);
+
+/**
+ * GET /api/admin/usage
+ * Top 10 tenants by invoice count for the current month.
+ */
+router.get(
+  '/usage',
+  asyncHandler(async (_req: Request, res: Response): Promise<void> => {
+    // Get current period (YYYY-MM)
+    const now = new Date();
+    const period = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+
+    const topTenants = await databaseService.getMany<{ tenant_id: number; value: number }>(
+      `SELECT tenant_id, value FROM usage_records
+       WHERE metric = 'invoices_created' AND period = ?
+       ORDER BY value DESC
+       LIMIT 10`,
+      [period]
+    );
+
+    res.json({ success: true, data: { period, topTenantsByInvoices: topTenants } });
   })
 );
 

@@ -28,6 +28,7 @@ import {
 } from '../types/api.types.js';
 import { User, UserPublic } from '../types/index.js';
 import { auditService } from '../services/AuditService.js';
+import { emailTemplateService } from '../services/EmailTemplateService.js';
 
 interface DecodedToken {
   userId: number;
@@ -191,24 +192,17 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
 
   // Send password reset email when provider is configured and enabled.
   const resetLink = `${process.env.CLIENT_URL || 'http://localhost:8080'}/reset-password?token=${token}`;
+  const tenantId = user.tenant_id || 1;
+  const resetEmailContent = await emailTemplateService.render('password_reset', {
+    name: user.name || 'there',
+    reset_url: resetLink
+  }, tenantId);
   await emailProviderService.sendEmail({
     to: user.email,
-    subject: 'Reset your Slimbooks password',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
-        <h2>Password reset request</h2>
-        <p>Hello ${user.name || 'there'},</p>
-        <p>Use the button below to reset your password.</p>
-        <p style="margin: 24px 0;">
-          <a href="${resetLink}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">
-            Reset password
-          </a>
-        </p>
-        <p>If you did not request this, you can ignore this email.</p>
-      </div>
-    `,
-    text: `Password reset request\n\nHello ${user.name || 'there'},\n\nReset your password using this link:\n${resetLink}\n\nIf you did not request this, you can ignore this email.`
-  }, { tenantId: user.tenant_id || 1 });
+    subject: resetEmailContent.subject,
+    html: resetEmailContent.html,
+    text: resetEmailContent.text
+  }, { tenantId });
 
   res.json({
     success: true,
@@ -467,27 +461,16 @@ export const registerTenant = asyncHandler(async (req: Request, res: Response): 
 
   // Send welcome email (fire-and-forget — don't fail registration if email fails)
   const appUrl = process.env.APP_URL || 'http://localhost:5173';
-  emailProviderService.sendEmail({
-    to: email,
-    subject: 'Welcome to Slimbooks — your 14-day trial has started',
-    text: `Hello ${name},\n\nWelcome to Slimbooks! Your 14-day free trial has started.\n\nGet started at ${appUrl}\n\nThank you for choosing Slimbooks!\nThe Slimbooks Team`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
-        <h2>Welcome to Slimbooks!</h2>
-        <p>Hello ${name},</p>
-        <p>Your 14-day free trial has started. You can log in and start managing your finances right away.</p>
-        <p style="margin: 24px 0;">
-          <a href="${appUrl}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">
-            Go to Slimbooks
-          </a>
-        </p>
-        <p>Thank you for choosing Slimbooks!</p>
-        <p>The Slimbooks Team</p>
-      </div>
-    `
-  }, { tenantId }).catch(() => {
-    // Ignore email errors — don't fail registration
-  });
+  emailTemplateService.render('welcome', { name, app_url: appUrl }, tenantId)
+    .then(welcomeContent => emailProviderService.sendEmail({
+      to: email,
+      subject: welcomeContent.subject,
+      html: welcomeContent.html,
+      text: welcomeContent.text
+    }, { tenantId }))
+    .catch(() => {
+      // Ignore email errors — don't fail registration
+    });
 
   const { password_hash, two_factor_secret, backup_codes, ...userResponse } = newUser;
 

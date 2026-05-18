@@ -1,6 +1,8 @@
 import { databaseService } from '../core/DatabaseService.js';
 import { emailProviderService } from './EmailProviderService.js';
 import { tenantService } from './TenantService.js';
+import { emailTemplateService } from './EmailTemplateService.js';
+import { outboundWebhookService } from './OutboundWebhookService.js';
 
 export type TenantSubscriptionStatus =
   | 'trialing'
@@ -523,6 +525,13 @@ export class SubscriptionService {
       }
     }
 
+    // Dispatch webhook for subscription update (fire-and-forget)
+    outboundWebhookService.dispatch(tenantId, 'subscription.updated', {
+      tenant_id: tenantId,
+      status: normalizedStatus,
+      plan_code: planCode
+    }).catch(() => {});
+
     return { tenantId };
   }
 
@@ -600,11 +609,15 @@ export class SubscriptionService {
 
     // Day 14+: send final notice (if not yet sent)
     if (daysElapsed >= 14 && !sentTypes.has('final_notice')) {
+      const finalContent = await emailTemplateService.render('dunning_final_notice', {
+        name: name || 'there',
+        portal_url: appUrl
+      }, tenantId);
       await emailProviderService.sendEmail({
         to: email,
-        subject: 'Final notice — your account will be suspended today',
-        text: `Hello ${name || 'there'},\n\nThis is a final notice that your payment has failed and your Slimbooks account will be suspended today unless payment is updated.\n\nPlease update your payment method at ${appUrl} to avoid suspension.\n\nThank you,\nThe Slimbooks Team`,
-        html: `<p>Hello ${name || 'there'},</p><p>This is a final notice that your payment has failed and your Slimbooks account will be suspended today unless payment is updated.</p><p><a href="${appUrl}">Update your payment method</a></p><p>Thank you,<br>The Slimbooks Team</p>`
+        subject: finalContent.subject,
+        html: finalContent.html,
+        text: finalContent.text
       }, { tenantId });
       await databaseService.executeQuery(
         `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'final_notice', datetime('now'))`,
@@ -615,11 +628,16 @@ export class SubscriptionService {
 
     // Day 5+: send reminder_2 (if not yet sent)
     if (daysElapsed >= 5 && !sentTypes.has('reminder_2')) {
+      const reminder2Content = await emailTemplateService.render('dunning_reminder_2', {
+        name: name || 'there',
+        portal_url: appUrl,
+        days_remaining: '9'
+      }, tenantId);
       await emailProviderService.sendEmail({
         to: email,
-        subject: 'Action required — your account will be suspended in 9 days',
-        text: `Hello ${name || 'there'},\n\nYour payment has failed and your Slimbooks account will be suspended in 9 days unless payment is updated.\n\nPlease update your payment method at ${appUrl}.\n\nThank you,\nThe Slimbooks Team`,
-        html: `<p>Hello ${name || 'there'},</p><p>Your payment has failed and your Slimbooks account will be suspended in 9 days unless payment is updated.</p><p><a href="${appUrl}">Update your payment method</a></p><p>Thank you,<br>The Slimbooks Team</p>`
+        subject: reminder2Content.subject,
+        html: reminder2Content.html,
+        text: reminder2Content.text
       }, { tenantId });
       await databaseService.executeQuery(
         `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'reminder_2', datetime('now'))`,
@@ -630,11 +648,15 @@ export class SubscriptionService {
 
     // Day 1+: send reminder_1 (if not yet sent)
     if (daysElapsed >= 1 && !sentTypes.has('reminder_1')) {
+      const reminder1Content = await emailTemplateService.render('dunning_reminder_1', {
+        name: name || 'there',
+        portal_url: appUrl
+      }, tenantId);
       await emailProviderService.sendEmail({
         to: email,
-        subject: 'Payment failed — please update your payment method',
-        text: `Hello ${name || 'there'},\n\nYour recent payment for Slimbooks has failed. Please update your payment method to keep your account active.\n\nUpdate your payment method at ${appUrl}.\n\nThank you,\nThe Slimbooks Team`,
-        html: `<p>Hello ${name || 'there'},</p><p>Your recent payment for Slimbooks has failed. Please update your payment method to keep your account active.</p><p><a href="${appUrl}">Update your payment method</a></p><p>Thank you,<br>The Slimbooks Team</p>`
+        subject: reminder1Content.subject,
+        html: reminder1Content.html,
+        text: reminder1Content.text
       }, { tenantId });
       await databaseService.executeQuery(
         `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'reminder_1', datetime('now'))`,

@@ -4,6 +4,7 @@
 import { databaseService } from '../core/DatabaseService.js';
 import { subscriptionService } from './SubscriptionService.js';
 import { Client, ServiceOptions } from '../types/index.js';
+import { usageService } from './UsageService.js';
 
 /**
  * Client Service
@@ -160,6 +161,9 @@ export class ClientService {
       clientRecord.tax_id, clientRecord.notes, clientRecord.is_active,
       null, clientRecord.created_at, clientRecord.updated_at
     ]);
+
+    // Fire-and-forget: usage metering
+    usageService.increment(scopedTenantId, 'clients_created').catch(() => {});
 
     return nextId;
   }

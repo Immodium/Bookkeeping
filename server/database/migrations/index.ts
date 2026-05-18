@@ -18,6 +18,9 @@ import { up as migration013 } from './013_add_status_to_expenses.js';
 import { up as migration014 } from './014_add_token_version_to_users.js';
 import { up as migration015 } from './015_add_dunning_events.js';
 import { up as migration016 } from './016_add_audit_log.js';
+import { up as migration017 } from './017_add_api_keys.js';
+import { up as migration018 } from './018_add_outbound_webhooks.js';
+import { up as migration019 } from './019_add_usage_records.js';
 
 interface Migration {
   id: string;
@@ -44,7 +47,10 @@ const migrations: Migration[] = [
   { id: '013', name: 'add_status_to_expenses', up: migration013 },
   { id: '014', name: 'add_token_version_to_users', up: migration014 },
   { id: '015', name: 'add_dunning_events', up: migration015 },
-  { id: '016', name: 'add_audit_log', up: migration016 }
+  { id: '016', name: 'add_audit_log', up: migration016 },
+  { id: '017', name: 'add_api_keys', up: migration017 },
+  { id: '018', name: 'add_outbound_webhooks', up: migration018 },
+  { id: '019', name: 'add_usage_records', up: migration019 }
 ];
 
 /**

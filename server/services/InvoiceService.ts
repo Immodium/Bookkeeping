@@ -8,6 +8,8 @@ import { authConfig } from '../config/index.js';
 import { ServiceOptions, InvoiceWithClient, InvoiceStatus } from '../types/index.js';
 import { PublicInvoiceDisplay, PublicInvoiceTokenPayload } from '../types/invoice.types.js';
 import { invoiceNumberService } from './InvoiceNumberService.js';
+import { outboundWebhookService } from './OutboundWebhookService.js';
+import { usageService } from './UsageService.js';
 
 /**
  * Invoice Service
@@ -348,6 +350,16 @@ export class InvoiceService {
       invoiceRecord.email_error, invoiceRecord.last_email_attempt, invoiceRecord.created_at,
       invoiceRecord.updated_at
     ]);
+
+    // Fire-and-forget: usage metering + webhook dispatch
+    usageService.increment(scopedTenantId, 'invoices_created').catch(() => {});
+    outboundWebhookService.dispatch(scopedTenantId, 'invoice.created', {
+      invoice_id: nextId,
+      tenant_id: scopedTenantId,
+      amount: invoiceRecord.amount,
+      client_id: invoiceRecord.client_id,
+      status: invoiceRecord.status
+    }).catch(() => {});
 
     return nextId;
   }

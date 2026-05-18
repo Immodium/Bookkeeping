@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { userService } from '../services/UserService.js';
 import { authConfig } from '../config/index.js';
 import { emailProviderService } from '../services/EmailProviderService.js';
+import { emailTemplateService } from '../services/EmailTemplateService.js';
 import { 
   NotFoundError, 
   ValidationError,
@@ -227,20 +228,18 @@ export const createUser = asyncHandler(async (req: Request<object, object, Creat
 
     const effectivePassword = typeof rawPassword === 'string' ? rawPassword.trim() : null;
     if (createdUser && effectivePassword) {
+      const appUrl = process.env.APP_URL || 'http://localhost:5173';
+      const inviteContent = await emailTemplateService.render('invitation', {
+        name: createdUser.name,
+        tenant_name: 'Slimbooks',
+        temp_password: effectivePassword,
+        app_url: appUrl
+      }, tenantId);
       await emailProviderService.sendEmail({
         to: createdUser.email,
-        subject: 'You have been invited to Slimbooks',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
-            <h2>Welcome to Slimbooks</h2>
-            <p>Hello ${createdUser.name},</p>
-            <p>An administrator invited you to the app.</p>
-            <p><strong>Email:</strong> ${createdUser.email}</p>
-            <p><strong>Temporary password:</strong> ${effectivePassword}</p>
-            <p>Please sign in and change your password immediately.</p>
-          </div>
-        `,
-        text: `Hello ${createdUser.name},\n\nYou have been invited to Slimbooks.\nEmail: ${createdUser.email}\nTemporary password: ${effectivePassword}\n\nPlease sign in and change your password immediately.`
+        subject: inviteContent.subject,
+        html: inviteContent.html,
+        text: inviteContent.text
       }, { tenantId });
     }
 
@@ -539,20 +538,18 @@ export const inviteUser = asyncHandler(async (req: Request, res: Response): Prom
   const createdUser = await userService.getUserById(userId, tenantId);
 
   if (createdUser && sendInviteEmail) {
+    const appUrl = process.env.APP_URL || 'http://localhost:5173';
+    const inviteContent = await emailTemplateService.render('invitation', {
+      name: createdUser.name,
+      tenant_name: 'Slimbooks',
+      temp_password: tempPassword,
+      app_url: appUrl
+    }, tenantId);
     await emailProviderService.sendEmail({
       to: createdUser.email,
-      subject: 'You are invited to Slimbooks',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
-          <h2>You're invited</h2>
-          <p>Hello ${createdUser.name},</p>
-          <p>You were invited to Slimbooks.</p>
-          <p><strong>Email:</strong> ${createdUser.email}</p>
-          <p><strong>Temporary password:</strong> ${tempPassword}</p>
-          <p>Please log in and change your password.</p>
-        </div>
-      `,
-      text: `Hello ${createdUser.name},\n\nYou were invited to Slimbooks.\nEmail: ${createdUser.email}\nTemporary password: ${tempPassword}\n\nPlease log in and change your password.`
+      subject: inviteContent.subject,
+      html: inviteContent.html,
+      text: inviteContent.text
     }, { tenantId });
   }
 

@@ -54,6 +54,8 @@ export interface DatabaseConfig {
     foreign_keys: string;
     journal_mode: string;
   };
+  databaseUrl: string | undefined;
+  usePostgres: boolean;
 }
 
 /**
@@ -244,7 +246,11 @@ export const databaseConfig: DatabaseConfig = {
   pragmas: {
     foreign_keys: 'ON',
     journal_mode: 'WAL'
-  }
+  },
+
+  // PostgreSQL support
+  databaseUrl: process.env.DATABASE_URL,
+  usePostgres: !!process.env.DATABASE_URL
 };
 
 /**

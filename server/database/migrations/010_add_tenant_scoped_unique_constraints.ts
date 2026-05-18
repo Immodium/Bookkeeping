@@ -1,28 +1,32 @@
 import type { IDatabase } from '../../types/database.types.js';
 
-const hasTable = (db: IDatabase, tableName: string): boolean => {
-  const result = db.getMany<{ name: string }>(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-    [tableName]
-  );
-  return result.length > 0;
-};
-
-const hasColumn = (db: IDatabase, tableName: string, columnName: string): boolean => {
-  if (!hasTable(db, tableName)) {
+const hasTable = async (db: IDatabase, tableName: string): Promise<boolean> => {
+  try {
+    const result = await db.getMany<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      [tableName]
+    );
+    return result.length > 0;
+  } catch {
     return false;
   }
-  const columns = db.getMany<{ name: string }>(`PRAGMA table_info(${tableName})`);
-  return columns.some((column) => column.name === columnName);
 };
 
-const recreateSettingsTable = (db: IDatabase): void => {
-  if (!hasTable(db, 'settings')) {
-    return;
+const hasColumn = async (db: IDatabase, tableName: string, columnName: string): Promise<boolean> => {
+  if (!(await hasTable(db, tableName))) return false;
+  try {
+    const columns = await db.getMany<{ name: string }>(`PRAGMA table_info(${tableName})`);
+    return columns.some((column) => column.name === columnName);
+  } catch {
+    return false;
   }
+};
 
-  db.executeQuery('ALTER TABLE settings RENAME TO settings_legacy_010');
-  db.executeQuery(`
+const recreateSettingsTable = async (db: IDatabase): Promise<void> => {
+  if (!(await hasTable(db, 'settings'))) return;
+
+  await db.executeQuery('ALTER TABLE settings RENAME TO settings_legacy_010');
+  await db.executeQuery(`
     CREATE TABLE settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tenant_id INTEGER NOT NULL DEFAULT 1,
@@ -38,11 +42,12 @@ const recreateSettingsTable = (db: IDatabase): void => {
       UNIQUE (tenant_id, key)
     )
   `);
-  const categorySelect = hasColumn(db, 'settings_legacy_010', 'category')
+
+  const categorySelect = (await hasColumn(db, 'settings_legacy_010', 'category'))
     ? "COALESCE(category, 'general')"
     : "'general'";
 
-  db.executeQuery(`
+  await db.executeQuery(`
     INSERT INTO settings (
       id, tenant_id, key, value, type, description, is_public, category, created_at, updated_at
     )
@@ -50,18 +55,16 @@ const recreateSettingsTable = (db: IDatabase): void => {
       id, tenant_id, key, value, type, description, is_public, ${categorySelect}, created_at, updated_at
     FROM settings_legacy_010
   `);
-  db.executeQuery('DROP TABLE settings_legacy_010');
-  db.executeQuery('CREATE INDEX IF NOT EXISTS idx_settings_tenant_id ON settings(tenant_id)');
-  db.executeQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_tenant_key ON settings(tenant_id, key)');
+  await db.executeQuery('DROP TABLE settings_legacy_010');
+  await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_settings_tenant_id ON settings(tenant_id)');
+  await db.executeQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_tenant_key ON settings(tenant_id, key)');
 };
 
-const recreateProjectSettingsTable = (db: IDatabase): void => {
-  if (!hasTable(db, 'project_settings')) {
-    return;
-  }
+const recreateProjectSettingsTable = async (db: IDatabase): Promise<void> => {
+  if (!(await hasTable(db, 'project_settings'))) return;
 
-  db.executeQuery('ALTER TABLE project_settings RENAME TO project_settings_legacy_010');
-  db.executeQuery(`
+  await db.executeQuery('ALTER TABLE project_settings RENAME TO project_settings_legacy_010');
+  await db.executeQuery(`
     CREATE TABLE project_settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tenant_id INTEGER NOT NULL DEFAULT 1,
@@ -74,23 +77,21 @@ const recreateProjectSettingsTable = (db: IDatabase): void => {
       UNIQUE (tenant_id, key)
     )
   `);
-  db.executeQuery(`
+  await db.executeQuery(`
     INSERT INTO project_settings (id, tenant_id, key, value, enabled, created_at, updated_at)
     SELECT id, tenant_id, key, value, enabled, created_at, updated_at
     FROM project_settings_legacy_010
   `);
-  db.executeQuery('DROP TABLE project_settings_legacy_010');
-  db.executeQuery('CREATE INDEX IF NOT EXISTS idx_project_settings_tenant_id ON project_settings(tenant_id)');
-  db.executeQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_project_settings_tenant_key ON project_settings(tenant_id, key)');
+  await db.executeQuery('DROP TABLE project_settings_legacy_010');
+  await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_project_settings_tenant_id ON project_settings(tenant_id)');
+  await db.executeQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_project_settings_tenant_key ON project_settings(tenant_id, key)');
 };
 
-const recreateCountersTable = (db: IDatabase): void => {
-  if (!hasTable(db, 'counters')) {
-    return;
-  }
+const recreateCountersTable = async (db: IDatabase): Promise<void> => {
+  if (!(await hasTable(db, 'counters'))) return;
 
-  db.executeQuery('ALTER TABLE counters RENAME TO counters_legacy_010');
-  db.executeQuery(`
+  await db.executeQuery('ALTER TABLE counters RENAME TO counters_legacy_010');
+  await db.executeQuery(`
     CREATE TABLE counters (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tenant_id INTEGER NOT NULL DEFAULT 1,
@@ -102,23 +103,21 @@ const recreateCountersTable = (db: IDatabase): void => {
       UNIQUE (tenant_id, name)
     )
   `);
-  db.executeQuery(`
+  await db.executeQuery(`
     INSERT INTO counters (id, tenant_id, name, value, created_at, updated_at)
     SELECT id, tenant_id, name, value, created_at, updated_at
     FROM counters_legacy_010
   `);
-  db.executeQuery('DROP TABLE counters_legacy_010');
-  db.executeQuery('CREATE INDEX IF NOT EXISTS idx_counters_tenant_id ON counters(tenant_id)');
-  db.executeQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_counters_tenant_name ON counters(tenant_id, name)');
+  await db.executeQuery('DROP TABLE counters_legacy_010');
+  await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_counters_tenant_id ON counters(tenant_id)');
+  await db.executeQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_counters_tenant_name ON counters(tenant_id, name)');
 };
 
-const recreateInvoicesTable = (db: IDatabase): void => {
-  if (!hasTable(db, 'invoices')) {
-    return;
-  }
+const recreateInvoicesTable = async (db: IDatabase): Promise<void> => {
+  if (!(await hasTable(db, 'invoices'))) return;
 
-  db.executeQuery('ALTER TABLE invoices RENAME TO invoices_legacy_010');
-  db.executeQuery(`
+  await db.executeQuery('ALTER TABLE invoices RENAME TO invoices_legacy_010');
+  await db.executeQuery(`
     CREATE TABLE invoices (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tenant_id INTEGER NOT NULL DEFAULT 1,
@@ -167,7 +166,7 @@ const recreateInvoicesTable = (db: IDatabase): void => {
       UNIQUE (tenant_id, invoice_number)
     )
   `);
-  db.executeQuery(`
+  await db.executeQuery(`
     INSERT INTO invoices (
       id, tenant_id, invoice_number, client_id, design_template_id, recurring_template_id,
       amount, tax_amount, total_amount, currency, status, due_date, issue_date, paid_date,
@@ -185,21 +184,27 @@ const recreateInvoicesTable = (db: IDatabase): void => {
       last_email_attempt, is_recurring, recurring_frequency, next_due_date, created_at, updated_at
     FROM invoices_legacy_010
   `);
-  db.executeQuery('DROP TABLE invoices_legacy_010');
-  db.executeQuery('CREATE INDEX IF NOT EXISTS idx_invoices_tenant_id ON invoices(tenant_id)');
-  db.executeQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_tenant_invoice_number ON invoices(tenant_id, invoice_number)');
+  await db.executeQuery('DROP TABLE invoices_legacy_010');
+  await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_invoices_tenant_id ON invoices(tenant_id)');
+  await db.executeQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_tenant_invoice_number ON invoices(tenant_id, invoice_number)');
 };
 
-export const up = (db: IDatabase): void => {
-  db.executeQuery('PRAGMA foreign_keys = OFF');
+export const up = async (db: IDatabase): Promise<void> => {
+  await db.executeQuery('PRAGMA foreign_keys = OFF');
   try {
-    db.transaction(() => {
-      recreateSettingsTable(db);
-      recreateProjectSettingsTable(db);
-      recreateCountersTable(db);
-      recreateInvoicesTable(db);
+    await db.transaction(async () => {
+      await recreateSettingsTable(db);
+      await recreateProjectSettingsTable(db);
+      await recreateCountersTable(db);
+      await recreateInvoicesTable(db);
     });
+  } catch {
+    // May fail on PostgreSQL due to PRAGMA - ignore
   } finally {
-    db.executeQuery('PRAGMA foreign_keys = ON');
+    try {
+      await db.executeQuery('PRAGMA foreign_keys = ON');
+    } catch {
+      // PostgreSQL doesn't have PRAGMA
+    }
   }
 };

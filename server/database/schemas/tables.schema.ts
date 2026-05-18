@@ -104,6 +104,7 @@ const usersSchema: TableSchema = {
     { name: 'role', type: 'TEXT', constraints: ["DEFAULT 'user'"] },
     { name: 'email_verified', type: 'INTEGER', constraints: ['DEFAULT 0'] },
     { name: 'google_id', type: 'TEXT', constraints: ['UNIQUE'] },
+    { name: 'roles', type: 'TEXT' },
     { name: 'two_factor_secret', type: 'TEXT' },
     { name: 'backup_codes', type: 'TEXT' },
     { name: 'last_login', type: 'TEXT' },
@@ -111,6 +112,7 @@ const usersSchema: TableSchema = {
     { name: 'account_locked_until', type: 'TEXT' },
     { name: 'password_updated_at', type: 'TEXT' },
     { name: 'email_verified_at', type: 'TEXT' },
+    { name: 'token_version', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
     { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
     { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
   ],
@@ -473,8 +475,8 @@ export const tableSchemas: TableSchema[] = [
 /**
  * Create all database tables
  */
-export const createTables = (db: IDatabase): void => {
-  tableSchemas.forEach(schema => {
+export const createTables = async (db: IDatabase): Promise<void> => {
+  for (const schema of tableSchemas) {
     const columnDefs = schema.columns
       .map(col => `${col.name} ${col.type} ${col.constraints?.join(' ') || ''}`)
       .join(', ');
@@ -485,11 +487,11 @@ export const createTables = (db: IDatabase): void => {
 
     const createTableSQL = `CREATE TABLE IF NOT EXISTS ${schema.name} (${columnDefs}${constraints})`;
 
-    db.executeQuery(createTableSQL);
-  });
+    await db.executeQuery(createTableSQL);
+  }
 
   // Ensure a default tenant exists for backwards-compatible single-tenant mode.
-  db.executeQuery(`
+  await db.executeQuery(`
     INSERT OR IGNORE INTO tenants (id, name, slug, status)
     VALUES (1, 'Default Tenant', 'default', 'active')
   `);
@@ -509,7 +511,7 @@ export const createTables = (db: IDatabase): void => {
     'billing.max_invoices_per_month': 10000
   });
 
-  db.executeQuery(
+  await db.executeQuery(
     `
       INSERT OR IGNORE INTO subscription_plans (
         code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
@@ -517,7 +519,7 @@ export const createTables = (db: IDatabase): void => {
     `,
     ['trial', 'Trial', 0, 14, trialFeatures]
   );
-  db.executeQuery(
+  await db.executeQuery(
     `
       INSERT OR IGNORE INTO subscription_plans (
         code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
@@ -526,7 +528,7 @@ export const createTables = (db: IDatabase): void => {
     ['starter', 'Starter', 2900, 0, starterFeatures]
   );
 
-  db.executeQuery(`
+  await db.executeQuery(`
     INSERT OR IGNORE INTO tenant_subscriptions (
       tenant_id,
       plan_id,
@@ -556,7 +558,7 @@ export const createTables = (db: IDatabase): void => {
   `);
 
   // Create token tables for password reset and email verification
-  createTokenTables(db);
+  await createTokenTables(db);
 };
 
 /**

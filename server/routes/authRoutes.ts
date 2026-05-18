@@ -11,7 +11,8 @@ import {
   refreshToken,
   getProfile,
   updateProfile,
-  changePassword
+  changePassword,
+  logout
 } from '../controllers/index.js';
 import {
   requireAuth,
@@ -77,9 +78,15 @@ router.put('/profile',
 );
 
 // Change password (requires authentication)
-router.post('/change-password', 
+router.post('/change-password',
   requireAuth,
   changePassword
+);
+
+// Logout - invalidates all sessions via token_version bump
+router.post('/logout',
+  requireAuth,
+  logout
 );
 
 export default router;

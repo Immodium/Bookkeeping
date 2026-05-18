@@ -49,7 +49,7 @@ export class TenantService {
   }
 
   async getAllTenants(): Promise<Array<Tenant & { user_count: number }>> {
-    return databaseService.getMany<Tenant & { user_count: number }>(
+    return await databaseService.getMany<Tenant & { user_count: number }>(
       `
         SELECT
           t.id,
@@ -71,7 +71,7 @@ export class TenantService {
 
   async getTenantById(tenantId: number): Promise<Tenant | null> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getOne<Tenant>(
+    return await databaseService.getOne<Tenant>(
       'SELECT id, name, slug, status, created_at, updated_at FROM tenants WHERE id = ?',
       [scopedTenantId]
     );
@@ -126,9 +126,9 @@ export class TenantService {
     return tenantId === 1 ? counterName : `${counterName}__tenant_${tenantId}`;
   }
 
-  private initializeTenantCounters(tenantId: number): void {
+  private async initializeTenantCounters(tenantId: number): Promise<void> {
     for (const counterName of this.provisioningCounters) {
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         `
           INSERT OR IGNORE INTO counters (tenant_id, name, value, created_at, updated_at)
           VALUES (?, ?, 0, datetime('now'), datetime('now'))
@@ -137,7 +137,7 @@ export class TenantService {
       );
     }
 
-    databaseService.executeQuery(
+    await databaseService.executeQuery(
       `
         INSERT OR IGNORE INTO counters (tenant_id, name, value, created_at, updated_at)
         VALUES (?, ?, 0, datetime('now'), datetime('now'))
@@ -146,13 +146,13 @@ export class TenantService {
     );
   }
 
-  private createTenantAdminUser(tenantId: number, admin: TenantAdminBootstrapInput): number {
-    const nextUserId = databaseService.getNextId('users');
+  private async createTenantAdminUser(tenantId: number, admin: TenantAdminBootstrapInput): Promise<number> {
+    const nextUserId = await databaseService.getNextId('users');
     const roles: UserRole[] = ['admin'];
     const now = new Date().toISOString();
     const passwordHash = bcrypt.hashSync(admin.password, authConfig.bcryptRounds);
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       `
         INSERT INTO users (
           id, tenant_id, name, email, username, password_hash, role, roles, email_verified,
@@ -185,7 +185,7 @@ export class TenantService {
     const { name, slug } = this.validateTenantInput(input);
     const admin = this.validateAdminBootstrapInput(input.admin);
 
-    const existingTenant = databaseService.getOne<{ id: number }>(
+    const existingTenant = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM tenants WHERE LOWER(slug) = LOWER(?)',
       [slug]
     );
@@ -193,7 +193,7 @@ export class TenantService {
       throw new Error('Tenant slug already exists');
     }
 
-    const existingUser = databaseService.getOne<{ id: number }>(
+    const existingUser = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM users WHERE LOWER(email) = LOWER(?)',
       [admin.email]
     );
@@ -205,8 +205,8 @@ export class TenantService {
     let adminUserId = 0;
     const now = new Date().toISOString();
 
-    databaseService.executeTransaction(() => {
-      const tenantInsert = databaseService.executeQuery(
+    await databaseService.executeTransaction(async () => {
+      const tenantInsert = await databaseService.executeQuery(
         `
           INSERT INTO tenants (name, slug, status, created_at, updated_at)
           VALUES (?, ?, 'active', ?, ?)
@@ -214,8 +214,8 @@ export class TenantService {
         [name, slug, now, now]
       );
       tenantId = tenantInsert.lastInsertRowid;
-      adminUserId = this.createTenantAdminUser(tenantId, admin);
-      this.initializeTenantCounters(tenantId);
+      adminUserId = await this.createTenantAdminUser(tenantId, admin);
+      await this.initializeTenantCounters(tenantId);
     });
 
     // Seed tenant onto a default subscription lifecycle if billing tables exist.
@@ -235,7 +235,7 @@ export class TenantService {
       throw new Error('Cannot bootstrap admin for non-active tenant');
     }
 
-    const existingUser = databaseService.getOne<{ id: number }>(
+    const existingUser = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM users WHERE LOWER(email) = LOWER(?)',
       [normalizedAdmin.email]
     );
@@ -243,7 +243,7 @@ export class TenantService {
       throw new Error('Tenant admin email is already in use');
     }
 
-    const adminUserId = this.createTenantAdminUser(scopedTenantId, normalizedAdmin);
+    const adminUserId = await this.createTenantAdminUser(scopedTenantId, normalizedAdmin);
     return { adminUserId };
   }
 
@@ -255,7 +255,7 @@ export class TenantService {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     this.assertTenantMutationAllowed(scopedTenantId, status);
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       "UPDATE tenants SET status = ?, updated_at = datetime('now') WHERE id = ?",
       [status, scopedTenantId]
     );

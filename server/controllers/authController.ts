@@ -9,9 +9,10 @@ import { authService } from '../services/AuthService.js';
 import { tenantService } from '../services/TenantService.js';
 import { tokenService } from '../services/TokenService.js';
 import { emailProviderService } from '../services/EmailProviderService.js';
-import { 
-  AppError, 
-  NotFoundError, 
+import { databaseService } from '../core/DatabaseService.js';
+import {
+  AppError,
+  NotFoundError,
   ValidationError,
   AuthenticationError,
   asyncHandler,
@@ -373,6 +374,27 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response): P
     success: true,
     data: updatedUser,
     message: 'Profile updated successfully'
+  });
+});
+
+/**
+ * Logout - invalidate all existing tokens for the user by bumping token_version
+ */
+export const logout = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const user = req.user;
+
+  if (!user) {
+    throw new AuthenticationError('User not authenticated');
+  }
+
+  await databaseService.executeQuery(
+    `UPDATE users SET token_version = COALESCE(token_version, 0) + 1, updated_at = datetime('now') WHERE id = ?`,
+    [user.id]
+  );
+
+  res.json({
+    success: true,
+    message: 'Logged out successfully'
   });
 });
 

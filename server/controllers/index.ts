@@ -112,7 +112,8 @@ export {
   refreshToken,
   getProfile,
   updateProfile,
-  changePassword
+  changePassword,
+  logout
 } from './authController.js';
 
 // Settings controller

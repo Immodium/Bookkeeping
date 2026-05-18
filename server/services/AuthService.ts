@@ -19,11 +19,12 @@ export class AuthService {
       'u.email',
       'u.username',
       'u.role',
-      'COALESCE(u.roles, json_array(u.role)) as roles',
+      `COALESCE(u.roles, '["' || u.role || '"]') as roles`,
       'u.email_verified',
       'u.last_login',
       'u.failed_login_attempts',
-      'u.account_locked_until'
+      'u.account_locked_until',
+      'COALESCE(u.token_version, 0) as token_version'
     ];
 
     if (includeSensitive) {
@@ -69,7 +70,7 @@ export class AuthService {
     if (!email || typeof email !== 'string') {
       throw new Error('Valid email is required');
     }
-    const row = databaseService.getOne<User>(`
+    const row = await databaseService.getOne<User>(`
       SELECT ${this.buildUserPublicSelectClause(true)}
       FROM users u
       WHERE u.email = ?
@@ -84,7 +85,7 @@ export class AuthService {
     if (!userId || typeof userId !== 'number') {
       throw new Error('Valid user ID is required');
     }
-    const row = databaseService.getOne<UserPublic>(`
+    const row = await databaseService.getOne<UserPublic>(`
       SELECT ${this.buildUserPublicSelectClause(false)}
       FROM users u
       WHERE u.id = ?
@@ -121,19 +122,19 @@ export class AuthService {
     }
 
     // Check if user already exists
-    if (databaseService.exists('users', 'email', email)) {
+    if (await databaseService.exists('users', 'email', email)) {
       throw new Error('User with this email already exists');
     }
 
     // Get next user ID from counter
-    const nextId = databaseService.getNextId('users');
+    const nextId = await databaseService.getNextId('users');
     
     const normalizedRoles = normalizeRoles([...(roles || []), role]);
     const primaryRole = normalizedRoles[0] || 'user';
 
     // Create user
     const now = new Date().toISOString();
-    databaseService.executeQuery(`
+    await databaseService.executeQuery(`
       INSERT INTO users (
         id, tenant_id, name, email, username, password_hash, role, roles, email_verified,
         failed_login_attempts, created_at, updated_at
@@ -166,7 +167,7 @@ export class AuthService {
 
     if (success) {
       // Reset failed attempts on successful login
-      databaseService.executeQuery(`
+      await databaseService.executeQuery(`
         UPDATE users 
         SET failed_login_attempts = 0, account_locked_until = NULL, last_login = datetime('now'), updated_at = datetime('now')
         WHERE id = ?
@@ -175,14 +176,14 @@ export class AuthService {
     }
 
     // Increment failed attempts
-    const user = databaseService.getOne<{failed_login_attempts: number}>(
+    const user = await databaseService.getOne<{failed_login_attempts: number}>(
       'SELECT failed_login_attempts FROM users WHERE id = ?', 
       [userId]
     );
     const newAttempts = (user?.failed_login_attempts || 0) + 1;
     
     // Get current lockout settings
-    const userTenant = databaseService.getOne<{ tenant_id: number }>(
+    const userTenant = await databaseService.getOne<{ tenant_id: number }>(
       'SELECT tenant_id FROM users WHERE id = ?',
       [userId]
     );
@@ -195,7 +196,7 @@ export class AuthService {
       lockedUntil = new Date(Date.now() + lockoutDuration).toISOString();
     }
     
-    databaseService.executeQuery(`
+    await databaseService.executeQuery(`
       UPDATE users 
       SET failed_login_attempts = ?, account_locked_until = ?, updated_at = datetime('now')
       WHERE id = ?
@@ -227,7 +228,7 @@ export class AuthService {
       throw new Error('Valid user ID is required');
     }
 
-    const changes = databaseService.updateById('users', userId, { 
+    const changes = await databaseService.updateById('users', userId, { 
       email_verified: 1,
       email_verified_at: new Date().toISOString()
     });
@@ -246,11 +247,11 @@ export class AuthService {
       throw new Error('Valid password hash is required');
     }
 
-    const changes = databaseService.updateById('users', userId, { 
-      password_hash: passwordHash,
-      password_updated_at: new Date().toISOString()
-    });
-    return changes;
+    await databaseService.executeQuery(
+      `UPDATE users SET password_hash = ?, password_updated_at = ?, token_version = COALESCE(token_version, 0) + 1, updated_at = datetime('now') WHERE id = ?`,
+      [passwordHash, new Date().toISOString(), userId]
+    );
+    return true;
   }
 
   /**
@@ -261,7 +262,7 @@ export class AuthService {
       throw new Error('Valid email is required');
     }
 
-    return databaseService.getOne<User>(`
+    return await databaseService.getOne<User>(`
       SELECT id, tenant_id, name, email, username, password_hash, role, roles, email_verified, 
              failed_login_attempts, account_locked_until, last_login
       FROM users WHERE email = ?
@@ -296,7 +297,7 @@ export class AuthService {
 
     // Check email uniqueness if email is being updated
     if (updateData.email) {
-      const existingUser = databaseService.getOne<{id: number}>(
+      const existingUser = await databaseService.getOne<{id: number}>(
         'SELECT id FROM users WHERE email = ? AND id != ?', 
         [updateData.email, userId]
       );
@@ -305,7 +306,7 @@ export class AuthService {
       }
     }
 
-    const changes = databaseService.updateById('users', userId, updateData);
+    const changes = await databaseService.updateById('users', userId, updateData);
     return changes;
   }
 
@@ -315,7 +316,7 @@ export class AuthService {
   async getAllUsers(options: { limit?: number; offset?: number } = {}): Promise<UserPublic[]> {
     const { limit = 100, offset = 0 } = options;
     
-    const rows = databaseService.getMany<UserPublic>(`
+    const rows = await databaseService.getMany<UserPublic>(`
       SELECT ${this.buildUserPublicSelectClause(true)}
       FROM users u
       ORDER BY u.created_at DESC
@@ -334,18 +335,18 @@ export class AuthService {
     }
 
     // Don't allow deletion of the last admin
-    const adminCount = databaseService.getOne<{count: number}>(
+    const adminCount = await databaseService.getOne<{count: number}>(
       "SELECT COUNT(*) as count FROM users WHERE role = 'admin'"
     );
     const userToDelete = this.hydrateUserRoles(
-      databaseService.getOne<UserPublic>('SELECT id, role, roles FROM users WHERE id = ?', [userId])
+      await databaseService.getOne<UserPublic>('SELECT id, role, roles FROM users WHERE id = ?', [userId])
     );
     
     if (userToDelete?.role === 'admin' && (adminCount?.count || 0) <= 1) {
       throw new Error('Cannot delete the last administrator');
     }
 
-    const changes = databaseService.deleteById('users', userId);
+    const changes = await databaseService.deleteById('users', userId);
     return changes;
   }
 
@@ -356,7 +357,7 @@ export class AuthService {
     if (!username || typeof username !== 'string') {
       throw new Error('Valid username is required');
     }
-    const row = databaseService.getOne<User>(`
+    const row = await databaseService.getOne<User>(`
       SELECT ${this.buildUserPublicSelectClause(true)}
       FROM users u
       WHERE u.username = ?
@@ -371,7 +372,7 @@ export class AuthService {
     if (!userId || typeof userId !== 'number') {
       return false;
     }
-    return databaseService.exists('users', 'id', userId);
+    return await databaseService.exists('users', 'id', userId);
   }
 
   /**
@@ -383,14 +384,14 @@ export class AuthService {
     }
 
     if (excludeUserId) {
-      const user = databaseService.getOne<{id: number}>(
+      const user = await databaseService.getOne<{id: number}>(
         'SELECT id FROM users WHERE email = ? AND id != ?', 
         [email, excludeUserId]
       );
       return !!user;
     }
 
-    return databaseService.exists('users', 'email', email);
+    return await databaseService.exists('users', 'email', email);
   }
 
   /**
@@ -402,7 +403,7 @@ export class AuthService {
     }
 
     const lockedUntil = new Date(Date.now() + lockDuration).toISOString();
-    const changes = databaseService.updateById('users', userId, {
+    const changes = await databaseService.updateById('users', userId, {
       account_locked_until: lockedUntil
     });
     return changes;
@@ -416,7 +417,7 @@ export class AuthService {
       throw new Error('Valid user ID is required');
     }
 
-    const changes = databaseService.updateById('users', userId, {
+    const changes = await databaseService.updateById('users', userId, {
       failed_login_attempts: 0,
       account_locked_until: null
     });
@@ -436,7 +437,7 @@ export class AuthService {
       throw new Error('Valid user ID is required');
     }
 
-    const user = databaseService.getOne<{
+    const user = await databaseService.getOne<{
       last_login: string | null;
       failed_login_attempts: number;
       account_locked_until: string | null;

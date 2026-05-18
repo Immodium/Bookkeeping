@@ -40,7 +40,7 @@ export class CounterService {
     const scopedCounterName = this.getScopedCounterName(counterName, scopedTenantId);
 
     // Get current counter value
-    const counterResult = databaseService.getOne<{value: number}>(
+    const counterResult = await databaseService.getOne<{value: number}>(
       'SELECT value FROM counters WHERE tenant_id = ? AND name = ?', 
       [scopedTenantId, scopedCounterName]
     );
@@ -48,12 +48,12 @@ export class CounterService {
     const nextId = (counterResult?.value || 0) + 1;
     
     if (counterResult) {
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         'UPDATE counters SET value = ?, updated_at = datetime(\'now\') WHERE tenant_id = ? AND name = ?', 
         [nextId, scopedTenantId, scopedCounterName]
       );
     } else {
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         'INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (?, ?, ?, datetime(\'now\'), datetime(\'now\'))',
         [scopedTenantId, scopedCounterName, nextId]
       );
@@ -72,7 +72,7 @@ export class CounterService {
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const scopedCounterName = this.getScopedCounterName(counterName, scopedTenantId);
-    const counterResult = databaseService.getOne<{value: number}>(
+    const counterResult = await databaseService.getOne<{value: number}>(
       'SELECT value FROM counters WHERE tenant_id = ? AND name = ?', 
       [scopedTenantId, scopedCounterName]
     );
@@ -106,7 +106,7 @@ export class CounterService {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const scopedCounterName = this.getScopedCounterName(counterName, scopedTenantId);
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'UPDATE counters SET value = ?, updated_at = datetime(\'now\') WHERE tenant_id = ? AND name = ?', 
       [value, scopedTenantId, scopedCounterName]
     );
@@ -144,7 +144,7 @@ export class CounterService {
     }
 
     // Create new counter
-    databaseService.executeQuery(
+    await databaseService.executeQuery(
       'INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (?, ?, ?, datetime(\'now\'), datetime(\'now\'))', 
       [scopedTenantId, scopedCounterName, initialValue]
     );
@@ -161,7 +161,7 @@ export class CounterService {
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const scopedCounterName = this.getScopedCounterName(counterName, scopedTenantId);
-    const counter = databaseService.getOne<{ name: string }>(
+    const counter = await databaseService.getOne<{ name: string }>(
       'SELECT name FROM counters WHERE tenant_id = ? AND name = ?',
       [scopedTenantId, scopedCounterName]
     );
@@ -173,7 +173,7 @@ export class CounterService {
    */
   async getAllCounters(tenantId?: number): Promise<Counter[]> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const results = databaseService.getMany<{name: string; value: number}>(
+    const results = await databaseService.getMany<{name: string; value: number}>(
       'SELECT name, value FROM counters WHERE tenant_id = ? ORDER BY name',
       [scopedTenantId]
     );
@@ -217,7 +217,7 @@ export class CounterService {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const scopedCounterName = this.getScopedCounterName(counterName, scopedTenantId);
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'UPDATE counters SET value = ?, updated_at = datetime(\'now\') WHERE tenant_id = ? AND name = ?', 
       [value, scopedTenantId, scopedCounterName]
     );
@@ -234,18 +234,18 @@ export class CounterService {
    */
   async initializeStandardCounters(tenantId?: number): Promise<boolean> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const operations = () => {
+    const operations = async () => {
       for (const counterName of this.validCounters) {
         const scopedCounterName = this.getScopedCounterName(counterName, scopedTenantId);
         // Use INSERT OR IGNORE to avoid errors if counter already exists
-        databaseService.executeQuery(
-          'INSERT OR IGNORE INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (?, ?, ?, datetime(\'now\'), datetime(\'now\'))', 
+        await databaseService.executeQuery(
+          'INSERT OR IGNORE INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (?, ?, ?, datetime(\'now\'), datetime(\'now\'))',
           [scopedTenantId, scopedCounterName, 0]
         );
       }
     };
 
-    databaseService.executeTransaction(operations);
+    await databaseService.executeTransaction(operations);
     return true;
   }
 }

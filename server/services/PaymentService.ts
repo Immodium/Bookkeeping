@@ -13,26 +13,26 @@ export class PaymentService {
     return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
   }
 
-  private getInvoiceClientId(invoiceId?: number, tenantId?: number): number | null {
+  private async getInvoiceClientId(invoiceId?: number, tenantId?: number): Promise<number | null> {
     if (!invoiceId) {
       return null;
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const invoice = databaseService.getOne<{ client_id: number }>(
+    const invoice = await databaseService.getOne<{ client_id: number }>(
       'SELECT client_id FROM invoices WHERE id = ? AND tenant_id = ? LIMIT 1',
       [invoiceId, scopedTenantId]
     );
     return invoice?.client_id || null;
   }
 
-  private mapClientNameToId(clientName?: string, tenantId?: number): number | null {
+  private async mapClientNameToId(clientName?: string, tenantId?: number): Promise<number | null> {
     if (!clientName || typeof clientName !== 'string') {
       return null;
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const exactMatch = databaseService.getOne<{ id: number }>(
+    const exactMatch = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM clients WHERE tenant_id = ? AND LOWER(name) = LOWER(?) AND deleted_at IS NULL LIMIT 1',
       [scopedTenantId, clientName.trim()]
     );
@@ -41,7 +41,7 @@ export class PaymentService {
       return exactMatch.id;
     }
 
-    const fuzzyMatch = databaseService.getOne<{ id: number }>(
+    const fuzzyMatch = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM clients WHERE tenant_id = ? AND LOWER(name) LIKE LOWER(?) AND deleted_at IS NULL ORDER BY id ASC LIMIT 1',
       [scopedTenantId, `%${clientName.trim()}%`]
     );
@@ -49,13 +49,13 @@ export class PaymentService {
     return fuzzyMatch?.id || null;
   }
 
-  private getClientNameById(clientId?: number, tenantId?: number): string {
+  private async getClientNameById(clientId?: number, tenantId?: number): Promise<string> {
     if (!clientId) {
       return 'Unknown Client';
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const client = databaseService.getOne<{ name: string }>(
+    const client = await databaseService.getOne<{ name: string }>(
       'SELECT name FROM clients WHERE id = ? AND tenant_id = ? LIMIT 1',
       [clientId, scopedTenantId]
     );
@@ -143,7 +143,7 @@ export class PaymentService {
     query += ' ORDER BY p.date DESC, p.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
     
-    const payments = this.enrichPaymentRows(databaseService.getMany<Payment>(query, params));
+    const payments = this.enrichPaymentRows(await databaseService.getMany<Payment>(query, params));
     
     // Get total count for pagination
     let countQuery = 'SELECT COUNT(*) as count FROM payments p';
@@ -151,7 +151,7 @@ export class PaymentService {
       countQuery += ' WHERE ' + conditions.join(' AND ');
     }
     
-    const totalResult = databaseService.getOne<{count: number}>(countQuery, params.slice(0, -2));
+    const totalResult = await databaseService.getOne<{count: number}>(countQuery, params.slice(0, -2));
     const total = totalResult?.count || 0;
     
     return {
@@ -174,7 +174,7 @@ export class PaymentService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getOne<Payment>(`
+    return await databaseService.getOne<Payment>(`
       ${this.getPaymentSelectClause()}
       WHERE p.id = ? AND p.tenant_id = ?
       LIMIT 1
@@ -219,7 +219,7 @@ export class PaymentService {
     }
 
     // Validate invoice exists if invoice_id provided
-    if (paymentData.invoice_id && !databaseService.getOne<{ id: number }>(
+    if (paymentData.invoice_id && !await databaseService.getOne<{ id: number }>(
       'SELECT id FROM invoices WHERE id = ? AND tenant_id = ?',
       [paymentData.invoice_id, scopedTenantId]
     )) {
@@ -228,7 +228,7 @@ export class PaymentService {
 
     let resolvedClientId: number | null = null;
     if (paymentData.client_id) {
-      if (!databaseService.getOne<{ id: number }>(
+      if (!await databaseService.getOne<{ id: number }>(
         'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
         [paymentData.client_id, scopedTenantId]
       )) {
@@ -236,11 +236,11 @@ export class PaymentService {
       }
       resolvedClientId = paymentData.client_id;
     } else {
-      resolvedClientId = this.mapClientNameToId(paymentData.client_name, scopedTenantId);
+      resolvedClientId = await this.mapClientNameToId(paymentData.client_name, scopedTenantId);
     }
 
     if (!resolvedClientId && paymentData.invoice_id) {
-      resolvedClientId = this.getInvoiceClientId(paymentData.invoice_id, scopedTenantId);
+      resolvedClientId = await this.getInvoiceClientId(paymentData.invoice_id, scopedTenantId);
     }
 
     if (!resolvedClientId) {
@@ -251,7 +251,7 @@ export class PaymentService {
     }
 
     // Get next payment ID
-    const nextId = databaseService.getNextId('payments');
+    const nextId = await databaseService.getNextId('payments');
     
     // Prepare payment data
     const now = new Date().toISOString();
@@ -271,7 +271,7 @@ export class PaymentService {
     };
 
     // Create payment
-    databaseService.executeQuery(`
+    await databaseService.executeQuery(`
       INSERT INTO payments (
         id, tenant_id, date, client_id, invoice_id, amount, method, transaction_id, 
         notes, status, created_at, updated_at
@@ -327,14 +327,14 @@ export class PaymentService {
     }
 
     // Validate invoice exists if invoice_id provided
-    if (paymentData.invoice_id && !databaseService.getOne<{ id: number }>(
+    if (paymentData.invoice_id && !await databaseService.getOne<{ id: number }>(
       'SELECT id FROM invoices WHERE id = ? AND tenant_id = ?',
       [paymentData.invoice_id, scopedTenantId]
     )) {
       throw new Error('Specified invoice does not exist');
     }
 
-    if (paymentData.client_id !== undefined && !databaseService.getOne<{ id: number }>(
+    if (paymentData.client_id !== undefined && !await databaseService.getOne<{ id: number }>(
       'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
       [paymentData.client_id, scopedTenantId]
     )) {
@@ -352,7 +352,7 @@ export class PaymentService {
     if (paymentData.status !== undefined) updateData.status = paymentData.status;
 
     if (paymentData.client_name !== undefined) {
-      const resolvedClientId = this.mapClientNameToId(paymentData.client_name, scopedTenantId);
+      const resolvedClientId = await this.mapClientNameToId(paymentData.client_name, scopedTenantId);
       if (!resolvedClientId) {
         throw new Error(`Client "${paymentData.client_name}" was not found`);
       }
@@ -370,7 +370,7 @@ export class PaymentService {
     const keys = Object.keys(updateData);
     const values = Object.values(updateData);
     const setClause = keys.map((key) => `${key} = ?`).join(', ');
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       `UPDATE payments SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
       [...values, id, scopedTenantId]
     );
@@ -392,7 +392,7 @@ export class PaymentService {
       throw new Error('Payment not found');
     }
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'DELETE FROM payments WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -421,7 +421,7 @@ export class PaymentService {
 
     // Validate all payment IDs exist
     const placeholders = paymentIds.map(() => '?').join(',');
-    const existingPayments = databaseService.getMany<{id: number}>(
+    const existingPayments = await databaseService.getMany<{id: number}>(
       `SELECT id FROM payments WHERE tenant_id = ? AND id IN (${placeholders})`, 
       [scopedTenantId, ...paymentIds]
     );
@@ -431,7 +431,7 @@ export class PaymentService {
     }
 
     // Delete all payments
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       `DELETE FROM payments WHERE tenant_id = ? AND id IN (${placeholders})`, 
       [scopedTenantId, ...paymentIds]
     );
@@ -485,7 +485,7 @@ export class PaymentService {
       }
     }
     
-    const summaryStats = databaseService.getOne<{
+    const summaryStats = await databaseService.getOne<{
       total_payments: number;
       total_amount: number;
       average_amount: number;
@@ -510,7 +510,7 @@ export class PaymentService {
     `, params);
     
     // Get method breakdown
-    const methodStats = databaseService.getMany<{
+    const methodStats = await databaseService.getMany<{
       method: PaymentMethod;
       count: number;
       total_amount: number;
@@ -527,7 +527,7 @@ export class PaymentService {
     `, params);
     
     // Get monthly trends (last 12 months)
-    const monthlyTrends = databaseService.getMany<{
+    const monthlyTrends = await databaseService.getMany<{
       month: string;
       count: number;
       total_amount: number;
@@ -570,7 +570,7 @@ export class PaymentService {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const { limit = 100, offset = 0 } = options;
 
-    return this.enrichPaymentRows(databaseService.getMany<Payment>(`
+    return this.enrichPaymentRows(await databaseService.getMany<Payment>(`
       ${this.getPaymentSelectClause()}
       WHERE p.tenant_id = ? AND p.invoice_id = ? 
       ORDER BY p.date DESC 
@@ -589,7 +589,7 @@ export class PaymentService {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const { limit = 100, offset = 0 } = options;
 
-    return this.enrichPaymentRows(databaseService.getMany<Payment>(`
+    return this.enrichPaymentRows(await databaseService.getMany<Payment>(`
       ${this.getPaymentSelectClause()}
       WHERE p.tenant_id = ? AND LOWER(COALESCE(c.name, '')) LIKE LOWER(?) 
       ORDER BY p.date DESC 
@@ -624,14 +624,14 @@ export class PaymentService {
     const { limit = 100, offset = 0 } = options;
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const payments = this.enrichPaymentRows(databaseService.getMany<Payment>(`
+    const payments = this.enrichPaymentRows(await databaseService.getMany<Payment>(`
       ${this.getPaymentSelectClause()}
       WHERE p.tenant_id = ? AND p.date BETWEEN ? AND ?
       ORDER BY p.date DESC, p.created_at DESC
       LIMIT ? OFFSET ?
     `, [scopedTenantId, startDate, endDate, limit, offset]));
 
-    const summaryResult = databaseService.getOne<{
+    const summaryResult = await databaseService.getOne<{
       count: number;
       total_amount: number;
       average_amount: number;
@@ -665,7 +665,7 @@ export class PaymentService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return this.enrichPaymentRows(databaseService.getMany<Payment>(`
+    return this.enrichPaymentRows(await databaseService.getMany<Payment>(`
       ${this.getPaymentSelectClause()}
       WHERE p.tenant_id = ?
       ORDER BY p.date DESC, p.created_at DESC
@@ -713,7 +713,7 @@ export class PaymentService {
       query += ' WHERE ' + conditions.join(' AND ');
     }
     
-    const result = databaseService.getOne<{total: number}>(query, params);
+    const result = await databaseService.getOne<{total: number}>(query, params);
     return result?.total || 0;
   }
 
@@ -732,7 +732,7 @@ export class PaymentService {
     }
 
     // Check if payment exists
-    const paymentExists = databaseService.getOne<{ id: number }>(
+    const paymentExists = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM payments WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -740,7 +740,7 @@ export class PaymentService {
       throw new Error('Payment not found');
     }
 
-    const result = databaseService.executeQuery(`
+    const result = await databaseService.executeQuery(`
       UPDATE payments 
       SET status = ?, updated_at = datetime('now')
       WHERE id = ? AND tenant_id = ?
@@ -760,7 +760,7 @@ export class PaymentService {
     last_used: string;
   }>> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getMany<{
+    return await databaseService.getMany<{
       method: PaymentMethod;
       count: number;
       total_amount: number;
@@ -808,7 +808,7 @@ export class PaymentService {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const searchPattern = `%${searchTerm.trim()}%`;
 
-    const payments = this.enrichPaymentRows(databaseService.getMany<Payment>(`
+    const payments = this.enrichPaymentRows(await databaseService.getMany<Payment>(`
       ${this.getPaymentSelectClause()}
       WHERE (
         p.tenant_id = ?
@@ -830,7 +830,7 @@ export class PaymentService {
       limit, offset
     ]));
 
-    const totalResult = databaseService.getOne<{count: number}>(`
+    const totalResult = await databaseService.getOne<{count: number}>(`
       SELECT COUNT(*) as count 
       FROM payments p
       LEFT JOIN clients c ON p.client_id = c.id
@@ -861,7 +861,7 @@ export class PaymentService {
       return false;
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return Boolean(databaseService.getOne<{ id: number }>(
+    return Boolean(await databaseService.getOne<{ id: number }>(
       'SELECT id FROM payments WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     ));

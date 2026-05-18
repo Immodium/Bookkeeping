@@ -7,6 +7,7 @@ import { authConfig } from '../config/index.js';
 import { authService } from '../services/AuthService.js';
 import { subscriptionService } from '../services/SubscriptionService.js';
 import { tenantService } from '../services/TenantService.js';
+import { databaseService } from '../core/DatabaseService.js';
 import { User, UserPublic, UserRole } from '../types/index.js';
 import { hasRole as roleListHasRole, hasAnyRole } from '../auth/roles.js';
 
@@ -27,6 +28,7 @@ interface JWTPayload {
   role: UserRole;
   roles?: UserRole[];
   type: string;
+  tokenVersion?: number;
   iat: number;
 }
 
@@ -36,6 +38,7 @@ interface TokenGenerationUser {
   email: string;
   role: UserRole;
   roles?: UserRole[];
+  token_version?: number;
 }
 
 interface AccountLockoutSettings {
@@ -73,7 +76,22 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
         });
         return;
       }
-      
+
+      // Validate token version to support session invalidation
+      if (decoded.tokenVersion !== undefined) {
+        const tokenVersionRow = await databaseService.getOne<{ token_version: number }>(
+          'SELECT token_version FROM users WHERE id = ?', [decoded.userId]
+        );
+        const currentVersion = tokenVersionRow?.token_version ?? 0;
+        if (decoded.tokenVersion < currentVersion) {
+          res.status(401).json({
+            success: false,
+            error: 'Token has been invalidated'
+          });
+          return;
+        }
+      }
+
       // Check if user account is locked
       if (user.account_locked_until && new Date(user.account_locked_until) > new Date()) {
         res.status(423).json({
@@ -265,6 +283,7 @@ export const generateToken = (user: TokenGenerationUser): string => {
     role: user.role,
     ...(user.roles ? { roles: user.roles } : {}),
     type: 'access',
+    tokenVersion: user.token_version ?? 0,
     iat: Math.floor(Date.now() / 1000)
   };
 

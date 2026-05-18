@@ -72,7 +72,7 @@ export class ExpenseService {
     query += ' ORDER BY date DESC, created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
     
-    const expenses = databaseService.getMany<Expense>(query, params);
+    const expenses = await databaseService.getMany<Expense>(query, params);
     
     // Get total count for pagination
     let countQuery = 'SELECT COUNT(*) as total FROM expenses';
@@ -80,7 +80,7 @@ export class ExpenseService {
       countQuery += ' WHERE ' + conditions.join(' AND ');
     }
     
-    const totalResult = databaseService.getOne<{total: number}>(
+    const totalResult = await databaseService.getOne<{total: number}>(
       countQuery, 
       params.slice(0, -2) // Remove limit and offset for count
     );
@@ -104,7 +104,7 @@ export class ExpenseService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getOne<Expense>(
+    return await databaseService.getOne<Expense>(
       'SELECT * FROM expenses WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -160,7 +160,7 @@ export class ExpenseService {
     }
 
     // Get next expense ID
-    const nextId = databaseService.getNextId('expenses');
+    const nextId = await databaseService.getNextId('expenses');
     
     // Prepare expense data
     const now = new Date().toISOString();
@@ -183,7 +183,7 @@ export class ExpenseService {
     };
 
     // Create expense
-    databaseService.executeQuery(`
+    await databaseService.executeQuery(`
       INSERT INTO expenses (
         id, tenant_id, amount, description, category, date, vendor, notes, receipt_url,
         is_billable, client_id, project, status, created_at, updated_at
@@ -281,7 +281,7 @@ export class ExpenseService {
     const keys = Object.keys(updateData);
     const values = Object.values(updateData);
     const setClause = keys.map((key) => `${key} = ?`).join(', ');
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       `UPDATE expenses SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
       [...values, id, scopedTenantId]
     );
@@ -303,7 +303,7 @@ export class ExpenseService {
       throw new Error('Expense not found');
     }
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'DELETE FROM expenses WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -321,7 +321,7 @@ export class ExpenseService {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const { limit = 100, offset = 0 } = options;
 
-    return databaseService.getMany<Expense>(`
+    return await databaseService.getMany<Expense>(`
       SELECT * FROM expenses 
       WHERE tenant_id = ? AND category = ?
       ORDER BY date DESC
@@ -347,7 +347,7 @@ export class ExpenseService {
     query += ' ORDER BY date DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
-    return databaseService.getMany<Expense>(query, params);
+    return await databaseService.getMany<Expense>(query, params);
   }
 
   /**
@@ -366,7 +366,7 @@ export class ExpenseService {
     const { limit = 100, offset = 0 } = options;
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    return databaseService.getMany<Expense>(`
+    return await databaseService.getMany<Expense>(`
       SELECT * FROM expenses 
       WHERE tenant_id = ? AND date >= ? AND date <= ?
       ORDER BY date DESC
@@ -379,7 +379,7 @@ export class ExpenseService {
    */
   async getExpenseCategories(tenantId?: number): Promise<Array<{category: string; count: number; total: number}>> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getMany<{category: string; count: number; total: number}>(`
+    return await databaseService.getMany<{category: string; count: number; total: number}>(`
       SELECT 
         category,
         COUNT(*) as count,
@@ -423,7 +423,7 @@ export class ExpenseService {
     const baseCondition = ` WHERE ${conditions.join(' AND ')}`;
 
     // Get basic stats
-    const basicStats = databaseService.getOne<{
+    const basicStats = await databaseService.getOne<{
       total: number;
       totalAmount: number;
       billableAmount: number;
@@ -438,7 +438,7 @@ export class ExpenseService {
     `, params);
 
     // Get category breakdown
-    const categoryData = databaseService.getMany<{category: string; count: number; amount: number}>(`
+    const categoryData = await databaseService.getMany<{category: string; count: number; amount: number}>(`
       SELECT 
         category,
         COUNT(*) as count,
@@ -460,7 +460,7 @@ export class ExpenseService {
     });
 
     // Get monthly trend (last 12 months)
-    const monthlyTrend = databaseService.getMany<{month: string; count: number; amount: number}>(`
+    const monthlyTrend = await databaseService.getMany<{month: string; count: number; amount: number}>(`
       SELECT 
         strftime('%Y-%m', date) as month,
         COUNT(*) as count,
@@ -495,7 +495,7 @@ export class ExpenseService {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const searchPattern = `%${searchTerm}%`;
 
-    return databaseService.getMany<Expense>(`
+    return await databaseService.getMany<Expense>(`
       SELECT * FROM expenses
       WHERE tenant_id = ? AND (description LIKE ? OR vendor LIKE ? OR notes LIKE ? OR category LIKE ?)
       ORDER BY 
@@ -521,7 +521,7 @@ export class ExpenseService {
       return false;
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return Boolean(databaseService.getOne<{ id: number }>(
+    return Boolean(await databaseService.getOne<{ id: number }>(
       'SELECT id FROM expenses WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     ));
@@ -534,7 +534,7 @@ export class ExpenseService {
     if (!clientId || typeof clientId !== 'number') {
       return false;
     }
-    return Boolean(databaseService.getOne<{ id: number }>(
+    return Boolean(await databaseService.getOne<{ id: number }>(
       'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
       [clientId, tenantId]
     ));

@@ -1,19 +1,19 @@
 import type { IDatabase } from '../../types/database.types.js';
 
-export const up = (db: IDatabase): void => {
+export const up = async (db: IDatabase): Promise<void> => {
   try {
-    const tableInfo = db.getMany('PRAGMA table_info(clients)', []);
+    const tableInfo = await db.getMany('PRAGMA table_info(clients)', []);
     const columns = tableInfo.map((col: any) => col.name);
 
     if (!columns.includes('first_name')) {
-      db.executeQuery('ALTER TABLE clients ADD COLUMN first_name TEXT');
+      await db.executeQuery('ALTER TABLE clients ADD COLUMN first_name TEXT');
     }
 
     if (!columns.includes('last_name')) {
-      db.executeQuery('ALTER TABLE clients ADD COLUMN last_name TEXT');
+      await db.executeQuery('ALTER TABLE clients ADD COLUMN last_name TEXT');
     }
 
-    db.executeQuery(`
+    await db.executeQuery(`
       UPDATE clients
       SET
         first_name = CASE

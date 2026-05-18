@@ -72,8 +72,8 @@ export class RetainerService {
     return !isNaN(date.getTime()) && /^\d{4}-\d{2}-\d{2}$/.test(dateString);
   }
 
-  private assertClientExists(clientId: number, tenantId: number): void {
-    const client = databaseService.getOne<{ id: number }>(
+  private async assertClientExists(clientId: number, tenantId: number): Promise<void> {
+    const client = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM clients WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL LIMIT 1',
       [clientId, tenantId]
     );
@@ -143,7 +143,7 @@ export class RetainerService {
     query += ' ORDER BY r.next_invoice_date ASC, r.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
 
-    const retainers = databaseService.getMany<Retainer>(query, params);
+    const retainers = await databaseService.getMany<Retainer>(query, params);
 
     const countQuery = `
       SELECT COUNT(*) as count
@@ -152,7 +152,7 @@ export class RetainerService {
       WHERE ${conditions.join(' AND ')}
     `;
 
-    const totalResult = databaseService.getOne<{ count: number }>(countQuery, params.slice(0, -2));
+    const totalResult = await databaseService.getOne<{ count: number }>(countQuery, params.slice(0, -2));
     const total = totalResult?.count || 0;
 
     return {
@@ -172,7 +172,7 @@ export class RetainerService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getOne<Retainer>(
+    return await databaseService.getOne<Retainer>(
       `
         ${this.getRetainerSelectClause()}
         WHERE r.id = ? AND r.tenant_id = ? AND r.deleted_at IS NULL
@@ -219,7 +219,7 @@ export class RetainerService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    this.assertClientExists(retainerData.client_id, scopedTenantId);
+    await this.assertClientExists(retainerData.client_id, scopedTenantId);
 
     const billingCycle = retainerData.billing_cycle || 'monthly';
     this.assertBillingCycle(billingCycle);
@@ -234,10 +234,10 @@ export class RetainerService {
           ? 0
           : 1;
 
-    const nextId = databaseService.getNextId('retainers');
+    const nextId = await databaseService.getNextId('retainers');
     const now = new Date().toISOString();
 
-    databaseService.executeQuery(
+    await databaseService.executeQuery(
       `
         INSERT INTO retainers (
           id, tenant_id, client_id, name, description, amount, currency, billing_cycle, start_date,
@@ -300,7 +300,7 @@ export class RetainerService {
     }
 
     if (retainerData.client_id !== undefined) {
-      this.assertClientExists(retainerData.client_id, scopedTenantId);
+      await this.assertClientExists(retainerData.client_id, scopedTenantId);
     }
 
     if (retainerData.amount !== undefined) {
@@ -359,7 +359,7 @@ export class RetainerService {
     const keys = Object.keys(updateData);
     const values = Object.values(updateData);
     const setClause = keys.map((key) => `${key} = ?`).join(', ');
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       `UPDATE retainers SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
       [...values, id, scopedTenantId]
     );
@@ -377,7 +377,7 @@ export class RetainerService {
       throw new Error('Retainer not found');
     }
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       "UPDATE retainers SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL",
       [id, scopedTenantId]
     );
@@ -386,7 +386,7 @@ export class RetainerService {
 
   async getRetainerStats(tenantId?: number): Promise<RetainerStats> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const summary = databaseService.getOne<RetainerStats['summary']>(
+    const summary = await databaseService.getOne<RetainerStats['summary']>(
       `
         SELECT
           COUNT(*) AS total,
@@ -412,7 +412,7 @@ export class RetainerService {
       [scopedTenantId]
     );
 
-    const byBillingCycle = databaseService.getMany<RetainerStats['by_billing_cycle'][number]>(
+    const byBillingCycle = await databaseService.getMany<RetainerStats['by_billing_cycle'][number]>(
       `
         SELECT
           billing_cycle,
@@ -426,7 +426,7 @@ export class RetainerService {
       [scopedTenantId]
     );
 
-    const upcomingResult = databaseService.getOne<{ count: number }>(
+    const upcomingResult = await databaseService.getOne<{ count: number }>(
       `
         SELECT COUNT(*) AS count
         FROM retainers

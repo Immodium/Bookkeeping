@@ -20,28 +20,28 @@ export class DatabaseService {
   /**
    * Execute a query with parameters
    */
-  public executeQuery(query: string, params: unknown[] = []) {
+  public async executeQuery(query: string, params: unknown[] = []) {
     return this.database.executeQuery(query, params);
   }
 
   /**
    * Get single record with prepared statement
    */
-  public getOne<T = Record<string, unknown>>(query: string, params: unknown[] = []): T | null {
+  public async getOne<T = Record<string, unknown>>(query: string, params: unknown[] = []): Promise<T | null> {
     return this.database.getOne<T>(query, params);
   }
 
   /**
    * Get multiple records with prepared statement
    */
-  public getMany<T = Record<string, unknown>>(query: string, params: unknown[] = []): T[] {
+  public async getMany<T = Record<string, unknown>>(query: string, params: unknown[] = []): Promise<T[]> {
     return this.database.getMany<T>(query, params);
   }
 
   /**
    * Get records with pagination and filtering
    */
-  public getPaginated<T = Record<string, unknown>>(
+  public async getPaginated<T = Record<string, unknown>>(
     query: string,
     params: unknown[] = [],
     options: ServiceOptions = {}
@@ -50,14 +50,14 @@ export class DatabaseService {
 
     let finalQuery = query;
     const finalParams = [...params];
-    
+
     // Add soft delete filter if not explicitly including deleted records
     if (!includeDeleted && !query.toLowerCase().includes('where')) {
       finalQuery += ' WHERE deleted_at IS NULL';
     } else if (!includeDeleted && query.toLowerCase().includes('where')) {
       finalQuery += ' AND deleted_at IS NULL';
     }
-    
+
     // Apply additional filters
     if (filters && Object.keys(filters).length > 0) {
       const filterConditions = Object.entries(filters)
@@ -68,36 +68,36 @@ export class DatabaseService {
           finalParams.push(value);
           return `${key} = ?`;
         });
-      
+
       const whereClause = query.toLowerCase().includes('where') ? ' AND ' : ' WHERE ';
       finalQuery += whereClause + filterConditions.join(' AND ');
     }
-    
+
     const queryOptions: QueryOptions = {
       limit,
       offset
     };
-    
+
     if (page) queryOptions.page = page;
     if (sort) queryOptions.sort = sort;
-    
+
     return this.database.getWithPagination<T>(finalQuery, finalParams, queryOptions);
   }
 
   /**
    * Execute operations within a transaction
    */
-  public withTransaction<T>(callback: () => T): T {
+  public async withTransaction<T>(callback: () => Promise<T>): Promise<T> {
     return this.database.transaction(callback);
   }
 
   /**
    * Soft delete a record (if table has deleted_at column)
    */
-  public softDelete(table: string, id: number): boolean {
+  public async softDelete(table: string, id: number): Promise<boolean> {
     validateTableName(table);
     try {
-      const result = this.executeQuery(
+      const result = await this.executeQuery(
         `UPDATE ${table} SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
         [id]
       );
@@ -112,9 +112,9 @@ export class DatabaseService {
   /**
    * Hard delete a record
    */
-  public hardDelete(table: string, id: number): boolean {
+  public async hardDelete(table: string, id: number): Promise<boolean> {
     validateTableName(table);
-    const result = this.executeQuery(`DELETE FROM ${table} WHERE id = ?`, [id]);
+    const result = await this.executeQuery(`DELETE FROM ${table} WHERE id = ?`, [id]);
     return result.changes > 0;
   }
 
@@ -124,12 +124,12 @@ export class DatabaseService {
    * @param id - Record ID
    * @param tableName - Logical name for setting lookup (e.g., 'clients', 'invoices')
    */
-  public deleteWithSetting(table: string, id: number, tableName?: string): boolean {
+  public async deleteWithSetting(table: string, id: number, tableName?: string): Promise<boolean> {
     validateTableName(table);
 
     // Check if soft delete is enabled for this table
     const settingKey = `data.${tableName || table}_soft_delete_enabled`;
-    const setting = this.getOne<{ value: string }>(
+    const setting = await this.getOne<{ value: string }>(
       'SELECT value FROM settings WHERE key = ?',
       [settingKey]
     );
@@ -142,7 +142,7 @@ export class DatabaseService {
   /**
    * Update a record with automatic timestamp
    */
-  public updateRecord(table: string, id: number, data: Record<string, unknown>): boolean {
+  public async updateRecord(table: string, id: number, data: Record<string, unknown>): Promise<boolean> {
     validateTableName(table);
     const keys = Object.keys(data);
     const values = Object.values(data);
@@ -160,14 +160,14 @@ export class DatabaseService {
 
     values.push(id);
 
-    const result = this.executeQuery(query, values);
+    const result = await this.executeQuery(query, values);
     return result.changes > 0;
   }
 
   /**
    * Insert a record with automatic timestamps
    */
-  public insertRecord(table: string, data: Record<string, unknown>): number {
+  public async insertRecord(table: string, data: Record<string, unknown>): Promise<number> {
     validateTableName(table);
     const keys = Object.keys(data);
     const values = Object.values(data);
@@ -180,37 +180,37 @@ export class DatabaseService {
     const placeholders = keys.map(() => '?').join(', ');
     const query = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`;
 
-    const result = this.executeQuery(query, values);
+    const result = await this.executeQuery(query, values);
     return result.lastInsertRowid;
   }
 
   /**
    * Get next sequence value for a counter
    */
-  public getNextSequence(counterName: string): number {
-    return this.withTransaction(() => {
+  public async getNextSequence(counterName: string): Promise<number> {
+    return this.withTransaction(async () => {
       // Get current value
-      const counter = this.getOne<{ value: number }>(
+      const counter = await this.getOne<{ value: number }>(
         'SELECT value FROM counters WHERE tenant_id = 1 AND name = ?',
         [counterName]
       );
-      
+
       if (!counter) {
         // Create counter if it doesn't exist
-        this.executeQuery(
-          'INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (1, ?, 1, datetime(\'now\'), datetime(\'now\'))',
+        await this.executeQuery(
+          "INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (1, ?, 1, datetime('now'), datetime('now'))",
           [counterName]
         );
         return 1;
       }
-      
+
       // Increment counter
       const nextValue = counter.value + 1;
-      this.executeQuery(
-        'UPDATE counters SET value = ?, updated_at = datetime(\'now\') WHERE tenant_id = 1 AND name = ?',
+      await this.executeQuery(
+        "UPDATE counters SET value = ?, updated_at = datetime('now') WHERE tenant_id = 1 AND name = ?",
         [nextValue, counterName]
       );
-      
+
       return nextValue;
     });
   }
@@ -218,14 +218,14 @@ export class DatabaseService {
   /**
    * Get the next ID for a table (legacy method for compatibility)
    */
-  public getNextId(table: string): number {
+  public async getNextId(table: string): Promise<number> {
     return this.getNextSequence(table);
   }
 
   /**
    * Update a record by ID (legacy method for compatibility)
    */
-  public updateById(table: string, id: number, data: Record<string, unknown>): boolean {
+  public async updateById(table: string, id: number, data: Record<string, unknown>): Promise<boolean> {
     return this.updateRecord(table, id, data);
   }
 
@@ -233,30 +233,30 @@ export class DatabaseService {
    * Delete a record by ID (hard delete by default)
    * Use softDelete() method explicitly if soft delete is needed
    */
-  public deleteById(table: string, id: number): boolean {
+  public async deleteById(table: string, id: number): Promise<boolean> {
     return this.hardDelete(table, id);
   }
 
   /**
    * Check if a table exists
    */
-  public tableExists(tableName: string): boolean {
+  public async tableExists(tableName: string): Promise<boolean> {
     return this.database.tableExists(tableName);
   }
 
   /**
    * Check if a record exists with specific criteria
    */
-  public exists(table: string, column: string, value: unknown): boolean {
+  public async exists(table: string, column: string, value: unknown): Promise<boolean> {
     validateTableName(table);
-    const result = this.getOne(`SELECT 1 FROM ${table} WHERE ${column} = ?`, [value]);
+    const result = await this.getOne(`SELECT 1 FROM ${table} WHERE ${column} = ?`, [value]);
     return result !== null;
   }
 
   /**
    * Execute operations within a transaction (alias for withTransaction)
    */
-  public executeTransaction<T>(callback: () => T): T {
+  public async executeTransaction<T>(callback: () => Promise<T>): Promise<T> {
     return this.withTransaction(callback);
   }
 

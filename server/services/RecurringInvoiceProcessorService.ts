@@ -154,7 +154,7 @@ export class RecurringInvoiceProcessorService {
     };
 
     // Insert invoice into database
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       `INSERT INTO invoices (
         tenant_id, invoice_number, client_id, recurring_template_id, amount, tax_amount, 
         total_amount, status, due_date, issue_date, description, line_items, 

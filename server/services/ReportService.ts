@@ -68,20 +68,20 @@ export class ReportService {
     return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
   }
 
-  private getTableColumns(tableName: string): Set<string> {
+  private async getTableColumns(tableName: string): Promise<Set<string>> {
     const cached = this.tableColumnCache.get(tableName);
     if (cached) {
       return cached;
     }
 
-    const rows = databaseService.getMany<{ name: string }>(`PRAGMA table_info(${tableName})`);
+    const rows = await databaseService.getMany<{ name: string }>(`PRAGMA table_info(${tableName})`);
     const columns = new Set(rows.map((row) => row.name));
     this.tableColumnCache.set(tableName, columns);
     return columns;
   }
 
-  private tableHasColumn(tableName: string, columnName: string): boolean {
-    return this.getTableColumns(tableName).has(columnName);
+  private async tableHasColumn(tableName: string, columnName: string): Promise<boolean> {
+    return (await this.getTableColumns(tableName)).has(columnName);
   }
 
   private normalizeScheduleFrequency(frequency: string): ReportScheduleFrequency {
@@ -142,7 +142,7 @@ export class ReportService {
    */
   async getAllReports(tenantId?: number): Promise<DatabaseReport[]> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getMany<DatabaseReport>(`
+    return await databaseService.getMany<DatabaseReport>(`
       SELECT id, name, type, date_range_start, date_range_end, data, created_at
       FROM reports
       WHERE tenant_id = ?
@@ -159,7 +159,7 @@ export class ReportService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const report = databaseService.getOne<DatabaseReport>(`
+    const report = await databaseService.getOne<DatabaseReport>(`
       SELECT id, name, type, date_range_start, date_range_end, data, created_at
       FROM reports
       WHERE id = ? AND tenant_id = ?
@@ -192,11 +192,11 @@ export class ReportService {
     }
 
     // Get next ID from counter service
-    const nextId = databaseService.getNextId('reports');
+    const nextId = await databaseService.getNextId('reports');
     const now = new Date().toISOString();
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const result = databaseService.executeQuery(`
+    const result = await databaseService.executeQuery(`
       INSERT INTO reports (id, tenant_id, name, type, date_range_start, date_range_end, data, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, [
@@ -229,7 +229,7 @@ export class ReportService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const result = databaseService.executeQuery(`
+    const result = await databaseService.executeQuery(`
       UPDATE reports
       SET name = ?, type = ?, date_range_start = ?, date_range_end = ?, data = ?
       WHERE id = ? AND tenant_id = ?
@@ -265,8 +265,8 @@ export class ReportService {
     const nextRunAt = this.calculateNextRunAt(frequency, scheduleData.start_date, timeOfDay);
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const hasTenantColumn = this.tableHasColumn('report_schedules', 'tenant_id');
-    const result = databaseService.executeQuery(
+    const hasTenantColumn = await this.tableHasColumn('report_schedules', 'tenant_id');
+    const result = await databaseService.executeQuery(
       hasTenantColumn
         ? `
         INSERT INTO report_schedules (
@@ -343,7 +343,7 @@ export class ReportService {
 
   async getReportSchedules(reportType?: string, tenantId?: number): Promise<ReportSchedule[]> {
     const params: unknown[] = [];
-    const hasTenantColumn = this.tableHasColumn('report_schedules', 'tenant_id');
+    const hasTenantColumn = await this.tableHasColumn('report_schedules', 'tenant_id');
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const whereClauses: string[] = [];
     if (hasTenantColumn) {
@@ -356,7 +356,7 @@ export class ReportService {
     }
     const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    const schedules = databaseService.getMany<DatabaseReportSchedule>(
+    const schedules = await databaseService.getMany<DatabaseReportSchedule>(
       `
         SELECT
           id,
@@ -401,9 +401,9 @@ export class ReportService {
       throw new Error('Valid schedule ID is required');
     }
 
-    const hasTenantColumn = this.tableHasColumn('report_schedules', 'tenant_id');
+    const hasTenantColumn = await this.tableHasColumn('report_schedules', 'tenant_id');
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       hasTenantColumn
         ? 'DELETE FROM report_schedules WHERE id = ? AND tenant_id = ?'
         : 'DELETE FROM report_schedules WHERE id = ?',
@@ -429,7 +429,7 @@ export class ReportService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const result = databaseService.executeQuery('DELETE FROM reports WHERE id = ? AND tenant_id = ?', [id, scopedTenantId]);
+    const result = await databaseService.executeQuery('DELETE FROM reports WHERE id = ? AND tenant_id = ?', [id, scopedTenantId]);
 
     if (result.changes === 0) {
       throw new Error('Report not found');
@@ -449,7 +449,7 @@ export class ReportService {
       return false;
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const report = databaseService.getOne<{ id: number }>('SELECT id FROM reports WHERE id = ? AND tenant_id = ?', [id, scopedTenantId]);
+    const report = await databaseService.getOne<{ id: number }>('SELECT id FROM reports WHERE id = ? AND tenant_id = ?', [id, scopedTenantId]);
     return Boolean(report);
   }
 
@@ -462,7 +462,7 @@ export class ReportService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getMany<DatabaseReport>(`
+    return await databaseService.getMany<DatabaseReport>(`
       SELECT id, name, type, date_range_start, date_range_end, data, created_at
       FROM reports
       WHERE tenant_id = ? AND type = ?
@@ -479,7 +479,7 @@ export class ReportService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getMany<DatabaseReport>(`
+    return await databaseService.getMany<DatabaseReport>(`
       SELECT id, name, type, date_range_start, date_range_end, data, created_at
       FROM reports
       WHERE tenant_id = ? AND created_at >= ? AND created_at <= ?
@@ -492,7 +492,7 @@ export class ReportService {
    */
   async getReportCount(tenantId?: number): Promise<number> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const result = databaseService.getOne<{count: number}>(
+    const result = await databaseService.getOne<{count: number}>(
       'SELECT COUNT(*) as count FROM reports WHERE tenant_id = ?',
       [scopedTenantId]
     );
@@ -508,7 +508,7 @@ export class ReportService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const result = databaseService.getOne<{count: number}>(
+    const result = await databaseService.getOne<{count: number}>(
       'SELECT COUNT(*) as count FROM reports WHERE tenant_id = ? AND type = ?',
       [scopedTenantId, type]
     );
@@ -528,17 +528,17 @@ export class ReportService {
   ): Promise<any> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const invoicesWhere = ['i.tenant_id = ?', 'i.created_at >= ?', 'i.created_at <= ?'];
-    if (this.tableHasColumn('invoices', 'deleted_at')) {
+    if (await this.tableHasColumn('invoices', 'deleted_at')) {
       invoicesWhere.push('i.deleted_at IS NULL');
     }
 
     const expensesWhere = ['tenant_id = ?', 'date >= ?', 'date <= ?'];
-    if (this.tableHasColumn('expenses', 'deleted_at')) {
+    if (await this.tableHasColumn('expenses', 'deleted_at')) {
       expensesWhere.push('deleted_at IS NULL');
     }
 
     // Get invoices in date range
-    const invoices = databaseService.getMany<any>(`
+    const invoices = await databaseService.getMany<any>(`
       SELECT i.*, c.name as client_name
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
@@ -547,7 +547,7 @@ export class ReportService {
     `, [scopedTenantId, startDate, endDate + 'T23:59:59.999Z']);
 
     // Get expenses in date range
-    const expenses = databaseService.getMany<any>(`
+    const expenses = await databaseService.getMany<any>(`
       SELECT *
       FROM expenses
       WHERE ${expensesWhere.join(' AND ')}
@@ -613,11 +613,11 @@ export class ReportService {
   async generateExpenseData(startDate: string, endDate: string, tenantId?: number): Promise<any> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const expensesWhere = ['tenant_id = ?', 'date >= ?', 'date <= ?'];
-    if (this.tableHasColumn('expenses', 'deleted_at')) {
+    if (await this.tableHasColumn('expenses', 'deleted_at')) {
       expensesWhere.push('deleted_at IS NULL');
     }
 
-    const expenses = databaseService.getMany<any>(`
+    const expenses = await databaseService.getMany<any>(`
       SELECT *
       FROM expenses
       WHERE ${expensesWhere.join(' AND ')}
@@ -658,11 +658,11 @@ export class ReportService {
   async generateInvoiceData(startDate: string, endDate: string, tenantId?: number): Promise<any> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const invoicesWhere = ['i.tenant_id = ?', 'i.created_at >= ?', 'i.created_at <= ?'];
-    if (this.tableHasColumn('invoices', 'deleted_at')) {
+    if (await this.tableHasColumn('invoices', 'deleted_at')) {
       invoicesWhere.push('i.deleted_at IS NULL');
     }
 
-    const invoices = databaseService.getMany<any>(`
+    const invoices = await databaseService.getMany<any>(`
       SELECT i.*, c.name as client_name
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
@@ -716,11 +716,11 @@ export class ReportService {
    */
   async generateClientData(startDate?: string, endDate?: string, tenantId?: number): Promise<any> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const clientsWhere = this.tableHasColumn('clients', 'deleted_at')
+    const clientsWhere = await this.tableHasColumn('clients', 'deleted_at')
       ? 'WHERE tenant_id = ? AND deleted_at IS NULL'
       : 'WHERE tenant_id = ?';
 
-    const clients = databaseService.getMany<any>(`
+    const clients = await databaseService.getMany<any>(`
       SELECT *
       FROM clients
       ${clientsWhere}
@@ -734,7 +734,7 @@ export class ReportService {
       invoiceFilters.push('i.created_at >= ?', 'i.created_at <= ?');
       params.push(startDate, endDate + 'T23:59:59.999Z');
     }
-    if (this.tableHasColumn('invoices', 'deleted_at')) {
+    if (await this.tableHasColumn('invoices', 'deleted_at')) {
       invoiceFilters.push('i.deleted_at IS NULL');
     }
 
@@ -742,7 +742,7 @@ export class ReportService {
       ? `WHERE ${invoiceFilters.join(' AND ')}`
       : '';
 
-    const invoices = databaseService.getMany<any>(`
+    const invoices = await databaseService.getMany<any>(`
       SELECT i.*, c.name as client_name
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id

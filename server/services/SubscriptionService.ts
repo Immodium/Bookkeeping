@@ -140,7 +140,7 @@ export class SubscriptionService {
   }
 
   async getAvailablePlans(): Promise<SubscriptionPlanRecord[]> {
-    return databaseService.getMany<SubscriptionPlanRecord>(
+    return await databaseService.getMany<SubscriptionPlanRecord>(
       `
         SELECT id, code, name, status, price_cents, currency, billing_interval, trial_days, features_json
         FROM subscription_plans
@@ -153,7 +153,7 @@ export class SubscriptionService {
     if (!planCode || typeof planCode !== 'string') {
       throw new Error('Valid plan code is required');
     }
-    return databaseService.getOne<SubscriptionPlanRecord>(
+    return await databaseService.getOne<SubscriptionPlanRecord>(
       `
         SELECT id, code, name, status, price_cents, currency, billing_interval, trial_days, features_json
         FROM subscription_plans
@@ -165,7 +165,7 @@ export class SubscriptionService {
 
   async getTenantSubscription(tenantId?: number): Promise<TenantSubscriptionDetails | null> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const row = databaseService.getOne<
+    const row = await databaseService.getOne<
       TenantSubscriptionRecord & {
         plan_code: string;
         plan_name: string;
@@ -225,13 +225,13 @@ export class SubscriptionService {
     const provider = input.provider || 'internal';
     const metadataJson = input.metadata ? JSON.stringify(input.metadata) : null;
 
-    const existing = databaseService.getOne<{ id: number }>(
+    const existing = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM tenant_subscriptions WHERE tenant_id = ?',
       [scopedTenantId]
     );
 
     if (existing) {
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         `
           UPDATE tenant_subscriptions
           SET
@@ -261,7 +261,7 @@ export class SubscriptionService {
         ]
       );
       if (scopedTenantId !== 1 && (status === 'suspended' || status === 'canceled')) {
-        databaseService.executeQuery(
+        await databaseService.executeQuery(
           "UPDATE tenants SET status = 'suspended', updated_at = datetime('now') WHERE id = ?",
           [scopedTenantId]
         );
@@ -269,7 +269,7 @@ export class SubscriptionService {
       return true;
     }
 
-    databaseService.executeQuery(
+    await databaseService.executeQuery(
       `
         INSERT INTO tenant_subscriptions (
           tenant_id,
@@ -304,7 +304,7 @@ export class SubscriptionService {
       ]
     );
     if (scopedTenantId !== 1 && (status === 'suspended' || status === 'canceled')) {
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         "UPDATE tenants SET status = 'suspended', updated_at = datetime('now') WHERE id = ?",
         [scopedTenantId]
       );
@@ -314,11 +314,11 @@ export class SubscriptionService {
 
   async bootstrapTenantSubscription(tenantId: number): Promise<void> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    if (!databaseService.tableExists('tenant_subscriptions') || !databaseService.tableExists('subscription_plans')) {
+    if (!await databaseService.tableExists('tenant_subscriptions') || !await databaseService.tableExists('subscription_plans')) {
       return;
     }
 
-    const existing = databaseService.getOne<{ id: number }>(
+    const existing = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM tenant_subscriptions WHERE tenant_id = ?',
       [scopedTenantId]
     );
@@ -337,7 +337,7 @@ export class SubscriptionService {
     const trialEnds = new Date(Date.now() + Math.max(selectedPlan.trial_days || 0, 0) * 24 * 60 * 60 * 1000).toISOString();
     const status: TenantSubscriptionStatus = selectedPlan.code === 'trial' ? 'trialing' : 'active';
 
-    databaseService.executeQuery(
+    await databaseService.executeQuery(
       `
         INSERT INTO tenant_subscriptions (
           tenant_id,
@@ -361,7 +361,7 @@ export class SubscriptionService {
     const subscription = await this.getTenantSubscription(scopedTenantId);
     const planEntitlements = subscription?.features || {};
 
-    const overrideRows = databaseService.getMany<{ key: string; value: string }>(
+    const overrideRows = await databaseService.getMany<{ key: string; value: string }>(
       'SELECT key, value FROM tenant_entitlements WHERE tenant_id = ? ORDER BY key',
       [scopedTenantId]
     );
@@ -387,10 +387,10 @@ export class SubscriptionService {
       throw new Error('At least one entitlement update is required');
     }
 
-    databaseService.executeTransaction(() => {
+    await databaseService.executeTransaction(async () => {
       for (const [key, value] of Object.entries(entitlements)) {
         const serializedValue = this.toEntitlementStorageValue(value);
-        const updateResult = databaseService.executeQuery(
+        const updateResult = await databaseService.executeQuery(
           `
             UPDATE tenant_entitlements
             SET
@@ -404,7 +404,7 @@ export class SubscriptionService {
         );
 
         if (updateResult.changes === 0) {
-          databaseService.executeQuery(
+          await databaseService.executeQuery(
             `
               INSERT INTO tenant_entitlements (
                 tenant_id,
@@ -423,6 +423,19 @@ export class SubscriptionService {
     });
 
     return true;
+  }
+
+  async assertWithinLimit(tenantId: number, limitKey: string, currentCount: number): Promise<void> {
+    const entitlements = await this.getTenantEntitlements(tenantId);
+    const limit = entitlements[limitKey];
+    if (typeof limit === 'number' && limit > 0 && currentCount >= limit) {
+      const error = new Error(`Plan limit reached: ${limitKey} (${currentCount}/${limit})`);
+      (error as any).code = 'ENTITLEMENT_LIMIT_EXCEEDED';
+      (error as any).limitKey = limitKey;
+      (error as any).limit = limit;
+      (error as any).current = currentCount;
+      throw error;
+    }
   }
 
   async isFeatureEnabled(tenantId: number, entitlementKey: string): Promise<boolean> {
@@ -491,7 +504,7 @@ export class SubscriptionService {
     }
 
     if (tenantId !== 1 && (normalizedStatus === 'active' || normalizedStatus === 'trialing')) {
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         "UPDATE tenants SET status = CASE WHEN status = 'deleted' THEN status ELSE 'active' END, updated_at = datetime('now') WHERE id = ?",
         [tenantId]
       );

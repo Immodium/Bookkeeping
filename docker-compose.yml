@@ -1,12 +1,33 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16
+    container_name: slimbooks-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-slimbooks}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-slimbooks}
+      POSTGRES_DB: ${POSTGRES_DB:-slimbooks}
+    volumes:
+      - slimbooks_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-slimbooks}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
   slimbooks:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: slimbooks-app
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     
     # Security settings
     user: "1001:1001"
@@ -32,6 +53,7 @@ services:
       - ENABLE_HTTPS=true
       - SSL_KEY_PATH=certs/server.key
       - SSL_CERT_PATH=certs/server.crt
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-slimbooks}:${POSTGRES_PASSWORD:-slimbooks}@postgres:5432/${POSTGRES_DB:-slimbooks}
     
     # Volume mounts for persistent data
     volumes:
@@ -67,6 +89,8 @@ services:
 
 # Named volumes for data persistence
 volumes:
+  slimbooks_postgres:
+    driver: local
   slimbooks_data:
     driver: local
     driver_opts:

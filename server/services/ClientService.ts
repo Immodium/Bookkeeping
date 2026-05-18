@@ -2,6 +2,7 @@
 // Handles all client-related business logic and database operations
 
 import { databaseService } from '../core/DatabaseService.js';
+import { subscriptionService } from './SubscriptionService.js';
 import { Client, ServiceOptions } from '../types/index.js';
 
 /**
@@ -37,7 +38,7 @@ export class ClientService {
     const { limit = 100, offset = 0 } = options;
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const clients = databaseService.getMany<Client>(`
+    const clients = await databaseService.getMany<Client>(`
       SELECT * FROM clients
       WHERE tenant_id = ? AND deleted_at IS NULL
       ORDER BY created_at DESC
@@ -56,7 +57,7 @@ export class ClientService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const client = databaseService.getOne<Client>(
+    const client = await databaseService.getOne<Client>(
       'SELECT * FROM clients WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL',
       [id, scopedTenantId]
     );
@@ -87,6 +88,12 @@ export class ClientService {
       throw new Error('Client data is required');
     }
 
+    // Enforce plan limits
+    const clientCount = (await databaseService.getOne<{ count: number }>(
+      'SELECT COUNT(*) as count FROM clients WHERE tenant_id = ? AND deleted_at IS NULL', [scopedTenantId]
+    ))?.count || 0;
+    await subscriptionService.assertWithinLimit(scopedTenantId, 'billing.max_clients', clientCount);
+
     const firstName = (clientData.first_name || '').trim();
     const lastName = (clientData.last_name || '').trim();
     const combinedName = `${firstName} ${lastName}`.trim();
@@ -104,7 +111,7 @@ export class ClientService {
 
     // Check if client with same email already exists (if email provided)
     if (clientData.email) {
-      const existingClient = databaseService.getOne<{id: number}>(
+      const existingClient = await databaseService.getOne<{id: number}>(
         'SELECT id FROM clients WHERE tenant_id = ? AND email = ?', 
         [scopedTenantId, clientData.email]
       );
@@ -114,7 +121,7 @@ export class ClientService {
     }
 
     // Get next client ID
-    const nextId = databaseService.getNextId('clients');
+    const nextId = await databaseService.getNextId('clients');
     
     // Prepare client data
     const now = new Date().toISOString();
@@ -141,7 +148,7 @@ export class ClientService {
     };
 
     // Create client
-    databaseService.executeQuery(`
+    await databaseService.executeQuery(`
       INSERT INTO clients (
         id, tenant_id, name, first_name, last_name, email, phone, company, address, city, state,
         zip, country, tax_id, notes, is_active, stripe_customer_id, created_at, updated_at
@@ -200,7 +207,7 @@ export class ClientService {
 
       // Check email uniqueness if email is being changed
       if (clientData.email !== existingClient.email) {
-        const emailExists = databaseService.getOne<{id: number}>(
+        const emailExists = await databaseService.getOne<{id: number}>(
           'SELECT id FROM clients WHERE tenant_id = ? AND email = ? AND id != ?', 
           [scopedTenantId, clientData.email, id]
         );
@@ -250,7 +257,7 @@ export class ClientService {
     const keys = Object.keys(updateData);
     const values = Object.values(updateData);
     const setClause = keys.map((key) => `${key} = ?`).join(', ');
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       `UPDATE clients SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
       [...values, id, scopedTenantId]
     );
@@ -273,7 +280,7 @@ export class ClientService {
     }
 
     // Check if client has associated invoices
-    const invoiceCount = databaseService.getOne<{count: number}>(
+    const invoiceCount = await databaseService.getOne<{count: number}>(
       'SELECT COUNT(*) as count FROM invoices WHERE tenant_id = ? AND client_id = ?',
       [scopedTenantId, id]
     );
@@ -284,20 +291,20 @@ export class ClientService {
 
     // Use setting-based delete (checks data.clients_soft_delete_enabled setting)
     // Default is hard delete if setting doesn't exist
-    const useSoftDelete = databaseService.getOne<{ value: string }>(
+    const useSoftDelete = (await databaseService.getOne<{ value: string }>(
       'SELECT value FROM settings WHERE tenant_id = ? AND key = ?',
       [scopedTenantId, 'data.clients_soft_delete_enabled']
-    )?.value;
+    ))?.value;
 
     if (useSoftDelete === 'true' || useSoftDelete === '1') {
-      const result = databaseService.executeQuery(
+      const result = await databaseService.executeQuery(
         "UPDATE clients SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
         [id, scopedTenantId]
       );
       return result.changes;
     }
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'DELETE FROM clients WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -316,7 +323,7 @@ export class ClientService {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const searchPattern = `%${searchTerm}%`;
 
-    const clients = databaseService.getMany<Client>(`
+    const clients = await databaseService.getMany<Client>(`
       SELECT * FROM clients
       WHERE tenant_id = ? AND (name LIKE ? OR email LIKE ? OR company LIKE ? OR phone LIKE ?)
         AND deleted_at IS NULL
@@ -344,7 +351,7 @@ export class ClientService {
     const { limit = 100, offset = 0 } = options;
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const clients = databaseService.getMany<Client>(`
+    const clients = await databaseService.getMany<Client>(`
       SELECT * FROM clients 
       WHERE tenant_id = ?
       ORDER BY name ASC
@@ -373,7 +380,7 @@ export class ClientService {
     const { limit = 100, offset = 0 } = options;
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const clients = databaseService.getMany<Client>(`
+    const clients = await databaseService.getMany<Client>(`
       SELECT * FROM clients 
       WHERE tenant_id = ? AND country = ?
       ORDER BY name ASC
@@ -394,26 +401,26 @@ export class ClientService {
     byCountry: Record<string, number>;
   }> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const total = databaseService.getOne<{count: number}>(
+    const total = (await databaseService.getOne<{count: number}>(
       'SELECT COUNT(*) as count FROM clients WHERE tenant_id = ?',
       [scopedTenantId]
-    )?.count || 0;
+    ))?.count || 0;
 
     const active = total; // All clients are considered active now
     const inactive = 0;
 
-    const withEmail = databaseService.getOne<{count: number}>(
+    const withEmail = (await databaseService.getOne<{count: number}>(
       'SELECT COUNT(*) as count FROM clients WHERE tenant_id = ? AND email IS NOT NULL',
       [scopedTenantId]
-    )?.count || 0;
+    ))?.count || 0;
 
-    const withPhone = databaseService.getOne<{count: number}>(
+    const withPhone = (await databaseService.getOne<{count: number}>(
       'SELECT COUNT(*) as count FROM clients WHERE tenant_id = ? AND phone IS NOT NULL',
       [scopedTenantId]
-    )?.count || 0;
+    ))?.count || 0;
 
     // Get country distribution
-    const countryData = databaseService.getMany<{country: string; count: number}>(
+    const countryData = await databaseService.getMany<{country: string; count: number}>(
       'SELECT country, COUNT(*) as count FROM clients WHERE tenant_id = ? AND country IS NOT NULL GROUP BY country ORDER BY count DESC',
       [scopedTenantId]
     );
@@ -442,7 +449,7 @@ export class ClientService {
     const { limit = 50, offset = 0 } = options;
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const clients = databaseService.getMany<Client>(`
+    const clients = await databaseService.getMany<Client>(`
       SELECT DISTINCT c.* FROM clients c
       INNER JOIN invoices i ON c.id = i.client_id
       WHERE c.tenant_id = ? AND i.tenant_id = ? AND i.created_at > datetime('now', '-${days} days')
@@ -460,7 +467,7 @@ export class ClientService {
       return false;
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const client = databaseService.getOne<{ id: number }>(
+    const client = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -477,13 +484,13 @@ export class ClientService {
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
     if (excludeId) {
-      const client = databaseService.getOne<{id: number}>(
+      const client = await databaseService.getOne<{id: number}>(
         'SELECT id FROM clients WHERE tenant_id = ? AND email = ? AND id != ?', 
         [scopedTenantId, email, excludeId]
       );
       return !!client;
     }
-    const client = databaseService.getOne<{ id: number }>(
+    const client = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM clients WHERE tenant_id = ? AND email = ?',
       [scopedTenantId, email]
     );

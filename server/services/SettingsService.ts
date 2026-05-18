@@ -16,14 +16,14 @@ export class SettingsService {
     return 1;
   }
 
-  private upsertSetting(tenantId: number, key: string, value: string, category: string): void {
-    const updateResult = databaseService.executeQuery(
+  private async upsertSetting(tenantId: number, key: string, value: string, category: string): Promise<void> {
+    const updateResult = await databaseService.executeQuery(
       "UPDATE settings SET value = ?, category = ?, updated_at = datetime('now') WHERE tenant_id = ? AND key = ?",
       [value, category, tenantId, key]
     );
 
     if (updateResult.changes === 0) {
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         "INSERT INTO settings (tenant_id, key, value, category, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))",
         [tenantId, key, value, category]
       );
@@ -46,7 +46,7 @@ export class SettingsService {
 
     query += ' ORDER BY key';
 
-    const results = databaseService.getMany<{key: string, value: string}>(query, params);
+    const results = await databaseService.getMany<{key: string, value: string}>(query, params);
     
     const settings: Record<string, unknown> = {};
 
@@ -74,7 +74,7 @@ export class SettingsService {
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const result = databaseService.getOne<{value: string}>(
+    const result = await databaseService.getOne<{value: string}>(
       'SELECT value FROM settings WHERE tenant_id = ? AND key = ?',
       [scopedTenantId, key]
     );
@@ -104,7 +104,7 @@ export class SettingsService {
     
     const jsonValue = typeof value === 'string' ? value : JSON.stringify(value);
     
-    this.upsertSetting(scopedTenantId, settingKey, jsonValue, category);
+    await this.upsertSetting(scopedTenantId, settingKey, jsonValue, category);
     
     return true;
   }
@@ -119,17 +119,17 @@ export class SettingsService {
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
     const formatCategory = 'format';
-    const operations = () => {
+    const operations = async () => {
       for (const [key, value] of Object.entries(settings)) {
         if (value === undefined) continue;
         
         const jsonValue = typeof value === 'string' ? value : JSON.stringify(value);
         
-        this.upsertSetting(scopedTenantId, key, jsonValue, formatCategory);
+        await this.upsertSetting(scopedTenantId, key, jsonValue, formatCategory);
       }
     };
 
-    databaseService.executeTransaction(operations);
+    await databaseService.executeTransaction(operations);
     return true;
   }
 
@@ -145,7 +145,7 @@ export class SettingsService {
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const operations = () => {
+    const operations = async () => {
       for (const [key, data] of Object.entries(settings)) {
         if (!data || typeof data !== 'object') {
           throw new Error(`Invalid setting data for key: ${key}`);
@@ -155,11 +155,11 @@ export class SettingsService {
         const settingKey = key.includes('.') ? key : `${category}.${key}`;
         const jsonValue = typeof value === 'string' ? value : JSON.stringify(value);
         
-        this.upsertSetting(scopedTenantId, settingKey, jsonValue, category);
+        await this.upsertSetting(scopedTenantId, settingKey, jsonValue, category);
       }
     };
 
-    databaseService.executeTransaction(operations);
+    await databaseService.executeTransaction(operations);
     return true;
   }
 
@@ -170,7 +170,7 @@ export class SettingsService {
     try {
       const scopedTenantId = this.normalizeTenantId(tenantId);
       // Get all project settings from database using settings table
-      const dbSettings = databaseService.getMany<{key: string, value: string}>(
+      const dbSettings = await databaseService.getMany<{key: string, value: string}>(
         'SELECT key, value FROM settings WHERE tenant_id = ? AND (key LIKE ? OR key LIKE ? OR key LIKE ? OR key LIKE ?)',
         [scopedTenantId, 'google_oauth.%', 'stripe.%', 'email.%', 'security.%']
       );
@@ -281,13 +281,13 @@ export class SettingsService {
     const flatSettings = flattenSettings(settings);
 
     // Use transaction for bulk updates
-    const operations = () => {
+    const operations = async () => {
       for (const setting of flatSettings) {
-        this.upsertSetting(scopedTenantId, setting.key, setting.value, 'project');
+        await this.upsertSetting(scopedTenantId, setting.key, setting.value, 'project');
       }
     };
 
-    databaseService.executeTransaction(operations);
+    await databaseService.executeTransaction(operations);
     return true;
   }
 
@@ -300,7 +300,7 @@ export class SettingsService {
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const setting = databaseService.getOne<{value: string}>(
+    const setting = await databaseService.getOne<{value: string}>(
       'SELECT value FROM settings WHERE tenant_id = ? AND key = ?', 
       [scopedTenantId, `security.${settingName}`]
     );
@@ -335,7 +335,7 @@ export class SettingsService {
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'DELETE FROM settings WHERE tenant_id = ? AND key = ?',
       [scopedTenantId, key]
     );
@@ -351,7 +351,7 @@ export class SettingsService {
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'DELETE FROM settings WHERE tenant_id = ? AND key LIKE ?',
       [scopedTenantId, `${category}.%`]
     );
@@ -363,7 +363,7 @@ export class SettingsService {
    */
   async getCategories(tenantId?: number): Promise<string[]> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const results = databaseService.getMany<{key: string}>(
+    const results = await databaseService.getMany<{key: string}>(
       'SELECT DISTINCT key FROM settings WHERE tenant_id = ? AND key LIKE "%.%" ORDER BY key',
       [scopedTenantId]
     );
@@ -389,7 +389,7 @@ export class SettingsService {
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const setting = databaseService.getOne<{ key: string }>(
+    const setting = await databaseService.getOne<{ key: string }>(
       'SELECT key FROM settings WHERE tenant_id = ? AND key = ?',
       [scopedTenantId, key]
     );
@@ -409,7 +409,7 @@ export class SettingsService {
       params.push(`${category}.%`);
     }
 
-    const result = databaseService.getOne<{count: number}>(query, params);
+    const result = await databaseService.getOne<{count: number}>(query, params);
     return result?.count || 0;
   }
 
@@ -426,7 +426,7 @@ export class SettingsService {
       params.push(`${category}.%`);
     }
 
-    databaseService.executeQuery(query, params);
+    await databaseService.executeQuery(query, params);
     return true;
   }
 }

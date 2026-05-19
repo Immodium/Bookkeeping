@@ -12,7 +12,10 @@ export class ExpenseService {
   private readonly validStatuses = new Set(['pending', 'approved', 'rejected', 'reimbursed']);
 
   private normalizeTenantId(tenantId?: number): number {
-    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+    if (!tenantId || !Number.isInteger(tenantId) || tenantId <= 0) {
+      throw new Error(`Invalid tenant context: tenantId must be a positive integer, got ${tenantId}`);
+    }
+    return tenantId;
   }
 
   /**

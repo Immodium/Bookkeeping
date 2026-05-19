@@ -5,6 +5,7 @@ import { Request, Response, NextFunction } from 'express';
 import { Server } from 'http';
 import { Database } from 'better-sqlite3';
 import { loggingConfig } from '../config/index.js';
+import { logger } from '../utils/logger.js';
 
 interface SQLiteError extends Error {
   code: string;
@@ -147,6 +148,7 @@ export const errorHandler = (
       error: err.message,
       type: err.type,
       timestamp: err.timestamp,
+      requestId: req?.headers?.['x-request-id'],
       ...(loggingConfig.level === 'debug' && { stack: err.stack }),
       ...('details' in err && err.details ? { details: err.details } : {})
     });
@@ -199,14 +201,15 @@ export const errorHandler = (
   }
   
   // Handle unexpected errors
-  console.error('Unexpected error:', err);
-  
+  logger.error({ err, requestId: req?.headers?.['x-request-id'] }, 'Unexpected error');
+
   res.status(500).json({
     success: false,
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
       : err.message,
     type: 'INTERNAL_ERROR',
+    requestId: req?.headers?.['x-request-id'],
     ...(process.env.NODE_ENV !== 'production' && { stack: err.stack })
   });
 };
@@ -215,7 +218,7 @@ export const errorHandler = (
  * Handle SQLite specific errors
  */
 const handleSQLiteError = (err: SQLiteError, res: Response): void => {
-  console.error('SQLite error:', err);
+  logger.error({ err }, 'SQLite error');
   
   switch (err.code) {
     case 'SQLITE_CONSTRAINT_UNIQUE':
@@ -272,7 +275,7 @@ const logError = (err: Error, req: Request): void => {
   };
   
   if (loggingConfig.enableErrorLogging) {
-    console.error('Error occurred:', JSON.stringify(errorInfo, null, 2));
+    logger.error({ requestId: req?.headers?.['x-request-id'], errorInfo }, 'Error occurred');
   }
   
   // TODO: Implement file logging or external logging service
@@ -324,35 +327,35 @@ export const timeoutHandler = (timeout = 30000) => {
  */
 export const gracefulShutdown = (server: Server, db?: Database): void => {
   const shutdown = (signal: string): void => {
-    console.log(`\n${signal} received. Starting graceful shutdown...`);
-    
+    logger.info(`${signal} received. Starting graceful shutdown...`);
+
     server.close((err) => {
       if (err) {
-        console.error('Error during server shutdown:', err);
+        logger.error({ err }, 'Error during server shutdown');
         process.exit(1);
       }
-      
-      console.log('HTTP server closed.');
-      
+
+      logger.info('HTTP server closed.');
+
       // Close database connection
       if (db && typeof db.close === 'function') {
         try {
           db.close();
-          console.log('Database connection closed.');
+          logger.info('Database connection closed.');
         } catch (dbErr) {
-          console.error('Error closing database:', dbErr);
+          logger.error({ err: dbErr }, 'Error closing database');
         }
       }
-      
-      console.log('Graceful shutdown completed.');
+
+      logger.info('Graceful shutdown completed.');
       process.exit(0);
     });
     
-    // Force shutdown after 10 seconds
+    // Force shutdown after 25 seconds
     setTimeout(() => {
-      console.error('Forced shutdown after timeout');
+      logger.error('Forced shutdown after timeout');
       process.exit(1);
-    }, 10000);
+    }, 25000);
   };
   
   process.on('SIGTERM', () => shutdown('SIGTERM'));

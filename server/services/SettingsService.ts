@@ -10,10 +10,10 @@ import { Setting, ProjectSettings } from '../types/index.js';
  */
 export class SettingsService {
   private normalizeTenantId(tenantId?: number): number {
-    if (tenantId && Number.isInteger(tenantId) && tenantId > 0) {
-      return tenantId;
+    if (!tenantId || !Number.isInteger(tenantId) || tenantId <= 0) {
+      throw new Error(`Invalid tenant context: tenantId must be a positive integer, got ${tenantId}`);
     }
-    return 1;
+    return tenantId;
   }
 
   private async upsertSetting(tenantId: number, key: string, value: string, category: string): Promise<void> {

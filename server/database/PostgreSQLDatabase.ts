@@ -129,9 +129,10 @@ export class PostgreSQLDatabase implements IDatabase {
 
     this.pool = new Pool({
       connectionString: connStr,
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      max: parseInt(process.env.DB_POOL_MAX || '20', 10),
+      min: parseInt(process.env.DB_POOL_MIN || '2', 10),
+      idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10),
+      connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '5000', 10),
       ssl: connStr.includes('sslmode=require') || (process.env.NODE_ENV === 'production' && !connStr.includes('localhost'))
         ? { rejectUnauthorized: false }
         : undefined

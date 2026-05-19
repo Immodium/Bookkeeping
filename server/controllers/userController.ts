@@ -273,6 +273,23 @@ export const updateUser = asyncHandler(async (req: Request<{id: string}, UpdateU
 
   try {
     const tenantId = req.tenantId || req.user?.tenant_id || 1;
+
+    // Mass-assignment protection: non-admin callers must not be able to set privileged fields
+    const callerIsAdmin = req.user?.roles?.includes('admin') || req.user?.role === 'admin';
+    const isUpdatingOtherUser = String(userId) !== String(req.user?.id);
+
+    if (isUpdatingOtherUser && !callerIsAdmin) {
+      throw new ValidationError('Admin role required to update another user');
+    }
+
+    // Strip privileged fields for non-admin callers
+    if (!callerIsAdmin) {
+      const privilegedFields = ['role', 'roles', 'email_verified', 'google_id', 'password_hash', 'tenant_id'];
+      for (const field of privilegedFields) {
+        delete (userData as Record<string, unknown>)[field];
+      }
+    }
+
     // Convert and validate user data for service layer
     const convertedUserData: Partial<{
       name: string;
@@ -284,19 +301,19 @@ export const updateUser = asyncHandler(async (req: Request<{id: string}, UpdateU
       google_id: string;
       password_hash: string;
     }> = {};
-    
-    // Copy all defined properties except email_verified
+
+    // Copy all defined properties except email_verified (and tenant_id which should never be in updates)
     Object.keys(userData).forEach(key => {
-      if (key !== 'email_verified' && userData[key as keyof typeof userData] !== undefined) {
+      if (key !== 'email_verified' && key !== 'tenant_id' && userData[key as keyof typeof userData] !== undefined) {
         (convertedUserData as Record<string, unknown>)[key] = userData[key as keyof typeof userData];
       }
     });
-    
+
     // Handle email_verified conversion separately
     if (userData.email_verified !== undefined) {
       convertedUserData.email_verified = userData.email_verified === 1;
     }
-    
+
     const requestedRoles = parseRolesInput((userData as Record<string, unknown>).roles);
     const newPassword = (userData as Record<string, unknown>).password;
 

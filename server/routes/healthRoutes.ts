@@ -4,6 +4,7 @@
 import { Router, Request, Response } from 'express';
 import { serverConfig } from '../config/index.js';
 import { databaseService } from '../core/DatabaseService.js';
+import { migrationsComplete } from '../database/migrations/index.js';
 
 const router: Router = Router();
 
@@ -90,24 +91,34 @@ router.get('/detailed', async (req: Request, res: Response) => {
  * Readiness check (for container orchestration)
  */
 router.get('/ready', async (req: Request, res: Response) => {
+  // Gate on migrations: if they haven't completed, the app isn't ready
+  if (!migrationsComplete) {
+    res.status(503).json({
+      status: 'not_ready',
+      reason: 'migrations_pending',
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
   try {
     const { databaseHealthService } = await import('../services/DatabaseHealthService.js');
     const isHealthy = await databaseHealthService.checkDatabaseHealth();
-    
+
     if (isHealthy) {
-      res.json({ 
+      res.json({
         ready: true,
         timestamp: new Date().toISOString()
       });
     } else {
-      res.status(503).json({ 
+      res.status(503).json({
         ready: false,
         error: 'Database not ready',
         timestamp: new Date().toISOString()
       });
     }
   } catch (error) {
-    res.status(503).json({ 
+    res.status(503).json({
       ready: false,
       error: (error as Error).message,
       timestamp: new Date().toISOString()

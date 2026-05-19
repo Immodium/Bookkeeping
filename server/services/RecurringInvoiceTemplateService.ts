@@ -55,7 +55,10 @@ interface RecurringInvoiceTemplateData {
  */
 export class RecurringInvoiceTemplateService {
   private normalizeTenantId(tenantId?: number): number {
-    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+    if (!tenantId || !Number.isInteger(tenantId) || tenantId <= 0) {
+      throw new Error(`Invalid tenant context: tenantId must be a positive integer, got ${tenantId}`);
+    }
+    return tenantId;
   }
 
   /**

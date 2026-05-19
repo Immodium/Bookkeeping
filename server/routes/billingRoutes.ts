@@ -3,6 +3,7 @@ import { serverConfig, stripeConfig } from '../config/index.js';
 import { subscriptionService, BillingWebhookEvent } from '../services/SubscriptionService.js';
 import { stripeService } from '../services/StripeService.js';
 import { requireAuth, requireAdmin } from '../middleware/index.js';
+import { db } from '../database/index.js';
 
 const router: Router = Router();
 
@@ -116,6 +117,13 @@ router.post('/webhook',
   async (req: Request, res: Response): Promise<void> => {
     // Handle Stripe webhook verification when configured
     if (stripeService.isConfigured()) {
+      // Stripe webhook secret must be present when Stripe is configured
+      if (!stripeConfig.webhookSecret) {
+        console.error('Stripe is configured but STRIPE_WEBHOOK_SECRET is not set — cannot verify webhook');
+        res.status(400).json({ success: false, error: 'Stripe webhook secret not configured' });
+        return;
+      }
+
       const sig = req.headers['stripe-signature'];
       if (!sig || typeof sig !== 'string') {
         res.status(400).json({ success: false, error: 'Missing Stripe signature' });
@@ -130,16 +138,50 @@ router.post('/webhook',
         return;
       }
 
+      // Idempotency check — deduplicate already-processed events
+      const eventId = stripeEvent.id;
+      if (eventId) {
+        try {
+          const existing = await db.getOne<{ event_id: string }>(
+            'SELECT event_id FROM processed_webhook_events WHERE event_id = ?',
+            [eventId]
+          );
+          if (existing) {
+            res.json({ received: true, duplicate: true });
+            return;
+          }
+        } catch {
+          // If table not ready yet, continue — idempotency is best-effort
+        }
+      }
+
       // Map Stripe event types to BillingWebhookEvent shape
       const mapped = mapStripeEvent(stripeEvent);
       if (mapped) {
         try {
           const result = await subscriptionService.syncSubscriptionFromWebhook(mapped);
+
+          // Record as processed
+          if (eventId) {
+            db.executeQuery(
+              "INSERT OR IGNORE INTO processed_webhook_events (event_id, provider) VALUES (?, 'stripe')",
+              [eventId]
+            ).catch(() => {});
+          }
+
           res.json({ success: true, data: result });
         } catch (error) {
           res.status(400).json({ success: false, error: (error as Error).message });
         }
         return;
+      }
+
+      // Record as processed even for unhandled event types
+      if (eventId) {
+        db.executeQuery(
+          "INSERT OR IGNORE INTO processed_webhook_events (event_id, provider) VALUES (?, 'stripe')",
+          [eventId]
+        ).catch(() => {});
       }
 
       // Acknowledge unhandled Stripe events

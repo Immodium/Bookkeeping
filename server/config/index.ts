@@ -34,6 +34,7 @@ export interface ServerConfig {
   allowDatabaseImportExport: boolean;
   cronJobSecret: string | undefined;
   billingWebhookSecret: string | undefined;
+  serveStaticFiles: boolean;
   rateLimiting: {
     windowMs: number;
     maxRequests: number;
@@ -220,6 +221,7 @@ export const serverConfig: ServerConfig = {
     (process.env.NODE_ENV !== 'production' && process.env.SAAS_MODE !== 'true'),
   cronJobSecret: process.env.CRON_JOB_SECRET,
   billingWebhookSecret: process.env.BILLING_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET,
+  serveStaticFiles: process.env.SERVE_STATIC_FILES !== 'false',
 
   // Rate limiting configuration
   rateLimiting: {
@@ -257,10 +259,10 @@ export const databaseConfig: DatabaseConfig = {
  * Authentication configuration
  */
 export const authConfig: AuthConfig = {
-  // JWT configuration
-  jwtSecret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
-  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-change-in-production',
-  sessionSecret: process.env.SESSION_SECRET || 'your-session-secret-change-in-production',
+  // JWT configuration — no insecure defaults; empty string if not set
+  jwtSecret: process.env.JWT_SECRET || '',
+  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || '',
+  sessionSecret: process.env.SESSION_SECRET || '',
 
   // Token expiration (in milliseconds)
   accessTokenExpiry: parseInt(process.env.ACCESS_TOKEN_EXPIRY || '7200000'), // 2 hours
@@ -425,18 +427,44 @@ export const getAllConfig = (): AppConfigComplete => ({
 
 /**
  * Validate required environment variables
- * @throws {Error} If required environment variables are missing
+ * @throws {Error} If required environment variables are missing in production
  */
 export const validateConfig = (): void => {
   const requiredVars: string[] = [];
   const warnings: string[] = [];
 
-  // Always required variables
-  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'your-secret-key-change-in-production') {
-    if (serverConfig.isProduction) {
-      requiredVars.push('JWT_SECRET');
-    } else {
-      warnings.push('JWT_SECRET is using default value - change in production');
+  if (serverConfig.isProduction) {
+    // JWT_SECRET must be set and >= 32 chars in production
+    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+      requiredVars.push('JWT_SECRET (must be set and at least 32 characters)');
+    }
+
+    // SESSION_SECRET must be set and >= 32 chars in production
+    if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
+      requiredVars.push('SESSION_SECRET (must be set and at least 32 characters)');
+    }
+
+    // DATABASE_URL required when usePostgres is true
+    if (databaseConfig.usePostgres && !process.env.DATABASE_URL) {
+      requiredVars.push('DATABASE_URL (required when usePostgres is true)');
+    }
+
+    // STRIPE_WEBHOOK_SECRET required when STRIPE_SECRET_KEY is set
+    if (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_WEBHOOK_SECRET) {
+      requiredVars.push('STRIPE_WEBHOOK_SECRET (required when STRIPE_SECRET_KEY is set)');
+    }
+
+    // HTTPS warning (not a hard requirement — ALB can terminate TLS)
+    if (!serverConfig.enforceHttpsRedirect) {
+      warnings.push('ENFORCE_HTTPS_REDIRECT not set — ensure TLS is terminated at load balancer (ALB/CloudFront)');
+    }
+  } else {
+    // Non-production: warn but don't throw
+    if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+      warnings.push('JWT_SECRET is missing or under 32 characters — change before going to production');
+    }
+    if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
+      warnings.push('SESSION_SECRET is missing or under 32 characters — change before going to production');
     }
   }
 
@@ -449,18 +477,13 @@ export const validateConfig = (): void => {
     }
   }
 
-  // Check for missing required variables
-  const missing = requiredVars.filter(varName => !process.env[varName]);
-
-  if (missing.length > 0) {
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  if (requiredVars.length > 0) {
+    throw new Error(`Missing required environment variables: ${requiredVars.join(', ')}`);
   }
 
-  // Configuration warnings are disabled for cleaner logs
-  // if (warnings.length > 0 && serverConfig.isDevelopment) {
-  //   console.warn('⚠️  Configuration warnings:');
-  //   warnings.forEach(warning => console.warn(`   - ${warning}`));
-  // }
+  if (warnings.length > 0) {
+    warnings.forEach(warning => console.warn(`⚠️  Config warning: ${warning}`));
+  }
 
   // Log configuration status in a concise format
   const services: string[] = [];

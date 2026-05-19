@@ -21,6 +21,14 @@ import { up as migration016 } from './016_add_audit_log.js';
 import { up as migration017 } from './017_add_api_keys.js';
 import { up as migration018 } from './018_add_outbound_webhooks.js';
 import { up as migration019 } from './019_add_usage_records.js';
+import { up as migration020 } from './020_add_processed_webhook_events.js';
+import { up as migration021 } from './021_add_fk_indexes.js';
+
+/**
+ * Whether migrations have completed successfully.
+ * Used by the /api/health/ready endpoint as a startup gate.
+ */
+export let migrationsComplete = false;
 
 interface Migration {
   id: string;
@@ -50,7 +58,9 @@ const migrations: Migration[] = [
   { id: '016', name: 'add_audit_log', up: migration016 },
   { id: '017', name: 'add_api_keys', up: migration017 },
   { id: '018', name: 'add_outbound_webhooks', up: migration018 },
-  { id: '019', name: 'add_usage_records', up: migration019 }
+  { id: '019', name: 'add_usage_records', up: migration019 },
+  { id: '020', name: 'add_processed_webhook_events', up: migration020 },
+  { id: '021', name: 'add_fk_indexes', up: migration021 },
 ];
 
 /**
@@ -73,7 +83,7 @@ const isMigrationApplied = async (db: IDatabase, migrationId: string): Promise<b
   try {
     const result = await db.getMany('SELECT id FROM migrations WHERE id = ?', [migrationId]);
     return result.length > 0;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
@@ -88,12 +98,82 @@ const markMigrationApplied = async (db: IDatabase, migration: Migration): Promis
   );
 };
 
+// Stable advisory lock key for migrations
+const MIGRATION_LOCK_KEY = 20241201;
+
+/**
+ * Detect whether we're connected to PostgreSQL
+ */
+const isPostgres = async (db: IDatabase): Promise<boolean> => {
+  try {
+    await db.getOne('SELECT pg_backend_pid()');
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Try to acquire a PostgreSQL advisory lock.
+ * Returns true if acquired, false if not (another instance holds it).
+ */
+const acquireAdvisoryLock = async (db: IDatabase): Promise<boolean> => {
+  const result = await db.getOne<{ pg_try_advisory_lock: boolean }>(
+    'SELECT pg_try_advisory_lock(?) as pg_try_advisory_lock',
+    [MIGRATION_LOCK_KEY]
+  );
+  return result?.pg_try_advisory_lock === true;
+};
+
+/**
+ * Release the PostgreSQL advisory lock
+ */
+const releaseAdvisoryLock = async (db: IDatabase): Promise<void> => {
+  await db.executeQuery('SELECT pg_advisory_unlock(?)', [MIGRATION_LOCK_KEY]);
+};
+
+/**
+ * Determine whether a migration error is safe to ignore.
+ * SQLite-specific PRAGMA calls will fail on PostgreSQL — those are safe to skip.
+ */
+const isSafeToIgnoreError = (sql: string, errMsg: string): boolean => {
+  if (sql.toUpperCase().includes('PRAGMA')) return true;
+  if (errMsg.toLowerCase().includes('no such table: pragma')) return true;
+  if (errMsg.toLowerCase().includes('pragma')) return true;
+  return false;
+};
+
 /**
  * Run all pending migrations
  */
 export const runMigrations = async (db: IDatabase): Promise<void> => {
+  const onPostgres = await isPostgres(db);
+  let lockAcquired = false;
+
   try {
     console.log('Running database migrations...');
+
+    // Acquire advisory lock on PostgreSQL to prevent concurrent migrations
+    if (onPostgres) {
+      const maxWaitMs = 30000;
+      const retryIntervalMs = 2000;
+      const start = Date.now();
+
+      while (true) {
+        lockAcquired = await acquireAdvisoryLock(db);
+        if (lockAcquired) break;
+
+        const elapsed = Date.now() - start;
+        if (elapsed >= maxWaitMs) {
+          throw new Error('Could not acquire migration lock after 30s — another instance may be running migrations');
+        }
+
+        console.log(`Migration lock held by another instance — retrying in ${retryIntervalMs}ms...`);
+        await new Promise<void>((resolve) => setTimeout(resolve, retryIntervalMs));
+      }
+
+      console.log('Migration advisory lock acquired');
+    }
 
     // Create migrations table if it doesn't exist
     await createMigrationsTable(db);
@@ -109,13 +189,18 @@ export const runMigrations = async (db: IDatabase): Promise<void> => {
           await markMigrationApplied(db, migration);
           migrationsRun++;
         } catch (migrationError) {
-          // Some SQLite-specific migrations (PRAGMA, sqlite_master) will fail on PostgreSQL
-          // Mark as applied anyway so they don't block future runs
-          console.warn(`Migration ${migration.id} encountered an error (may be safe to ignore):`, (migrationError as Error).message);
-          try {
-            await markMigrationApplied(db, migration);
-          } catch {
-            // Already marked or other issue
+          const errMsg = (migrationError as Error).message || '';
+          // Only ignore known-safe SQLite-specific errors (e.g. PRAGMA on PostgreSQL)
+          if (isSafeToIgnoreError('', errMsg)) {
+            console.warn(`Migration ${migration.id} encountered a safe-to-ignore error:`, errMsg);
+            try {
+              await markMigrationApplied(db, migration);
+            } catch {
+              // Already marked or other issue
+            }
+          } else {
+            // Fatal: re-throw so startup fails
+            throw migrationError;
           }
         }
       }
@@ -126,9 +211,22 @@ export const runMigrations = async (db: IDatabase): Promise<void> => {
     } else {
       console.log('✓ All migrations up to date');
     }
+
+    // Signal that migrations completed successfully
+    migrationsComplete = true;
   } catch (error) {
     console.error('❌ Migration failed:', error);
     throw error;
+  } finally {
+    // Always release the advisory lock
+    if (onPostgres && lockAcquired) {
+      try {
+        await releaseAdvisoryLock(db);
+        console.log('Migration advisory lock released');
+      } catch (releaseErr) {
+        console.warn('Failed to release migration advisory lock:', (releaseErr as Error).message);
+      }
+    }
   }
 };
 

@@ -561,6 +561,19 @@ const webhookDeliveriesSchema: TableSchema = {
 };
 
 /**
+ * Processed webhook event IDs for idempotency deduplication
+ */
+const processedWebhookEventsSchema: TableSchema = {
+  name: 'processed_webhook_events',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'event_id', type: 'TEXT', constraints: ['NOT NULL UNIQUE'] },
+    { name: 'provider', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'stripe'"] },
+    { name: 'processed_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ]
+};
+
+/**
  * Usage records for metering per-tenant usage by month
  */
 const usageRecordsSchema: TableSchema = {
@@ -604,7 +617,8 @@ export const tableSchemas: TableSchema[] = [
   apiKeysSchema,
   webhookEndpointsSchema,
   webhookDeliveriesSchema,
-  usageRecordsSchema
+  usageRecordsSchema,
+  processedWebhookEventsSchema
 ];
 
 /**

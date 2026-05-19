@@ -35,7 +35,10 @@ const VALID_BILLING_CYCLES: RetainerBillingCycle[] = ['weekly', 'monthly', 'quar
 
 export class RetainerService {
   private normalizeTenantId(tenantId?: number): number {
-    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+    if (!tenantId || !Number.isInteger(tenantId) || tenantId <= 0) {
+      throw new Error(`Invalid tenant context: tenantId must be a positive integer, got ${tenantId}`);
+    }
+    return tenantId;
   }
 
   private getRetainerSelectClause(): string {

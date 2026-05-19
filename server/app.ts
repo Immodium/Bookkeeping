@@ -5,6 +5,9 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
+import compression from 'compression';
+import pinoHttp from 'pino-http';
+import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname, isAbsolute, join, resolve } from 'path';
 import { existsSync, readFileSync } from 'fs';
@@ -13,6 +16,9 @@ import http from 'http';
 
 // Import configuration
 import { serverConfig, validateConfig } from './config/index.js';
+
+// Import logger
+import { logger } from './utils/logger.js';
 
 // Import database
 import { initializeDatabase } from './database/index.js';
@@ -76,6 +82,23 @@ export const createApp = async () => {
     });
   }
 
+  // Request ID middleware — must be first
+  app.use((req, res, next) => {
+    const requestId = (req.headers['x-request-id'] as string) || randomUUID();
+    req.headers['x-request-id'] = requestId;
+    res.setHeader('X-Request-ID', requestId);
+    next();
+  });
+
+  // Structured HTTP logging (skip health checks to reduce noise)
+  app.use(pinoHttp({
+    logger,
+    customProps: (req) => ({ requestId: req.headers['x-request-id'] }),
+    customSuccessMessage: (req, res) => `${req.method} ${req.url} ${res.statusCode}`,
+    customErrorMessage: (req, res, err) => `${req.method} ${req.url} ${res.statusCode} — ${err.message}`,
+    autoLogging: { ignore: (req) => req.url?.startsWith('/api/health') ?? false },
+  }));
+
   // Security middleware
   app.use(createSecurityHeaders(serverConfig.corsOrigin));
   app.use(cors(createCorsOptions(serverConfig.corsOrigin)));
@@ -84,6 +107,9 @@ export const createApp = async () => {
   // Logging and monitoring middleware
   app.use(requestLogger);
   app.use(performanceMonitor());
+
+  // Response compression
+  app.use(compression({ level: 6, threshold: 1024 }));
 
   // Body parsing middleware with size limits
   app.use(express.json({ limit: '10mb' }));
@@ -128,25 +154,30 @@ export const createApp = async () => {
     });
   });
 
-  // Serve static files from uploads directory
-  const uploadsPath = join(__dirname, '..', 'public', 'uploads');
-  app.use('/uploads', express.static(uploadsPath));
-
-  // Serve static files from dist directory (built frontend)
+  // Static file serving (disable when CloudFront/S3 is handling assets in production)
   const distPath = join(__dirname, '..', 'dist');
-  app.use(express.static(distPath));
+  if (serverConfig.serveStaticFiles) {
+    // Serve static files from uploads directory
+    const uploadsPath = join(__dirname, '..', 'public', 'uploads');
+    app.use('/uploads', express.static(uploadsPath));
+
+    // Serve static files from dist directory (built frontend)
+    app.use(express.static(distPath));
+  }
 
   // API routes
   app.use('/', routes);
 
   // Serve index.html for client-side routing (must be after API routes)
-  app.get('*', (req, res, next) => {
-    // Skip API routes
-    if (req.path.startsWith('/api/')) {
-      return next();
-    }
-    res.sendFile(join(distPath, 'index.html'));
-  });
+  if (serverConfig.serveStaticFiles) {
+    app.get('*', (req, res, next) => {
+      // Skip API routes
+      if (req.path.startsWith('/api/')) {
+        return next();
+      }
+      res.sendFile(join(distPath, 'index.html'));
+    });
+  }
 
   // 404 handler for unmatched routes
   app.use(notFoundHandler);
@@ -185,43 +216,48 @@ export const startServer = async () => {
         app
       );
       server.listen(serverConfig.port, serverConfig.host, () => {
-        console.log(`🚀 Slimbooks server running on ${protocol}://${serverConfig.host}:${serverConfig.port}`);
-        console.log(`🔐 TLS certificate loaded from ${certPath}`);
-        console.log(`📊 Environment: ${serverConfig.nodeEnv} | CORS: ${serverConfig.corsOrigin} | Rate limit: ${serverConfig.rateLimiting.maxRequests}/${serverConfig.rateLimiting.windowMs / 1000}s`);
+        logger.info(`Slimbooks server running on ${protocol}://${serverConfig.host}:${serverConfig.port}`);
+        logger.info(`TLS certificate loaded from ${certPath}`);
+        logger.info(`Environment: ${serverConfig.nodeEnv} | CORS: ${serverConfig.corsOrigin} | Rate limit: ${serverConfig.rateLimiting.maxRequests}/${serverConfig.rateLimiting.windowMs / 1000}s`);
 
         const features = [];
         if (serverConfig.enforceHttpsRedirect) features.push('HTTPS redirect');
         if (serverConfig.enableDebugEndpoints) features.push('Debug');
         if (serverConfig.enableSampleData || serverConfig.isDevelopment) features.push('Sample data');
         if (features.length > 0) {
-          console.log(`🔧 Features: ${features.join(', ')}`);
+          logger.info(`Features: ${features.join(', ')}`);
         }
       });
     } else {
       server = app.listen(serverConfig.port, serverConfig.host, () => {
-        console.log(`🚀 Slimbooks server running on ${protocol}://${serverConfig.host}:${serverConfig.port}`);
-        console.log(`📊 Environment: ${serverConfig.nodeEnv} | CORS: ${serverConfig.corsOrigin} | Rate limit: ${serverConfig.rateLimiting.maxRequests}/${serverConfig.rateLimiting.windowMs / 1000}s`);
+        logger.info(`Slimbooks server running on ${protocol}://${serverConfig.host}:${serverConfig.port}`);
+        logger.info(`Environment: ${serverConfig.nodeEnv} | CORS: ${serverConfig.corsOrigin} | Rate limit: ${serverConfig.rateLimiting.maxRequests}/${serverConfig.rateLimiting.windowMs / 1000}s`);
 
         const features = [];
         if (serverConfig.enforceHttpsRedirect) features.push('HTTPS redirect');
         if (serverConfig.enableDebugEndpoints) features.push('Debug');
         if (serverConfig.enableSampleData || serverConfig.isDevelopment) features.push('Sample data');
         if (features.length > 0) {
-          console.log(`🔧 Features: ${features.join(', ')}`);
+          logger.info(`Features: ${features.join(', ')}`);
         }
       });
     }
 
     server.on('error', (error) => {
-      console.error('❌ Server startup error:', error);
+      logger.error({ err: error }, 'Server startup error');
     });
 
     if (!serverConfig.enableHttps) {
-      console.log('⚠️ HTTPS is disabled (set ENABLE_HTTPS=true to enable TLS)');
+      logger.info('HTTPS is disabled (set ENABLE_HTTPS=true to enable TLS)');
     }
 
     if (serverConfig.enforceHttpsRedirect && !serverConfig.enableHttps) {
-      console.log('⚠️ HTTPS redirect is enabled while app server is HTTP-only (expect TLS termination at proxy/load balancer)');
+      logger.info('HTTPS redirect is enabled while app server is HTTP-only (expect TLS termination at proxy/load balancer)');
+    }
+
+    // Prominent production warning when HTTPS redirect is not enforced
+    if (serverConfig.nodeEnv === 'production' && !serverConfig.enforceHttpsRedirect) {
+      logger.warn('WARNING: ENFORCE_HTTPS_REDIRECT is disabled in production. Set ENFORCE_HTTPS_REDIRECT=true or ensure TLS is terminated at the load balancer.');
     }
 
     // Initialize health logging
@@ -234,7 +270,7 @@ export const startServer = async () => {
 
     return server;
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    logger.error({ err: error }, 'Failed to start server');
     process.exit(1);
   }
 };

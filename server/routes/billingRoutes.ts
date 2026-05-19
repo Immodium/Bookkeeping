@@ -1,9 +1,21 @@
 import express, { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { serverConfig, stripeConfig } from '../config/index.js';
 import { subscriptionService, BillingWebhookEvent } from '../services/SubscriptionService.js';
 import { stripeService } from '../services/StripeService.js';
 import { requireAuth, requireAdmin } from '../middleware/index.js';
 import { db } from '../database/index.js';
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) {
+    // Still run compare to avoid length-based timing leak
+    crypto.timingSafeEqual(ba, Buffer.alloc(ba.length));
+    return false;
+  }
+  return crypto.timingSafeEqual(ba, bb);
+}
 
 const router: Router = Router();
 
@@ -202,7 +214,7 @@ router.post('/webhook',
         });
         return;
       }
-    } else if (normalizedIncoming !== configuredSecret) {
+    } else if (!normalizedIncoming || !timingSafeEqual(normalizedIncoming, configuredSecret)) {
       res.status(401).json({
         success: false,
         error: 'Invalid billing webhook secret'

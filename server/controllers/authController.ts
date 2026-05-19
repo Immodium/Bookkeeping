@@ -143,6 +143,9 @@ export const register = asyncHandler(async (req: Request<object, RegisterRespons
   if (!name || !email || !password) {
     throw new ValidationError('Name, email, and password are required');
   }
+  if (typeof password !== 'string' || password.length < 8) {
+    throw new ValidationError('Password must be at least 8 characters');
+  }
 
   // Hash password
   const hashedPassword = await bcrypt.hash(password, authConfig.bcryptRounds);

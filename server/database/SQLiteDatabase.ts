@@ -207,12 +207,28 @@ export class SQLiteDatabase implements IDatabase {
   }
 
   /**
-   * Execute a callback within a transaction
+   * Execute a callback within a transaction.
+   * Uses SAVEPOINTs for nested calls so that getNextId (which also opens a
+   * transaction internally) works when called from within an outer transaction.
    */
   async transaction<T>(callback: () => Promise<T>): Promise<T> {
     this.ensureConnected();
-    // better-sqlite3's transaction() is synchronous-only, so we run the async
-    // callback inside a manual BEGIN/COMMIT/ROLLBACK guard instead.
+    const nested = this.db!.inTransaction;
+    if (nested) {
+      // Already inside a transaction — use a savepoint for safe nesting
+      const sp = `sp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      this.db!.exec(`SAVEPOINT "${sp}"`);
+      try {
+        const result = await callback();
+        this.db!.exec(`RELEASE SAVEPOINT "${sp}"`);
+        return result;
+      } catch (e) {
+        this.db!.exec(`ROLLBACK TO SAVEPOINT "${sp}"`);
+        this.db!.exec(`RELEASE SAVEPOINT "${sp}"`);
+        throw e;
+      }
+    }
+    // Top-level transaction
     await this.beginTransaction();
     try {
       const result = await callback();

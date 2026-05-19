@@ -71,7 +71,15 @@ export class ReportService {
     return tenantId;
   }
 
+  private static readonly ALLOWED_TABLES = new Set([
+    'invoices', 'clients', 'expenses', 'payments', 'retainers',
+    'users', 'report_schedules', 'settings', 'counters',
+  ]);
+
   private async getTableColumns(tableName: string): Promise<Set<string>> {
+    if (!ReportService.ALLOWED_TABLES.has(tableName)) {
+      throw new Error(`Table '${tableName}' is not allowed for schema inspection`);
+    }
     const cached = this.tableColumnCache.get(tableName);
     if (cached) {
       return cached;

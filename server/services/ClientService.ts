@@ -92,12 +92,6 @@ export class ClientService {
       throw new Error('Client data is required');
     }
 
-    // Enforce plan limits
-    const clientCount = (await databaseService.getOne<{ count: number }>(
-      'SELECT COUNT(*) as count FROM clients WHERE tenant_id = ? AND deleted_at IS NULL', [scopedTenantId]
-    ))?.count || 0;
-    await subscriptionService.assertWithinLimit(scopedTenantId, 'billing.max_clients', clientCount);
-
     const firstName = (clientData.first_name || '').trim();
     const lastName = (clientData.last_name || '').trim();
     const combinedName = `${firstName} ${lastName}`.trim();
@@ -113,57 +107,64 @@ export class ClientService {
       throw new Error('Invalid email format');
     }
 
-    // Check if client with same email already exists (if email provided)
-    if (clientData.email) {
-      const existingClient = await databaseService.getOne<{id: number}>(
-        'SELECT id FROM clients WHERE tenant_id = ? AND email = ?', 
-        [scopedTenantId, clientData.email]
-      );
-      if (existingClient) {
-        throw new Error('Client with this email already exists');
+    // Enforce plan limits and create client inside a transaction to prevent TOCTOU race
+    const nextId = await databaseService.executeTransaction(async () => {
+      const clientCount = (await databaseService.getOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM clients WHERE tenant_id = ? AND deleted_at IS NULL', [scopedTenantId]
+      ))?.count || 0;
+      await subscriptionService.assertWithinLimit(scopedTenantId, 'billing.max_clients', clientCount);
+
+      // Check if client with same email already exists (if email provided)
+      if (clientData.email) {
+        const existingClient = await databaseService.getOne<{id: number}>(
+          'SELECT id FROM clients WHERE tenant_id = ? AND email = ?',
+          [scopedTenantId, clientData.email]
+        );
+        if (existingClient) {
+          throw new Error('Client with this email already exists');
+        }
       }
-    }
 
-    // Get next client ID
-    const nextId = await databaseService.getNextId('clients');
-    
-    // Prepare client data
-    const now = new Date().toISOString();
-    const zipValue = clientData.zipCode || clientData.zip || null;
-    const clientRecord = {
-      id: nextId,
-      tenant_id: scopedTenantId,
-      name: resolvedName,
-      first_name: firstName || null,
-      last_name: lastName || null,
-      email: clientData.email || null,
-      phone: clientData.phone || null,
-      address: clientData.address || null,
-      city: clientData.city || null,
-      state: clientData.state || null,
-      zip: zipValue,
-      country: clientData.country || null,
-      company: clientData.company || null,
-      tax_id: clientData.tax_id || null,
-      notes: clientData.notes || null,
-      is_active: 1,
-      created_at: now,
-      updated_at: now
-    };
+      const id = await databaseService.getNextId('clients');
 
-    // Create client
-    await databaseService.executeQuery(`
-      INSERT INTO clients (
-        id, tenant_id, name, first_name, last_name, email, phone, company, address, city, state,
-        zip, country, tax_id, notes, is_active, stripe_customer_id, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      clientRecord.id, clientRecord.tenant_id, clientRecord.name, clientRecord.first_name, clientRecord.last_name,
-      clientRecord.email, clientRecord.phone, clientRecord.company, clientRecord.address,
-      clientRecord.city, clientRecord.state, clientRecord.zip, clientRecord.country,
-      clientRecord.tax_id, clientRecord.notes, clientRecord.is_active,
-      null, clientRecord.created_at, clientRecord.updated_at
-    ]);
+      const now = new Date().toISOString();
+      const zipValue = clientData.zipCode || clientData.zip || null;
+      const clientRecord = {
+        id,
+        tenant_id: scopedTenantId,
+        name: resolvedName,
+        first_name: firstName || null,
+        last_name: lastName || null,
+        email: clientData.email || null,
+        phone: clientData.phone || null,
+        address: clientData.address || null,
+        city: clientData.city || null,
+        state: clientData.state || null,
+        zip: zipValue,
+        country: clientData.country || null,
+        company: clientData.company || null,
+        tax_id: clientData.tax_id || null,
+        notes: clientData.notes || null,
+        is_active: 1,
+        created_at: now,
+        updated_at: now
+      };
+
+      await databaseService.executeQuery(`
+        INSERT INTO clients (
+          id, tenant_id, name, first_name, last_name, email, phone, company, address, city, state,
+          zip, country, tax_id, notes, is_active, stripe_customer_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        clientRecord.id, clientRecord.tenant_id, clientRecord.name, clientRecord.first_name, clientRecord.last_name,
+        clientRecord.email, clientRecord.phone, clientRecord.company, clientRecord.address,
+        clientRecord.city, clientRecord.state, clientRecord.zip, clientRecord.country,
+        clientRecord.tax_id, clientRecord.notes, clientRecord.is_active,
+        null, clientRecord.created_at, clientRecord.updated_at
+      ]);
+
+      return id;
+    });
 
     // Fire-and-forget: usage metering
     usageService.increment(scopedTenantId, 'clients_created').catch(() => {});

@@ -172,83 +172,86 @@ export class UserService {
 
     const scopedTenantId = this.normalizeTenantId(tenant_id);
 
-    // Enforce plan limits
-    const userCount = (await databaseService.getOne<{ count: number }>(
-      'SELECT COUNT(*) as count FROM users WHERE tenant_id = ?', [scopedTenantId]
-    ))?.count || 0;
-    await subscriptionService.assertWithinLimit(scopedTenantId, 'billing.max_users', userCount);
-
-    // Check if user already exists for tenant
-    const existingUser = await databaseService.getOne<{ id: number }>(
-      'SELECT id FROM users WHERE tenant_id = ? AND email = ?',
-      [scopedTenantId, email]
-    );
-    if (existingUser) {
-      throw new Error('User with this email already exists');
-    }
-
     const normalizedRoles = normalizeRoles(roles && roles.length > 0 ? roles : [role]);
     const primaryRole = getPrimaryRole(normalizedRoles, role);
 
-    // Keep user ID generation resilient if counters drift behind real IDs.
-    const nextId = await this.reserveNextUserId();
-    
-    // Create user
-    const now = new Date().toISOString();
-    try {
-      await databaseService.executeQuery(`
-        INSERT INTO users (
-          id, tenant_id, name, email, username, password_hash, role, roles, email_verified,
-          google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        nextId, 
-        scopedTenantId,
-        name, 
-        email, 
-        username || email, 
-        password_hash || null, 
-        primaryRole,
-        JSON.stringify(normalizedRoles),
-        email_verified ? 1 : 0,
-        google_id || null,
-        last_login || null,
-        failed_login_attempts,
-        account_locked_until || null,
-        now, 
-        now
-      ]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes('UNIQUE constraint failed: users.id')) {
-        throw error;
+    // Enforce plan limits and create user inside a transaction to prevent TOCTOU race
+    const nextId = await databaseService.executeTransaction(async () => {
+      const userCount = (await databaseService.getOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM users WHERE tenant_id = ?', [scopedTenantId]
+      ))?.count || 0;
+      await subscriptionService.assertWithinLimit(scopedTenantId, 'billing.max_users', userCount);
+
+      // Check if user already exists for tenant
+      const existingUser = await databaseService.getOne<{ id: number }>(
+        'SELECT id FROM users WHERE tenant_id = ? AND email = ?',
+        [scopedTenantId, email]
+      );
+      if (existingUser) {
+        throw new Error('User with this email already exists');
       }
 
-      const fallbackId = await this.reserveNextUserId();
-      await databaseService.executeQuery(`
-        INSERT INTO users (
-          id, tenant_id, name, email, username, password_hash, role, roles, email_verified,
-          google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        fallbackId,
-        scopedTenantId,
-        name,
-        email,
-        username || email,
-        password_hash || null,
-        primaryRole,
-        JSON.stringify(normalizedRoles),
-        email_verified ? 1 : 0,
-        google_id || null,
-        last_login || null,
-        failed_login_attempts,
-        account_locked_until || null,
-        now,
-        now
-      ]);
-      return fallbackId;
-    }
+      // Keep user ID generation resilient if counters drift behind real IDs.
+      const id = await this.reserveNextUserId();
+
+      const now = new Date().toISOString();
+      try {
+        await databaseService.executeQuery(`
+          INSERT INTO users (
+            id, tenant_id, name, email, username, password_hash, role, roles, email_verified,
+            google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          id,
+          scopedTenantId,
+          name,
+          email,
+          username || email,
+          password_hash || null,
+          primaryRole,
+          JSON.stringify(normalizedRoles),
+          email_verified ? 1 : 0,
+          google_id || null,
+          last_login || null,
+          failed_login_attempts,
+          account_locked_until || null,
+          now,
+          now
+        ]);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes('UNIQUE constraint failed: users.id')) {
+          throw error;
+        }
+
+        const fallbackId = await this.reserveNextUserId();
+        await databaseService.executeQuery(`
+          INSERT INTO users (
+            id, tenant_id, name, email, username, password_hash, role, roles, email_verified,
+            google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          fallbackId,
+          scopedTenantId,
+          name,
+          email,
+          username || email,
+          password_hash || null,
+          primaryRole,
+          JSON.stringify(normalizedRoles),
+          email_verified ? 1 : 0,
+          google_id || null,
+          last_login || null,
+          failed_login_attempts,
+          account_locked_until || null,
+          now,
+          now
+        ]);
+        return fallbackId;
+      }
+
+      return id;
+    });
 
     return nextId;
   }

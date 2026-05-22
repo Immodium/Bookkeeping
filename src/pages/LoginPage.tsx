@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { AppLogo } from '@/components/ui/AppLogo';
 import { useProjectSettings } from '@/hooks/useProjectSettings';
 import { AuthUtils } from '@/utils/api';
 
@@ -103,6 +104,7 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-md">
         <div className="bg-card rounded-lg shadow-lg p-8 border">
           <div className="text-center mb-8">
+            <AppLogo alt="Slimbooks logo" className="h-10 w-auto mx-auto mb-4" />
             <h1 className="text-2xl font-bold text-card-foreground">Welcome to Slimbooks</h1>
             <p className="text-muted-foreground mt-2">Sign in to your account</p>
           </div>

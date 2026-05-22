@@ -1,8 +1,8 @@
 import type { IDatabase } from '../../types/database.types.js';
 
-export const up = (db: IDatabase): void => {
+export const up = async (db: IDatabase): Promise<void> => {
   try {
-    db.executeQuery(`
+    await db.executeQuery(`
       CREATE TABLE IF NOT EXISTS user_roles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,

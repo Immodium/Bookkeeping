@@ -3,10 +3,13 @@
 
 import jwt from 'jsonwebtoken';
 import { databaseService } from '../core/DatabaseService.js';
+import { subscriptionService } from './SubscriptionService.js';
 import { authConfig } from '../config/index.js';
 import { ServiceOptions, InvoiceWithClient, InvoiceStatus } from '../types/index.js';
 import { PublicInvoiceDisplay, PublicInvoiceTokenPayload } from '../types/invoice.types.js';
 import { invoiceNumberService } from './InvoiceNumberService.js';
+import { outboundWebhookService } from './OutboundWebhookService.js';
+import { usageService } from './UsageService.js';
 
 /**
  * Invoice Service
@@ -14,7 +17,10 @@ import { invoiceNumberService } from './InvoiceNumberService.js';
  */
 export class InvoiceService {
   private normalizeTenantId(tenantId?: number): number {
-    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+    if (!tenantId || !Number.isInteger(tenantId) || tenantId <= 0) {
+      throw new Error(`Invalid tenant context: tenantId must be a positive integer, got ${tenantId}`);
+    }
+    return tenantId;
   }
 
   /**
@@ -64,7 +70,7 @@ export class InvoiceService {
     query += ' ORDER BY i.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
     
-    const invoices = databaseService.getMany<InvoiceWithClient>(query, params);
+    const invoices = await databaseService.getMany<InvoiceWithClient>(query, params);
     
     // Get total count for pagination
     let countQuery = 'SELECT COUNT(*) as count FROM invoices i';
@@ -72,7 +78,7 @@ export class InvoiceService {
       countQuery += ' WHERE ' + conditions.join(' AND ');
     }
     
-    const totalResult = databaseService.getOne<{count: number}>(countQuery, params.slice(0, -2));
+    const totalResult = await databaseService.getOne<{count: number}>(countQuery, params.slice(0, -2));
     const total = totalResult?.count || 0;
     
     return {
@@ -95,7 +101,7 @@ export class InvoiceService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getOne<InvoiceWithClient>(`
+    return await databaseService.getOne<InvoiceWithClient>(`
       SELECT i.*, c.name as client_name, c.email as client_email, c.company as client_company,
              c.address as client_address, c.city as client_city, c.state as client_state,
              c.zip as client_zip, c.country as client_country, c.phone as client_phone
@@ -134,15 +140,15 @@ export class InvoiceService {
       }
 
       // Get company settings for public display
-      const companySettings = databaseService.getOne<{value: string}>(`
+      const companySettings = await databaseService.getOne<{value: string}>(`
         SELECT value FROM settings WHERE tenant_id = ? AND key = ? AND category = ?
       `, [invoice?.tenant_id || 1, 'company_settings', 'company']);
 
-      const currencySettings = databaseService.getOne<{value: string}>(`
+      const currencySettings = await databaseService.getOne<{value: string}>(`
         SELECT value FROM settings WHERE tenant_id = ? AND key = ? AND category = ?
       `, [invoice?.tenant_id || 1, 'currency_settings', 'currency']);
 
-      const invoiceTemplate = databaseService.getOne<{value: string}>(`
+      const invoiceTemplate = await databaseService.getOne<{value: string}>(`
         SELECT value FROM settings WHERE tenant_id = ? AND key = ? AND category = ?
       `, [invoice?.tenant_id || 1, 'invoice_template', 'appearance']);
 
@@ -173,7 +179,7 @@ export class InvoiceService {
     }
 
     // Verify invoice exists
-    const invoice = databaseService.getOne<{id: number; invoice_number: string}>(`
+    const invoice = await databaseService.getOne<{id: number; invoice_number: string}>(`
       SELECT i.id, i.invoice_number
       FROM invoices i
       WHERE i.id = ? AND i.tenant_id = ?
@@ -250,7 +256,7 @@ export class InvoiceService {
     }
 
     // Check if client exists
-    const clientExists = databaseService.getOne<{ id: number }>(
+    const clientExists = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
       [invoiceData.client_id, scopedTenantId]
     );
@@ -258,87 +264,110 @@ export class InvoiceService {
       throw new Error('Client not found');
     }
 
-    // Auto-generate invoice number if not provided
-    let invoiceNumber = invoiceData.invoice_number;
-    if (!invoiceNumber) {
-      invoiceNumber = await invoiceNumberService.generateInvoiceNumber(scopedTenantId);
-    } else {
-      // Check if provided invoice number already exists
-      const invoiceExists = databaseService.getOne<{ id: number }>(
-        'SELECT id FROM invoices WHERE tenant_id = ? AND invoice_number = ?',
-        [scopedTenantId, invoiceNumber]
-      );
-      if (invoiceExists) {
-        throw new Error('Invoice number already exists');
+    // Enforce plan limits and create invoice inside a transaction to prevent TOCTOU race
+    const nextId = await databaseService.executeTransaction(async () => {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      const invoiceCount = (await databaseService.getOne<{ count: number }>(
+        'SELECT COUNT(*) as count FROM invoices WHERE tenant_id = ? AND created_at >= ?',
+        [scopedTenantId, monthStart.toISOString()]
+      ))?.count || 0;
+      await subscriptionService.assertWithinLimit(scopedTenantId, 'billing.max_invoices_per_month', invoiceCount);
+
+      // Auto-generate invoice number if not provided
+      let invoiceNumber = invoiceData.invoice_number;
+      if (!invoiceNumber) {
+        invoiceNumber = await invoiceNumberService.generateInvoiceNumber(scopedTenantId);
+      } else {
+        // Check if provided invoice number already exists
+        const invoiceExists = await databaseService.getOne<{ id: number }>(
+          'SELECT id FROM invoices WHERE tenant_id = ? AND invoice_number = ?',
+          [scopedTenantId, invoiceNumber]
+        );
+        if (invoiceExists) {
+          throw new Error('Invoice number already exists');
+        }
       }
-    }
 
-    // Get next invoice ID
-    const nextId = databaseService.getNextId('invoices');
-    
-    // Prepare invoice data
-    const now = new Date().toISOString();
-    const invoiceRecord = {
-      id: nextId,
+      // Get next invoice ID
+      const id = await databaseService.getNextId('invoices');
+
+      // Prepare invoice data
+      const now = new Date().toISOString();
+      const invoiceRecord = {
+        id,
+        tenant_id: scopedTenantId,
+        invoice_number: invoiceNumber,
+        client_id: invoiceData.client_id,
+        design_template_id: invoiceData.design_template_id || null,
+        recurring_template_id: invoiceData.recurring_template_id || null,
+        amount: invoiceData.amount,
+        tax_amount: invoiceData.tax_amount || 0,
+        total_amount: invoiceData.total_amount || invoiceData.amount,
+        status: invoiceData.status || 'draft',
+        due_date: invoiceData.due_date || null,
+        issue_date: invoiceData.issue_date || null,
+        description: invoiceData.description || '',
+        items: invoiceData.items || null,
+        notes: invoiceData.notes || '',
+        payment_terms: invoiceData.payment_terms || '',
+        stripe_invoice_id: invoiceData.stripe_invoice_id || null,
+        stripe_payment_intent_id: invoiceData.stripe_payment_intent_id || null,
+        type: invoiceData.type || 'one-time',
+        client_name: invoiceData.client_name || null,
+        client_email: invoiceData.client_email || null,
+        client_phone: invoiceData.client_phone || null,
+        client_address: invoiceData.client_address || null,
+        line_items: invoiceData.line_items || null,
+        tax_rate_id: invoiceData.tax_rate_id || null,
+        shipping_amount: invoiceData.shipping_amount || 0,
+        shipping_rate_id: invoiceData.shipping_rate_id || null,
+        email_status: invoiceData.email_status || 'not_sent',
+        email_sent_at: invoiceData.email_sent_at || null,
+        email_error: invoiceData.email_error || null,
+        last_email_attempt: invoiceData.last_email_attempt || null,
+        created_at: now,
+        updated_at: now
+      };
+
+      await databaseService.executeQuery(`
+        INSERT INTO invoices (
+          id, tenant_id, invoice_number, client_id, design_template_id, recurring_template_id, amount, tax_amount, total_amount,
+          status, due_date, issue_date, description, items, notes, payment_terms,
+          stripe_invoice_id, stripe_payment_intent_id, type, client_name, client_email,
+          client_phone, client_address, line_items, tax_rate_id, shipping_amount,
+          shipping_rate_id, email_status, email_sent_at, email_error, last_email_attempt,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        invoiceRecord.id, invoiceRecord.tenant_id, invoiceRecord.invoice_number, invoiceRecord.client_id,
+        invoiceRecord.design_template_id, invoiceRecord.recurring_template_id, invoiceRecord.amount, invoiceRecord.tax_amount,
+        invoiceRecord.total_amount, invoiceRecord.status, invoiceRecord.due_date,
+        invoiceRecord.issue_date, invoiceRecord.description, invoiceRecord.items,
+        invoiceRecord.notes, invoiceRecord.payment_terms, invoiceRecord.stripe_invoice_id,
+        invoiceRecord.stripe_payment_intent_id, invoiceRecord.type, invoiceRecord.client_name,
+        invoiceRecord.client_email, invoiceRecord.client_phone, invoiceRecord.client_address,
+        invoiceRecord.line_items, invoiceRecord.tax_rate_id, invoiceRecord.shipping_amount,
+        invoiceRecord.shipping_rate_id, invoiceRecord.email_status, invoiceRecord.email_sent_at,
+        invoiceRecord.email_error, invoiceRecord.last_email_attempt, invoiceRecord.created_at,
+        invoiceRecord.updated_at
+      ]);
+
+      return { id, amount: invoiceRecord.amount, client_id: invoiceRecord.client_id, status: invoiceRecord.status };
+    });
+
+    // Fire-and-forget: usage metering + webhook dispatch
+    usageService.increment(scopedTenantId, 'invoices_created').catch(() => {});
+    outboundWebhookService.dispatch(scopedTenantId, 'invoice.created', {
+      invoice_id: nextId.id,
       tenant_id: scopedTenantId,
-      invoice_number: invoiceNumber,
-      client_id: invoiceData.client_id,
-      design_template_id: invoiceData.design_template_id || null,
-      recurring_template_id: invoiceData.recurring_template_id || null,
-      amount: invoiceData.amount,
-      tax_amount: invoiceData.tax_amount || 0,
-      total_amount: invoiceData.total_amount || invoiceData.amount,
-      status: invoiceData.status || 'draft',
-      due_date: invoiceData.due_date || null,
-      issue_date: invoiceData.issue_date || null,
-      description: invoiceData.description || '',
-      items: invoiceData.items || null,
-      notes: invoiceData.notes || '',
-      payment_terms: invoiceData.payment_terms || '',
-      stripe_invoice_id: invoiceData.stripe_invoice_id || null,
-      stripe_payment_intent_id: invoiceData.stripe_payment_intent_id || null,
-      type: invoiceData.type || 'one-time',
-      client_name: invoiceData.client_name || null,
-      client_email: invoiceData.client_email || null,
-      client_phone: invoiceData.client_phone || null,
-      client_address: invoiceData.client_address || null,
-      line_items: invoiceData.line_items || null,
-      tax_rate_id: invoiceData.tax_rate_id || null,
-      shipping_amount: invoiceData.shipping_amount || 0,
-      shipping_rate_id: invoiceData.shipping_rate_id || null,
-      email_status: invoiceData.email_status || 'not_sent',
-      email_sent_at: invoiceData.email_sent_at || null,
-      email_error: invoiceData.email_error || null,
-      last_email_attempt: invoiceData.last_email_attempt || null,
-      created_at: now,
-      updated_at: now
-    };
+      amount: nextId.amount,
+      client_id: nextId.client_id,
+      status: nextId.status
+    }).catch(() => {});
 
-    // Create invoice
-    databaseService.executeQuery(`
-      INSERT INTO invoices (
-        id, tenant_id, invoice_number, client_id, design_template_id, recurring_template_id, amount, tax_amount, total_amount,
-        status, due_date, issue_date, description, items, notes, payment_terms,
-        stripe_invoice_id, stripe_payment_intent_id, type, client_name, client_email,
-        client_phone, client_address, line_items, tax_rate_id, shipping_amount,
-        shipping_rate_id, email_status, email_sent_at, email_error, last_email_attempt,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      invoiceRecord.id, invoiceRecord.tenant_id, invoiceRecord.invoice_number, invoiceRecord.client_id,
-      invoiceRecord.design_template_id, invoiceRecord.recurring_template_id, invoiceRecord.amount, invoiceRecord.tax_amount,
-      invoiceRecord.total_amount, invoiceRecord.status, invoiceRecord.due_date,
-      invoiceRecord.issue_date, invoiceRecord.description, invoiceRecord.items,
-      invoiceRecord.notes, invoiceRecord.payment_terms, invoiceRecord.stripe_invoice_id,
-      invoiceRecord.stripe_payment_intent_id, invoiceRecord.type, invoiceRecord.client_name,
-      invoiceRecord.client_email, invoiceRecord.client_phone, invoiceRecord.client_address,
-      invoiceRecord.line_items, invoiceRecord.tax_rate_id, invoiceRecord.shipping_amount,
-      invoiceRecord.shipping_rate_id, invoiceRecord.email_status, invoiceRecord.email_sent_at,
-      invoiceRecord.email_error, invoiceRecord.last_email_attempt, invoiceRecord.created_at,
-      invoiceRecord.updated_at
-    ]);
-
-    return nextId;
+    return nextId.id;
   }
 
   /**
@@ -398,7 +427,7 @@ export class InvoiceService {
 
     // If invoice number is being updated, check for duplicates
     if (invoiceData.invoice_number) {
-      const numberExists = databaseService.getOne<{id: number}>(
+      const numberExists = await databaseService.getOne<{id: number}>(
         'SELECT id FROM invoices WHERE tenant_id = ? AND invoice_number = ? AND id != ?', 
         [scopedTenantId, invoiceData.invoice_number, id]
       );
@@ -408,7 +437,7 @@ export class InvoiceService {
     }
 
     // If client_id is being updated, check if client exists
-    if (invoiceData.client_id && !databaseService.getOne<{ id: number }>(
+    if (invoiceData.client_id && !await databaseService.getOne<{ id: number }>(
       'SELECT id FROM clients WHERE id = ? AND tenant_id = ?',
       [invoiceData.client_id, scopedTenantId]
     )) {
@@ -439,7 +468,7 @@ export class InvoiceService {
     const keys = Object.keys(updateData);
     const values = Object.values(updateData);
     const setClause = keys.map((key) => `${key} = ?`).join(', ');
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       `UPDATE invoices SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
       [...values, id, scopedTenantId]
     );
@@ -456,7 +485,7 @@ export class InvoiceService {
     }
 
     // Check if invoice exists and get status
-    const invoice = databaseService.getOne<{id: number; status: InvoiceStatus}>(
+    const invoice = await databaseService.getOne<{id: number; status: InvoiceStatus}>(
       'SELECT id, status FROM invoices WHERE id = ? AND tenant_id = ?', 
       [id, scopedTenantId]
     );
@@ -470,7 +499,7 @@ export class InvoiceService {
       throw new Error('Cannot delete paid invoices');
     }
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'DELETE FROM invoices WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -493,7 +522,7 @@ export class InvoiceService {
     draft_count: number;
   }> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const stats = databaseService.getOne<{
+    const stats = await databaseService.getOne<{
       total_invoices: number;
       total_paid: number;
       total_pending: number;
@@ -549,7 +578,7 @@ export class InvoiceService {
     }
 
     // Check if invoice exists
-    const invoiceExists = databaseService.getOne<{ id: number }>(
+    const invoiceExists = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM invoices WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -557,7 +586,7 @@ export class InvoiceService {
       throw new Error('Invoice not found');
     }
 
-    const result = databaseService.executeQuery(`
+    const result = await databaseService.executeQuery(`
       UPDATE invoices 
       SET status = ?, updated_at = datetime('now')
       WHERE id = ? AND tenant_id = ?
@@ -577,7 +606,7 @@ export class InvoiceService {
 
     const sentAt = emailSentAt || new Date().toISOString();
     
-    const result = databaseService.executeQuery(`
+    const result = await databaseService.executeQuery(`
       UPDATE invoices 
       SET status = 'sent', email_status = 'sent', email_sent_at = ?, updated_at = datetime('now')
       WHERE id = ? AND tenant_id = ?
@@ -591,7 +620,7 @@ export class InvoiceService {
    */
   async getOverdueInvoices(tenantId?: number): Promise<InvoiceWithClient[]> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getMany<InvoiceWithClient>(`
+    return await databaseService.getMany<InvoiceWithClient>(`
       SELECT i.*, c.name as client_name, c.email as client_email
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
@@ -611,7 +640,7 @@ export class InvoiceService {
     const { limit = 100, offset = 0 } = options;
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    return databaseService.getMany<InvoiceWithClient>(`
+    return await databaseService.getMany<InvoiceWithClient>(`
       SELECT i.*, c.name as client_name, c.email as client_email
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
@@ -630,7 +659,7 @@ export class InvoiceService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getMany<InvoiceWithClient>(`
+    return await databaseService.getMany<InvoiceWithClient>(`
       SELECT i.*, c.name as client_name, c.email as client_email
       FROM invoices i
       LEFT JOIN clients c ON i.client_id = c.id
@@ -648,7 +677,7 @@ export class InvoiceService {
       return false;
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return Boolean(databaseService.getOne<{ id: number }>(
+    return Boolean(await databaseService.getOne<{ id: number }>(
       'SELECT id FROM invoices WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     ));
@@ -664,13 +693,13 @@ export class InvoiceService {
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
     if (excludeId) {
-      const result = databaseService.getOne<{id: number}>(
+      const result = await databaseService.getOne<{id: number}>(
         'SELECT id FROM invoices WHERE tenant_id = ? AND invoice_number = ? AND id != ?', 
         [scopedTenantId, invoiceNumber, excludeId]
       );
       return !!result;
     }
-    return Boolean(databaseService.getOne<{ id: number }>(
+    return Boolean(await databaseService.getOne<{ id: number }>(
       'SELECT id FROM invoices WHERE tenant_id = ? AND invoice_number = ?',
       [scopedTenantId, invoiceNumber]
     ));

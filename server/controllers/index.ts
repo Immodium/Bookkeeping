@@ -112,7 +112,9 @@ export {
   refreshToken,
   getProfile,
   updateProfile,
-  changePassword
+  changePassword,
+  logout,
+  registerTenant
 } from './authController.js';
 
 // Settings controller

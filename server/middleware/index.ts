@@ -10,6 +10,7 @@ export {
   requireAnyRole,
   requirePermission,
   requireEntitlement,
+  requirePlatformAdmin,
   userHasRole,
   requireEmailVerified,
   optionalAuth,

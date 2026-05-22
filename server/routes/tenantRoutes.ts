@@ -17,6 +17,7 @@ import { serverConfig } from '../config/index.js';
 import {
   requireAuth,
   requireRole,
+  requirePlatformAdmin,
   validateRequest,
   validationRules,
   validationSets
@@ -29,18 +30,6 @@ const requireSaasMode = (_req: Request, res: Response, next: NextFunction): void
     res.status(404).json({
       success: false,
       error: 'Endpoint unavailable when SAAS_MODE is disabled'
-    });
-    return;
-  }
-  next();
-};
-
-const requirePlatformAdmin = (req: Request, res: Response, next: NextFunction): void => {
-  const tenantId = req.tenantId || req.user?.tenant_id || 1;
-  if (tenantId !== 1) {
-    res.status(403).json({
-      success: false,
-      error: 'Platform admin access required'
     });
     return;
   }

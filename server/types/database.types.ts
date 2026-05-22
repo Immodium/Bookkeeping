@@ -50,7 +50,7 @@ export interface QueryOptions extends PaginationOptions {
 
 // Transaction interface
 export interface TransactionCallback<T = any> {
-  (): T;
+  (): Promise<T>;
 }
 
 // Abstract database interface
@@ -59,28 +59,28 @@ export interface IDatabase {
   connect(config: DatabaseConfig): Promise<void>;
   disconnect(): Promise<void>;
   isConnected(): boolean;
-  
+
   // Query execution
-  executeQuery(query: string, params?: any[]): QueryResult;
-  getOne<T = any>(query: string, params?: any[]): T | null;
-  getMany<T = any>(query: string, params?: any[]): T[];
-  getWithPagination<T = any>(query: string, params?: any[], options?: QueryOptions): SelectResult<T>;
-  
+  executeQuery(query: string, params?: any[]): Promise<QueryResult>;
+  getOne<T = any>(query: string, params?: any[]): Promise<T | null>;
+  getMany<T = any>(query: string, params?: any[]): Promise<T[]>;
+  getWithPagination<T = any>(query: string, params?: any[], options?: QueryOptions): Promise<SelectResult<T>>;
+
   // Transaction support
-  beginTransaction(): void;
-  commit(): void;
-  rollback(): void;
-  transaction<T>(callback: TransactionCallback<T>): T;
-  
+  beginTransaction(): Promise<void>;
+  commit(): Promise<void>;
+  rollback(): Promise<void>;
+  transaction<T>(callback: () => Promise<T>): Promise<T>;
+
   // Schema operations
-  createTable(tableName: string, definition: string): void;
-  dropTable(tableName: string): void;
-  tableExists(tableName: string): boolean;
-  
+  createTable(tableName: string, definition: string): Promise<void>;
+  dropTable(tableName: string): Promise<void>;
+  tableExists(tableName: string): Promise<boolean>;
+
   // Utility operations
-  backup(path: string): void;
-  vacuum(): void;
-  pragma(setting: string, value?: string | number): any;
+  backup(path: string): Promise<void>;
+  vacuum(): Promise<void>;
+  pragma(setting: string, value?: string | number): Promise<any>;
 }
 
 // Database service options

@@ -1,10 +1,10 @@
 import type { IDatabase } from '../../types/database.types.js';
 
-export const up = (db: IDatabase): void => {
+export const up = async (db: IDatabase): Promise<void> => {
   // invoice_design_templates and recurring_invoice_templates are already
   // created as separate tables in the initial schema. This migration
   // exists for databases that were created before the table separation.
-  db.executeQuery(`
+  await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS invoice_design_templates (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -16,7 +16,7 @@ export const up = (db: IDatabase): void => {
     )
   `);
 
-  db.executeQuery(`
+  await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS recurring_invoice_templates (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,

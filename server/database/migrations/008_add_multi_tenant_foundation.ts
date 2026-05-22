@@ -1,8 +1,8 @@
 import type { IDatabase } from '../../types/database.types.js';
 
-const hasTable = (db: IDatabase, tableName: string): boolean => {
+const hasTable = async (db: IDatabase, tableName: string): Promise<boolean> => {
   try {
-    const result = db.getMany<{ name: string }>(
+    const result = await db.getMany<{ name: string }>(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
       [tableName]
     );
@@ -12,22 +12,29 @@ const hasTable = (db: IDatabase, tableName: string): boolean => {
   }
 };
 
-const addTenantColumnIfMissing = (db: IDatabase, tableName: string): void => {
-  if (!hasTable(db, tableName)) return;
+const addTenantColumnIfMissing = async (db: IDatabase, tableName: string): Promise<void> => {
+  if (!(await hasTable(db, tableName))) return;
 
-  const tableInfo = db.getMany<{ name: string }>(`PRAGMA table_info(${tableName})`, []);
-  const hasTenantId = tableInfo.some((col) => col.name === 'tenant_id');
-  if (!hasTenantId) {
-    db.executeQuery(`ALTER TABLE ${tableName} ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1`);
+  try {
+    const tableInfo = await db.getMany<{ name: string }>(`PRAGMA table_info(${tableName})`, []);
+    const hasTenantId = tableInfo.some((col) => col.name === 'tenant_id');
+    if (!hasTenantId) {
+      await db.executeQuery(`ALTER TABLE ${tableName} ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1`);
+    }
+  } catch {
+    // PRAGMA not supported (PostgreSQL)
   }
 
-  db.executeQuery(`UPDATE ${tableName} SET tenant_id = 1 WHERE tenant_id IS NULL`);
-  db.executeQuery(`CREATE INDEX IF NOT EXISTS idx_${tableName}_tenant_id ON ${tableName}(tenant_id)`);
+  try {
+    await db.executeQuery(`UPDATE ${tableName} SET tenant_id = 1 WHERE tenant_id IS NULL`);
+    await db.executeQuery(`CREATE INDEX IF NOT EXISTS idx_${tableName}_tenant_id ON ${tableName}(tenant_id)`);
+  } catch {
+    // Index may already exist
+  }
 };
 
-export const up = (db: IDatabase): void => {
-  // Create tenants table (idempotent).
-  db.executeQuery(`
+export const up = async (db: IDatabase): Promise<void> => {
+  await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS tenants (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -38,28 +45,18 @@ export const up = (db: IDatabase): void => {
     )
   `);
 
-  // Seed backward-compatible default tenant.
-  db.executeQuery(`
+  await db.executeQuery(`
     INSERT OR IGNORE INTO tenants (id, name, slug, status)
     VALUES (1, 'Default Tenant', 'default', 'active')
   `);
 
   const tablesToBackfill = [
-    'users',
-    'clients',
-    'invoice_design_templates',
-    'recurring_invoice_templates',
-    'invoices',
-    'invoice_items',
-    'payments',
-    'expenses',
-    'retainers',
-    'reports',
-    'settings',
-    'project_settings',
-    'counters',
-    'report_schedules'
+    'users', 'clients', 'invoice_design_templates', 'recurring_invoice_templates',
+    'invoices', 'invoice_items', 'payments', 'expenses', 'retainers',
+    'reports', 'settings', 'project_settings', 'counters', 'report_schedules'
   ];
 
-  tablesToBackfill.forEach((table) => addTenantColumnIfMissing(db, table));
+  for (const table of tablesToBackfill) {
+    await addTenantColumnIfMissing(db, table);
+  }
 };

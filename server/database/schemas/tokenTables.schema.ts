@@ -3,9 +3,9 @@ import type { IDatabase } from '../../types/database.types.js';
 /**
  * Create token tables for password reset and email verification
  */
-export function createTokenTables(db: IDatabase): void {
+export async function createTokenTables(db: IDatabase): Promise<void> {
   // Password reset tokens table
-  db.executeQuery(`
+  await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -17,18 +17,18 @@ export function createTokenTables(db: IDatabase): void {
     )
   `);
 
-  db.executeQuery(`
-    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id 
+  await db.executeQuery(`
+    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id
     ON password_reset_tokens(user_id)
   `);
 
-  db.executeQuery(`
-    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at 
+  await db.executeQuery(`
+    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at
     ON password_reset_tokens(expires_at)
   `);
 
   // Email verification tokens table
-  db.executeQuery(`
+  await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS email_verification_tokens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -40,13 +40,13 @@ export function createTokenTables(db: IDatabase): void {
     )
   `);
 
-  db.executeQuery(`
-    CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id 
+  await db.executeQuery(`
+    CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id
     ON email_verification_tokens(user_id)
   `);
 
-  db.executeQuery(`
-    CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_expires_at 
+  await db.executeQuery(`
+    CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_expires_at
     ON email_verification_tokens(expires_at)
   `);
 }

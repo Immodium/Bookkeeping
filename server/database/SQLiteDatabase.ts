@@ -2,13 +2,12 @@
 // Implements the abstract database interface with SQLite-specific functionality
 
 import Database from 'better-sqlite3';
-import type { 
-  IDatabase, 
-  DatabaseConfig, 
-  QueryResult, 
-  SelectResult, 
+import type {
+  IDatabase,
+  DatabaseConfig,
+  QueryResult,
+  SelectResult,
   QueryOptions,
-  TransactionCallback
 } from '../types/database.types.js';
 import { getDatabaseConfig, getSQLitePragmas } from './config/sqlite.config.js';
 
@@ -40,13 +39,13 @@ export class SQLiteDatabase implements IDatabase {
       this.connectionTime = Date.now();
       this.db = new Database(config.path, config.options);
       this._connected = true; // Set as connected before applying pragmas
-      
+
       // Apply SQLite-specific pragmas for optimization
       const pragmas = getSQLitePragmas();
       Object.entries(pragmas).forEach(([key, value]) => {
         this.pragma(key, value);
       });
-      
+
       if (process.env.NODE_ENV === 'development') {
         console.log(`✓ Database connected: ${config.path}`);
       }
@@ -66,7 +65,7 @@ export class SQLiteDatabase implements IDatabase {
         this.db.close();
         this._connected = false;
         this.db = null;
-        
+
         if (process.env.NODE_ENV === 'development') {
           console.log('✓ Database disconnected');
         }
@@ -86,14 +85,14 @@ export class SQLiteDatabase implements IDatabase {
   /**
    * Execute a query with parameters and return result metadata
    */
-  executeQuery(query: string, params: any[] = []): QueryResult {
+  async executeQuery(query: string, params: any[] = []): Promise<QueryResult> {
     this.ensureConnected();
-    
+
     try {
       this.queryCount++;
       const stmt = this.db!.prepare(query);
       const result = stmt.run(params) as Database.RunResult;
-      
+
       return {
         changes: result.changes,
         lastInsertRowid: Number(result.lastInsertRowid)
@@ -109,9 +108,9 @@ export class SQLiteDatabase implements IDatabase {
   /**
    * Get a single record
    */
-  getOne<T = Record<string, unknown>>(query: string, params: unknown[] = []): T | null {
+  async getOne<T = Record<string, unknown>>(query: string, params: unknown[] = []): Promise<T | null> {
     this.ensureConnected();
-    
+
     try {
       this.queryCount++;
       const stmt = this.db!.prepare(query);
@@ -127,9 +126,9 @@ export class SQLiteDatabase implements IDatabase {
   /**
    * Get multiple records
    */
-  getMany<T = Record<string, unknown>>(query: string, params: unknown[] = []): T[] {
+  async getMany<T = Record<string, unknown>>(query: string, params: unknown[] = []): Promise<T[]> {
     this.ensureConnected();
-    
+
     try {
       this.queryCount++;
       const stmt = this.db!.prepare(query);
@@ -145,15 +144,15 @@ export class SQLiteDatabase implements IDatabase {
   /**
    * Get records with pagination support
    */
-  getWithPagination<T = Record<string, unknown>>(query: string, params: unknown[] = [], options: QueryOptions = {}): SelectResult<T> {
+  async getWithPagination<T = Record<string, unknown>>(query: string, params: unknown[] = [], options: QueryOptions = {}): Promise<SelectResult<T>> {
     this.ensureConnected();
-    
+
     try {
       const { limit = 50, offset = 0, page, sort = [] } = options;
-      
+
       // Calculate offset from page if provided
       const actualOffset = page ? (page - 1) * limit : offset;
-      
+
       // Add sorting to query
       let finalQuery = query;
       if (sort.length > 0) {
@@ -162,17 +161,17 @@ export class SQLiteDatabase implements IDatabase {
           .join(', ');
         finalQuery += ` ORDER BY ${sortClause}`;
       }
-      
+
       // Add pagination
       finalQuery += ` LIMIT ${limit} OFFSET ${actualOffset}`;
-      
-      const data = this.getMany<T>(finalQuery, params);
-      
+
+      const data = await this.getMany<T>(finalQuery, params);
+
       // Get total count for pagination metadata
       const countQuery = `SELECT COUNT(*) as total FROM (${query}) as count_query`;
-      const totalResult = this.getOne<{ total: number }>(countQuery, params);
+      const totalResult = await this.getOne<{ total: number }>(countQuery, params);
       const total = totalResult?.total || 0;
-      
+
       return {
         data,
         total
@@ -186,7 +185,7 @@ export class SQLiteDatabase implements IDatabase {
   /**
    * Begin a transaction
    */
-  beginTransaction(): void {
+  async beginTransaction(): Promise<void> {
     this.ensureConnected();
     this.db!.exec('BEGIN TRANSACTION');
   }
@@ -194,7 +193,7 @@ export class SQLiteDatabase implements IDatabase {
   /**
    * Commit a transaction
    */
-  commit(): void {
+  async commit(): Promise<void> {
     this.ensureConnected();
     this.db!.exec('COMMIT');
   }
@@ -202,41 +201,65 @@ export class SQLiteDatabase implements IDatabase {
   /**
    * Rollback a transaction
    */
-  rollback(): void {
+  async rollback(): Promise<void> {
     this.ensureConnected();
     this.db!.exec('ROLLBACK');
   }
 
   /**
-   * Execute a callback within a transaction
+   * Execute a callback within a transaction.
+   * Uses SAVEPOINTs for nested calls so that getNextId (which also opens a
+   * transaction internally) works when called from within an outer transaction.
    */
-  transaction<T>(callback: TransactionCallback<T>): T {
+  async transaction<T>(callback: () => Promise<T>): Promise<T> {
     this.ensureConnected();
-    
-    const transaction = this.db!.transaction(callback);
-    return transaction();
+    const nested = this.db!.inTransaction;
+    if (nested) {
+      // Already inside a transaction — use a savepoint for safe nesting
+      const sp = `sp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      this.db!.exec(`SAVEPOINT "${sp}"`);
+      try {
+        const result = await callback();
+        this.db!.exec(`RELEASE SAVEPOINT "${sp}"`);
+        return result;
+      } catch (e) {
+        this.db!.exec(`ROLLBACK TO SAVEPOINT "${sp}"`);
+        this.db!.exec(`RELEASE SAVEPOINT "${sp}"`);
+        throw e;
+      }
+    }
+    // Top-level transaction
+    await this.beginTransaction();
+    try {
+      const result = await callback();
+      await this.commit();
+      return result;
+    } catch (e) {
+      await this.rollback();
+      throw e;
+    }
   }
 
   /**
    * Create a table
    */
-  createTable(tableName: string, definition: string): void {
+  async createTable(tableName: string, definition: string): Promise<void> {
     const query = `CREATE TABLE IF NOT EXISTS ${tableName} (${definition})`;
-    this.executeQuery(query);
+    await this.executeQuery(query);
   }
 
   /**
    * Drop a table
    */
-  dropTable(tableName: string): void {
-    this.executeQuery(`DROP TABLE IF EXISTS ${tableName}`);
+  async dropTable(tableName: string): Promise<void> {
+    await this.executeQuery(`DROP TABLE IF EXISTS ${tableName}`);
   }
 
   /**
    * Check if a table exists
    */
-  tableExists(tableName: string): boolean {
-    const result = this.getOne<{ count: number }>(
+  async tableExists(tableName: string): Promise<boolean> {
+    const result = await this.getOne<{ count: number }>(
       "SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name=?",
       [tableName]
     );
@@ -246,9 +269,9 @@ export class SQLiteDatabase implements IDatabase {
   /**
    * Create a database backup
    */
-  backup(path: string): void {
+  async backup(path: string): Promise<void> {
     this.ensureConnected();
-    
+
     try {
       this.db!.backup(path);
       console.log(`✓ Database backed up to: ${path}`);
@@ -260,7 +283,7 @@ export class SQLiteDatabase implements IDatabase {
   /**
    * Vacuum the database to reclaim space
    */
-  vacuum(): void {
+  async vacuum(): Promise<void> {
     this.ensureConnected();
     this.db!.exec('VACUUM');
   }
@@ -268,11 +291,11 @@ export class SQLiteDatabase implements IDatabase {
   /**
    * Execute a pragma command
    */
-  pragma(setting: string, value?: string | number): any {
+  async pragma(setting: string, value?: string | number): Promise<any> {
     this.ensureConnected();
-    
+
     const query = value !== undefined ? `PRAGMA ${setting} = ${value}` : `PRAGMA ${setting}`;
-    
+
     if (value !== undefined) {
       this.db!.exec(query);
     } else {
@@ -285,16 +308,16 @@ export class SQLiteDatabase implements IDatabase {
    */
   getHealth() {
     this.ensureConnected();
-    
+
     const uptime = Date.now() - this.connectionTime;
     const avgQueryTime = this.queryCount > 0 ? uptime / this.queryCount : 0;
-    
+
     return {
       isConnected: this._connected,
       uptime,
       totalQueries: this.queryCount,
       avgQueryTime,
-      diskUsage: this.pragma('page_count') * this.pragma('page_size')
+      diskUsage: (this.db!.pragma('page_count') as number) * (this.db!.pragma('page_size') as number)
     };
   }
 

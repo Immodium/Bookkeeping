@@ -32,7 +32,10 @@ interface TemplateData {
  */
 export class TemplateService {
   private normalizeTenantId(tenantId?: number): number {
-    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+    if (!tenantId || !Number.isInteger(tenantId) || tenantId <= 0) {
+      throw new Error(`Invalid tenant context: tenantId must be a positive integer, got ${tenantId}`);
+    }
+    return tenantId;
   }
 
   /**
@@ -40,7 +43,7 @@ export class TemplateService {
    */
   async getAllTemplates(tenantId?: number): Promise<Template[]> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getMany<Template>(
+    return await databaseService.getMany<Template>(
       'SELECT * FROM invoice_design_templates WHERE tenant_id = ? ORDER BY name ASC',
       [scopedTenantId]
     );
@@ -55,7 +58,7 @@ export class TemplateService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getOne<Template>(
+    return await databaseService.getOne<Template>(
       'SELECT * FROM invoice_design_templates WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -76,13 +79,13 @@ export class TemplateService {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     // If this is set as default, make sure no other template is default
     if (templateData.is_default) {
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         'UPDATE invoice_design_templates SET is_default = 0 WHERE tenant_id = ? AND is_default = 1',
         [scopedTenantId]
       );
     }
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'INSERT INTO invoice_design_templates (tenant_id, name, content, is_default, variables, created_at, updated_at) VALUES (?, ?, ?, ?, ?, DATETIME(\'now\'), DATETIME(\'now\'))',
       [
         scopedTenantId,
@@ -117,7 +120,7 @@ export class TemplateService {
 
     // If this is set as default, make sure no other template is default
     if (templateData.is_default) {
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         'UPDATE invoice_design_templates SET is_default = 0 WHERE tenant_id = ? AND is_default = 1 AND id != ?',
         [scopedTenantId, id]
       );
@@ -149,7 +152,7 @@ export class TemplateService {
     updates.push('updated_at = DATETIME(\'now\')');
     values.push(id);
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       `UPDATE invoice_design_templates SET ${updates.join(', ')} WHERE id = ? AND tenant_id = ?`,
       [...values, scopedTenantId]
     );
@@ -167,7 +170,7 @@ export class TemplateService {
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
     // Check if template is in use by any invoices
-    const inUse = databaseService.getOne<{ count: number }>(
+    const inUse = await databaseService.getOne<{ count: number }>(
       'SELECT COUNT(*) as count FROM invoices WHERE tenant_id = ? AND design_template_id = ?',
       [scopedTenantId, id]
     );
@@ -176,7 +179,7 @@ export class TemplateService {
       throw new Error('Template is currently in use by invoices and cannot be deleted');
     }
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'DELETE FROM invoice_design_templates WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -189,7 +192,7 @@ export class TemplateService {
    */
   async getDefaultTemplate(tenantId?: number): Promise<Template | null> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getOne<Template>(
+    return await databaseService.getOne<Template>(
       'SELECT * FROM invoice_design_templates WHERE tenant_id = ? AND is_default = 1 LIMIT 1',
       [scopedTenantId]
     );
@@ -210,21 +213,21 @@ export class TemplateService {
       throw new Error('Template not found');
     }
 
-    const operations = () => {
+    const operations = async () => {
       // Remove default from all templates
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         'UPDATE invoice_design_templates SET is_default = 0 WHERE tenant_id = ? AND is_default = 1',
         [scopedTenantId]
       );
 
       // Set new default
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         'UPDATE invoice_design_templates SET is_default = 1, updated_at = DATETIME(\'now\') WHERE id = ? AND tenant_id = ?',
         [id, scopedTenantId]
       );
     };
 
-    databaseService.executeTransaction(operations);
+    await databaseService.executeTransaction(operations);
     return true;
   }
 }

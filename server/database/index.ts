@@ -6,12 +6,24 @@ import { createTables } from './schemas/tables.schema.js';
 import { initializeAllSeeds } from './seeds/initial.seed.js';
 import { getDatabaseConfig } from './config/sqlite.config.js';
 import { runMigrations } from './migrations/index.js';
+import { databaseConfig } from '../config/index.js';
 import type { IDatabase } from '../types/database.types.js';
+
+// Choose database implementation based on DATABASE_URL
+let _db: IDatabase;
+
+if (databaseConfig.usePostgres) {
+  // Dynamically import PostgreSQLDatabase to avoid instantiation when not needed
+  const { PostgreSQLDatabase } = await import('./PostgreSQLDatabase.js');
+  _db = new PostgreSQLDatabase();
+} else {
+  _db = database;
+}
 
 /**
  * Main database instance (singleton)
  */
-export const db: IDatabase = database;
+export const db: IDatabase = _db;
 
 /**
  * Get a fresh database instance (for testing or specific use cases)
@@ -29,21 +41,25 @@ export const initializeDatabase = async (includeSampleData = false): Promise<voi
     // Ensure database is connected before proceeding
     if (!db.isConnected()) {
       console.log('Database not connected, attempting to connect...');
-      await db.connect(getDatabaseConfig());
+      if (databaseConfig.usePostgres) {
+        await db.connect({ path: databaseConfig.databaseUrl! });
+      } else {
+        await db.connect(getDatabaseConfig());
+      }
     }
 
     // Create all tables
-    createTables(db);
+    await createTables(db);
     console.log('✓ Database tables created');
 
     // Run migrations
-    runMigrations(db);
+    await runMigrations(db);
     console.log('✓ Database migrations completed');
 
     // Ensure report scheduling table exists for recurring report generation.
-    db.executeQuery(`
+    await db.executeQuery(`
       CREATE TABLE IF NOT EXISTS report_schedules (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id ${databaseConfig.usePostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
         tenant_id INTEGER NOT NULL DEFAULT 1,
         name TEXT NOT NULL,
         report_type TEXT NOT NULL,
@@ -57,27 +73,39 @@ export const initializeDatabase = async (includeSampleData = false): Promise<voi
         is_active INTEGER NOT NULL DEFAULT 1,
         last_run_at TEXT,
         next_run_at TEXT,
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        created_at TEXT NOT NULL DEFAULT ${databaseConfig.usePostgres ? 'NOW()' : "(datetime('now'))"},
+        updated_at TEXT NOT NULL DEFAULT ${databaseConfig.usePostgres ? 'NOW()' : "(datetime('now'))"}
       )
     `);
-    const reportScheduleColumns = db.getMany<{ name: string }>('PRAGMA table_info(report_schedules)');
-    const hasTenantColumn = reportScheduleColumns.some((column) => column.name === 'tenant_id');
-    if (!hasTenantColumn) {
-      db.executeQuery('ALTER TABLE report_schedules ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1');
-      db.executeQuery('UPDATE report_schedules SET tenant_id = 1 WHERE tenant_id IS NULL');
+
+    // Check for tenant_id column in report_schedules (SQLite only - PostgreSQL already has it from CREATE TABLE)
+    if (!databaseConfig.usePostgres) {
+      try {
+        const reportScheduleColumns = await db.getMany<{ name: string }>('PRAGMA table_info(report_schedules)');
+        const hasTenantColumn = reportScheduleColumns.some((column) => column.name === 'tenant_id');
+        if (!hasTenantColumn) {
+          await db.executeQuery('ALTER TABLE report_schedules ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1');
+          await db.executeQuery('UPDATE report_schedules SET tenant_id = 1 WHERE tenant_id IS NULL');
+        }
+      } catch {
+        // Ignore pragma errors
+      }
     }
-    db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_tenant_id ON report_schedules(tenant_id)');
-    db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_report_type ON report_schedules(report_type)');
-    db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_is_active ON report_schedules(is_active)');
-    db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_next_run_at ON report_schedules(next_run_at)');
-    db.executeQuery(`
-      CREATE TRIGGER IF NOT EXISTS update_report_schedules_updated_at
-      AFTER UPDATE ON report_schedules
-      BEGIN
-        UPDATE report_schedules SET updated_at = datetime('now') WHERE id = NEW.id;
-      END
-    `);
+
+    await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_tenant_id ON report_schedules(tenant_id)');
+    await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_report_type ON report_schedules(report_type)');
+    await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_is_active ON report_schedules(is_active)');
+    await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_report_schedules_next_run_at ON report_schedules(next_run_at)');
+
+    if (!databaseConfig.usePostgres) {
+      await db.executeQuery(`
+        CREATE TRIGGER IF NOT EXISTS update_report_schedules_updated_at
+        AFTER UPDATE ON report_schedules
+        BEGIN
+          UPDATE report_schedules SET updated_at = datetime('now') WHERE id = NEW.id;
+        END
+      `);
+    }
 
     // Initialize seed data
     await initializeAllSeeds(db, includeSampleData);
@@ -112,7 +140,8 @@ export const checkDatabaseHealth = () => {
   if (db instanceof SQLiteDatabase) {
     return db.getHealth();
   }
-  
+
+  // For PostgreSQL or other implementations
   return {
     isConnected: db.isConnected(),
     uptime: 0,
@@ -125,9 +154,9 @@ export const checkDatabaseHealth = () => {
 /**
  * Create a database backup
  */
-export const backupDatabase = (backupPath: string): void => {
+export const backupDatabase = async (backupPath: string): Promise<void> => {
   try {
-    db.backup(backupPath);
+    await db.backup(backupPath);
     console.log(`✓ Database backup created: ${backupPath}`);
   } catch (error) {
     console.error('❌ Database backup failed:', error);
@@ -138,10 +167,10 @@ export const backupDatabase = (backupPath: string): void => {
 /**
  * Optimize database performance
  */
-export const optimizeDatabase = (): void => {
+export const optimizeDatabase = async (): Promise<void> => {
   try {
-    db.vacuum();
-    db.pragma('optimize');
+    await db.vacuum();
+    await db.pragma('optimize');
     console.log('✓ Database optimization complete');
   } catch (error) {
     console.error('❌ Database optimization failed:', error);

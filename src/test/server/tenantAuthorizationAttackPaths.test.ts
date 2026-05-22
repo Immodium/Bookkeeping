@@ -18,7 +18,7 @@ const createdTenantIds: number[] = [];
 const createTenantWithAdmin = async (label: string): Promise<TestTenantContext> => {
   const timestamp = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   const slug = `tenant-${label}-${timestamp}`;
-  const tenantInsert = db.executeQuery(
+  const tenantInsert = await db.executeQuery(
     `
       INSERT INTO tenants (name, slug, status, created_at, updated_at)
       VALUES (?, ?, 'active', datetime('now'), datetime('now'))
@@ -30,7 +30,7 @@ const createTenantWithAdmin = async (label: string): Promise<TestTenantContext> 
 
   const email = `${label}.${timestamp}@example.test`;
   const passwordHash = await bcrypt.hash(`Pass-${label}-123!`, 4);
-  const userInsert = db.executeQuery(
+  const userInsert = await db.executeQuery(
     `
       INSERT INTO users (
         tenant_id, name, email, username, password_hash, role, roles, email_verified, created_at, updated_at
@@ -61,9 +61,9 @@ describe('Cross-tenant authorization attack-path regressions', () => {
     app = await appModule.createApp();
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     for (const tenantId of createdTenantIds.reverse()) {
-      db.executeQuery('DELETE FROM tenants WHERE id = ?', [tenantId]);
+      await db.executeQuery('DELETE FROM tenants WHERE id = ?', [tenantId]);
     }
   });
 

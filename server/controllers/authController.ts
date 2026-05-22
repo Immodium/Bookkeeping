@@ -9,23 +9,26 @@ import { authService } from '../services/AuthService.js';
 import { tenantService } from '../services/TenantService.js';
 import { tokenService } from '../services/TokenService.js';
 import { emailProviderService } from '../services/EmailProviderService.js';
-import { 
-  AppError, 
-  NotFoundError, 
+import { databaseService } from '../core/DatabaseService.js';
+import {
+  AppError,
+  NotFoundError,
   ValidationError,
   AuthenticationError,
   asyncHandler,
   generateToken
 } from '../middleware/index.js';
-import { 
-  LoginRequest, 
-  LoginResponse, 
-  RegisterRequest, 
+import {
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest,
   RegisterResponse,
   RefreshTokenRequest,
-  RefreshTokenResponse 
+  RefreshTokenResponse
 } from '../types/api.types.js';
 import { User, UserPublic } from '../types/index.js';
+import { auditService } from '../services/AuditService.js';
+import { emailTemplateService } from '../services/EmailTemplateService.js';
 
 interface DecodedToken {
   userId: number;
@@ -49,6 +52,13 @@ export const login = asyncHandler(async (req: Request<object, LoginResponse, Log
   const user = await authService.getUserForAuthentication(email);
   
   if (!user) {
+    // Fire-and-forget audit for failed login (unknown user)
+    auditService.log({
+      action: 'auth.login.failure',
+      ipAddress: req.ip ?? undefined,
+      userAgent: req.get('user-agent') ?? undefined,
+      metadata: { reason: 'user_not_found', email }
+    });
     throw new AuthenticationError('Invalid email or password');
   }
 
@@ -67,10 +77,19 @@ export const login = asyncHandler(async (req: Request<object, LoginResponse, Log
     throw new AuthenticationError('Invalid email or password');
   }
   const isValidPassword = await bcrypt.compare(password, user.password_hash);
-  
+
   if (!isValidPassword) {
     // Update failed login attempts
     await authService.updateLoginAttempts(user.id, false);
+    // Fire-and-forget audit for failed login
+    auditService.log({
+      action: 'auth.login.failure',
+      tenantId: user.tenant_id || 1,
+      userId: user.id,
+      ipAddress: req.ip ?? undefined,
+      userAgent: req.get('user-agent') ?? undefined,
+      metadata: { reason: 'invalid_password' }
+    });
     throw new AuthenticationError('Invalid email or password');
   }
 
@@ -91,6 +110,15 @@ export const login = asyncHandler(async (req: Request<object, LoginResponse, Log
 
   // Generate JWT token
   const token = generateToken(user);
+
+  // Fire-and-forget audit for successful login
+  auditService.log({
+    action: 'auth.login.success',
+    tenantId: user.tenant_id || 1,
+    userId: user.id,
+    ipAddress: req.ip ?? undefined,
+    userAgent: req.get('user-agent') ?? undefined
+  });
 
   // Remove sensitive data from response
   const { password_hash, two_factor_secret, backup_codes, ...userResponse } = user;
@@ -114,6 +142,9 @@ export const register = asyncHandler(async (req: Request<object, RegisterRespons
 
   if (!name || !email || !password) {
     throw new ValidationError('Name, email, and password are required');
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    throw new ValidationError('Password must be at least 8 characters');
   }
 
   // Hash password
@@ -164,24 +195,17 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
 
   // Send password reset email when provider is configured and enabled.
   const resetLink = `${process.env.CLIENT_URL || 'http://localhost:8080'}/reset-password?token=${token}`;
+  const tenantId = user.tenant_id || 1;
+  const resetEmailContent = await emailTemplateService.render('password_reset', {
+    name: user.name || 'there',
+    reset_url: resetLink
+  }, tenantId);
   await emailProviderService.sendEmail({
     to: user.email,
-    subject: 'Reset your Slimbooks password',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
-        <h2>Password reset request</h2>
-        <p>Hello ${user.name || 'there'},</p>
-        <p>Use the button below to reset your password.</p>
-        <p style="margin: 24px 0;">
-          <a href="${resetLink}" style="background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">
-            Reset password
-          </a>
-        </p>
-        <p>If you did not request this, you can ignore this email.</p>
-      </div>
-    `,
-    text: `Password reset request\n\nHello ${user.name || 'there'},\n\nReset your password using this link:\n${resetLink}\n\nIf you did not request this, you can ignore this email.`
-  }, { tenantId: user.tenant_id || 1 });
+    subject: resetEmailContent.subject,
+    html: resetEmailContent.html,
+    text: resetEmailContent.text
+  }, { tenantId });
 
   res.json({
     success: true,
@@ -377,6 +401,93 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response): P
 });
 
 /**
+ * Logout - invalidate all existing tokens for the user by bumping token_version
+ */
+export const logout = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const user = req.user;
+
+  if (!user) {
+    throw new AuthenticationError('User not authenticated');
+  }
+
+  await databaseService.executeQuery(
+    `UPDATE users SET token_version = COALESCE(token_version, 0) + 1, updated_at = datetime('now') WHERE id = ?`,
+    [user.id]
+  );
+
+  // Fire-and-forget audit for logout
+  auditService.log({
+    action: 'auth.logout',
+    tenantId: req.tenantId,
+    userId: user.id,
+    ipAddress: req.ip ?? undefined,
+    userAgent: req.get('user-agent') ?? undefined
+  });
+
+  res.json({
+    success: true,
+    message: 'Logged out successfully'
+  });
+});
+
+/**
+ * Tenant self-service registration
+ */
+export const registerTenant = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { tenantName, name, email, password } = req.body as {
+    tenantName?: string;
+    name?: string;
+    email?: string;
+    password?: string;
+  };
+
+  if (!tenantName || !name || !email || !password) {
+    throw new ValidationError('tenantName, name, email, and password are required');
+  }
+
+  if (password.length < 8) {
+    throw new ValidationError('Password must be at least 8 characters');
+  }
+
+  const { tenantId, adminUserId } = await tenantService.createTenant({
+    name: tenantName,
+    admin: { name, email, password }
+  });
+
+  // Fetch the newly created admin user to generate a token
+  const newUser = await authService.getUserById(adminUserId);
+  if (!newUser) {
+    throw new AppError('Failed to retrieve newly created user', 500);
+  }
+
+  const token = generateToken(newUser as User);
+
+  // Send welcome email (fire-and-forget — don't fail registration if email fails)
+  const appUrl = process.env.APP_URL || 'http://localhost:5173';
+  emailTemplateService.render('welcome', { name, app_url: appUrl }, tenantId)
+    .then(welcomeContent => emailProviderService.sendEmail({
+      to: email,
+      subject: welcomeContent.subject,
+      html: welcomeContent.html,
+      text: welcomeContent.text
+    }, { tenantId }))
+    .catch(() => {
+      // Ignore email errors — don't fail registration
+    });
+
+  const { password_hash, two_factor_secret, backup_codes, ...userResponse } = newUser;
+
+  res.status(201).json({
+    success: true,
+    data: {
+      user: userResponse as UserPublic,
+      token
+    },
+    message: 'Tenant registered successfully'
+  });
+});
+
+/**
  * Change password
  */
 export const changePassword = asyncHandler(async (req: Request, res: Response): Promise<void> => {
@@ -413,6 +524,15 @@ export const changePassword = asyncHandler(async (req: Request, res: Response): 
 
   // Update password using service
   await authService.updateUserPassword(user.id, hashedPassword);
+
+  // Fire-and-forget audit for password change
+  auditService.log({
+    action: 'auth.password_changed',
+    tenantId: req.tenantId,
+    userId: user.id,
+    ipAddress: req.ip ?? undefined,
+    userAgent: req.get('user-agent') ?? undefined
+  });
 
   res.json({
     success: true,

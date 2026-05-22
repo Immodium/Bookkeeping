@@ -104,6 +104,7 @@ const usersSchema: TableSchema = {
     { name: 'role', type: 'TEXT', constraints: ["DEFAULT 'user'"] },
     { name: 'email_verified', type: 'INTEGER', constraints: ['DEFAULT 0'] },
     { name: 'google_id', type: 'TEXT', constraints: ['UNIQUE'] },
+    { name: 'roles', type: 'TEXT' },
     { name: 'two_factor_secret', type: 'TEXT' },
     { name: 'backup_codes', type: 'TEXT' },
     { name: 'last_login', type: 'TEXT' },
@@ -111,6 +112,7 @@ const usersSchema: TableSchema = {
     { name: 'account_locked_until', type: 'TEXT' },
     { name: 'password_updated_at', type: 'TEXT' },
     { name: 'email_verified_at', type: 'TEXT' },
+    { name: 'token_version', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
     { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
     { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
   ],
@@ -449,6 +451,148 @@ const countersSchema: TableSchema = {
   ]
 };
 
+/**
+ * Audit log table for tracking user actions and system events
+ */
+const auditLogSchema: TableSchema = {
+  name: 'audit_log',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER' },
+    { name: 'user_id', type: 'INTEGER' },
+    { name: 'action', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'resource_type', type: 'TEXT' },
+    { name: 'resource_id', type: 'TEXT' },
+    { name: 'ip_address', type: 'TEXT' },
+    { name: 'user_agent', type: 'TEXT' },
+    { name: 'metadata_json', type: 'TEXT' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE SET NULL'
+  ]
+};
+
+/**
+ * Dunning events table for tracking payment failure follow-up emails
+ */
+const dunningEventsSchema: TableSchema = {
+  name: 'dunning_events',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'event_type', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'sent_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'metadata_json', type: 'TEXT' }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
+  ]
+};
+
+/**
+ * API keys table for programmatic access
+ */
+const apiKeysSchema: TableSchema = {
+  name: 'api_keys',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'user_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'key_hash', type: 'TEXT', constraints: ['NOT NULL UNIQUE'] },
+    { name: 'key_prefix', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'scopes', type: 'TEXT', constraints: ["NOT NULL DEFAULT '[\"read\",\"write\"]'"] },
+    { name: 'last_used_at', type: 'TEXT' },
+    { name: 'expires_at', type: 'TEXT' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
+    'FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE'
+  ]
+};
+
+/**
+ * Outbound webhook endpoints table
+ */
+const webhookEndpointsSchema: TableSchema = {
+  name: 'webhook_endpoints',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'url', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'secret', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'events', type: 'TEXT', constraints: ["NOT NULL DEFAULT '[\"*\"]'"] },
+    { name: 'is_active', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
+    { name: 'description', type: 'TEXT' },
+    { name: 'last_triggered_at', type: 'TEXT' },
+    { name: 'failure_count', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
+  ]
+};
+
+/**
+ * Webhook delivery log table
+ */
+const webhookDeliveriesSchema: TableSchema = {
+  name: 'webhook_deliveries',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'endpoint_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'event_type', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'payload_json', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'response_status', type: 'INTEGER' },
+    { name: 'response_body', type: 'TEXT' },
+    { name: 'attempt_count', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
+    { name: 'delivered_at', type: 'TEXT' },
+    { name: 'failed_at', type: 'TEXT' },
+    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (endpoint_id) REFERENCES webhook_endpoints (id) ON DELETE CASCADE'
+  ]
+};
+
+/**
+ * Processed webhook event IDs for idempotency deduplication
+ */
+const processedWebhookEventsSchema: TableSchema = {
+  name: 'processed_webhook_events',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'event_id', type: 'TEXT', constraints: ['NOT NULL UNIQUE'] },
+    { name: 'provider', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'stripe'"] },
+    { name: 'processed_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ]
+};
+
+/**
+ * Usage records for metering per-tenant usage by month
+ */
+const usageRecordsSchema: TableSchema = {
+  name: 'usage_records',
+  columns: [
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
+    { name: 'metric', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'value', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
+    { name: 'period', type: 'TEXT', constraints: ['NOT NULL'] },
+    { name: 'period_type', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'monthly'"] },
+    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+  ],
+  constraints: [
+    'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
+    'UNIQUE (tenant_id, metric, period)'
+  ]
+};
+
 // Export all schemas
 export const tableSchemas: TableSchema[] = [
   tenantsSchema,
@@ -467,14 +611,21 @@ export const tableSchemas: TableSchema[] = [
   reportsSchema,
   settingsSchema,
   projectSettingsSchema,
-  countersSchema
+  countersSchema,
+  dunningEventsSchema,
+  auditLogSchema,
+  apiKeysSchema,
+  webhookEndpointsSchema,
+  webhookDeliveriesSchema,
+  usageRecordsSchema,
+  processedWebhookEventsSchema
 ];
 
 /**
  * Create all database tables
  */
-export const createTables = (db: IDatabase): void => {
-  tableSchemas.forEach(schema => {
+export const createTables = async (db: IDatabase): Promise<void> => {
+  for (const schema of tableSchemas) {
     const columnDefs = schema.columns
       .map(col => `${col.name} ${col.type} ${col.constraints?.join(' ') || ''}`)
       .join(', ');
@@ -485,11 +636,11 @@ export const createTables = (db: IDatabase): void => {
 
     const createTableSQL = `CREATE TABLE IF NOT EXISTS ${schema.name} (${columnDefs}${constraints})`;
 
-    db.executeQuery(createTableSQL);
-  });
+    await db.executeQuery(createTableSQL);
+  }
 
   // Ensure a default tenant exists for backwards-compatible single-tenant mode.
-  db.executeQuery(`
+  await db.executeQuery(`
     INSERT OR IGNORE INTO tenants (id, name, slug, status)
     VALUES (1, 'Default Tenant', 'default', 'active')
   `);
@@ -509,7 +660,7 @@ export const createTables = (db: IDatabase): void => {
     'billing.max_invoices_per_month': 10000
   });
 
-  db.executeQuery(
+  await db.executeQuery(
     `
       INSERT OR IGNORE INTO subscription_plans (
         code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
@@ -517,7 +668,7 @@ export const createTables = (db: IDatabase): void => {
     `,
     ['trial', 'Trial', 0, 14, trialFeatures]
   );
-  db.executeQuery(
+  await db.executeQuery(
     `
       INSERT OR IGNORE INTO subscription_plans (
         code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
@@ -526,7 +677,7 @@ export const createTables = (db: IDatabase): void => {
     ['starter', 'Starter', 2900, 0, starterFeatures]
   );
 
-  db.executeQuery(`
+  await db.executeQuery(`
     INSERT OR IGNORE INTO tenant_subscriptions (
       tenant_id,
       plan_id,
@@ -556,7 +707,7 @@ export const createTables = (db: IDatabase): void => {
   `);
 
   // Create token tables for password reset and email verification
-  createTokenTables(db);
+  await createTokenTables(db);
 };
 
 /**

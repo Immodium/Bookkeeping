@@ -55,7 +55,10 @@ interface RecurringInvoiceTemplateData {
  */
 export class RecurringInvoiceTemplateService {
   private normalizeTenantId(tenantId?: number): number {
-    return tenantId && Number.isInteger(tenantId) && tenantId > 0 ? tenantId : 1;
+    if (!tenantId || !Number.isInteger(tenantId) || tenantId <= 0) {
+      throw new Error(`Invalid tenant context: tenantId must be a positive integer, got ${tenantId}`);
+    }
+    return tenantId;
   }
 
   /**
@@ -63,7 +66,7 @@ export class RecurringInvoiceTemplateService {
    */
   async getAllRecurringTemplates(tenantId?: number): Promise<RecurringInvoiceTemplate[]> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getMany<RecurringInvoiceTemplate>(
+    return await databaseService.getMany<RecurringInvoiceTemplate>(
       `SELECT rt.*, c.name as client_name, c.email as client_email
        FROM recurring_invoice_templates rt
        LEFT JOIN clients c ON rt.client_id = c.id AND c.tenant_id = rt.tenant_id
@@ -78,7 +81,7 @@ export class RecurringInvoiceTemplateService {
    */
   async getActiveRecurringTemplates(tenantId?: number): Promise<RecurringInvoiceTemplate[]> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getMany<RecurringInvoiceTemplate>(
+    return await databaseService.getMany<RecurringInvoiceTemplate>(
       `SELECT rt.*, c.name as client_name, c.email as client_email
        FROM recurring_invoice_templates rt
        LEFT JOIN clients c ON rt.client_id = c.id AND c.tenant_id = rt.tenant_id
@@ -94,12 +97,12 @@ export class RecurringInvoiceTemplateService {
   async getTemplatesDueForProcessing(tenantId?: number): Promise<RecurringInvoiceTemplate[]> {
     if (tenantId) {
       const scopedTenantId = this.normalizeTenantId(tenantId);
-      return databaseService.getMany<RecurringInvoiceTemplate>(
+      return await databaseService.getMany<RecurringInvoiceTemplate>(
         'SELECT * FROM recurring_invoice_templates WHERE tenant_id = ? AND is_active = 1 AND next_invoice_date <= DATE(\'now\') ORDER BY next_invoice_date ASC',
         [scopedTenantId]
       );
     }
-    return databaseService.getMany<RecurringInvoiceTemplate>(
+    return await databaseService.getMany<RecurringInvoiceTemplate>(
       'SELECT * FROM recurring_invoice_templates WHERE is_active = 1 AND next_invoice_date <= DATE(\'now\') ORDER BY next_invoice_date ASC'
     );
   }
@@ -113,7 +116,7 @@ export class RecurringInvoiceTemplateService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getOne<RecurringInvoiceTemplate>(
+    return await databaseService.getOne<RecurringInvoiceTemplate>(
       'SELECT * FROM recurring_invoice_templates WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -128,7 +131,7 @@ export class RecurringInvoiceTemplateService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getMany<RecurringInvoiceTemplate>(
+    return await databaseService.getMany<RecurringInvoiceTemplate>(
       'SELECT * FROM recurring_invoice_templates WHERE tenant_id = ? AND client_id = ? ORDER BY name ASC',
       [scopedTenantId, clientId]
     );
@@ -173,7 +176,7 @@ export class RecurringInvoiceTemplateService {
       throw new Error('Client not found');
     }
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       `INSERT INTO recurring_invoice_templates (
         tenant_id, name, client_id, amount, description, frequency, payment_terms, 
         next_invoice_date, is_active, line_items, tax_amount, tax_rate_id, 
@@ -308,7 +311,7 @@ export class RecurringInvoiceTemplateService {
     updates.push('updated_at = DATETIME(\'now\')');
     values.push(id);
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       `UPDATE recurring_invoice_templates SET ${updates.join(', ')} WHERE id = ? AND tenant_id = ?`,
       [...values, scopedTenantId]
     );
@@ -326,7 +329,7 @@ export class RecurringInvoiceTemplateService {
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
     // Check if template is in use by any invoices
-    const inUse = databaseService.getOne<{ count: number }>(
+    const inUse = await databaseService.getOne<{ count: number }>(
       'SELECT COUNT(*) as count FROM invoices WHERE tenant_id = ? AND recurring_template_id = ?',
       [scopedTenantId, id]
     );
@@ -335,7 +338,7 @@ export class RecurringInvoiceTemplateService {
       throw new Error('Recurring template is currently in use by invoices and cannot be deleted');
     }
 
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'DELETE FROM recurring_invoice_templates WHERE id = ? AND tenant_id = ?',
       [id, scopedTenantId]
     );
@@ -352,7 +355,7 @@ export class RecurringInvoiceTemplateService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'UPDATE recurring_invoice_templates SET is_active = ?, updated_at = DATETIME(\'now\') WHERE id = ? AND tenant_id = ?',
       [isActive ? 1 : 0, id, scopedTenantId]
     );
@@ -373,7 +376,7 @@ export class RecurringInvoiceTemplateService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const result = databaseService.executeQuery(
+    const result = await databaseService.executeQuery(
       'UPDATE recurring_invoice_templates SET next_invoice_date = ?, updated_at = DATETIME(\'now\') WHERE id = ? AND tenant_id = ?',
       [nextDate, id, scopedTenantId]
     );

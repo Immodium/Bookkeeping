@@ -273,7 +273,7 @@ export class PdfService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getOne<InvoiceWithClient>(`
+    return await databaseService.getOne<InvoiceWithClient>(`
       SELECT i.*, c.name as client_name 
       FROM invoices i 
       LEFT JOIN clients c ON i.client_id = c.id
@@ -439,7 +439,7 @@ export class PdfService {
       return false;
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    const invoice = databaseService.getOne<{ id: number }>(
+    const invoice = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM invoices WHERE id = ? AND tenant_id = ?',
       [invoiceId, scopedTenantId]
     );
@@ -462,7 +462,7 @@ export class PdfService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    return databaseService.getOne<{
+    return await databaseService.getOne<{
       id: number;
       invoice_number: string;
       client_id: number;
@@ -494,8 +494,8 @@ export class PdfService {
 
       // Only log if there's an activity log table
       // This is optional functionality
-      if (databaseService.tableExists('pdf_activity_log')) {
-        databaseService.executeQuery(`
+      if (await databaseService.tableExists('pdf_activity_log')) {
+        await databaseService.executeQuery(`
           INSERT INTO pdf_activity_log (invoice_id, action, metadata, created_at)
           VALUES (?, ?, ?, ?)
         `, [logData.invoice_id, logData.action, logData.metadata, logData.created_at]);

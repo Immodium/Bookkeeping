@@ -91,13 +91,13 @@ export class InvoiceNumberService {
     if (counter) {
       nextNumber = counter.value + 1;
       // Update counter
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         'UPDATE counters SET value = ?, updated_at = DATETIME(\'now\') WHERE tenant_id = ? AND name = ?',
         [nextNumber, tenantId, counterKey]
       );
     } else {
       // Create counter if it doesn't exist
-      databaseService.executeQuery(
+      await databaseService.executeQuery(
         'INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (?, ?, ?, DATETIME(\'now\'), DATETIME(\'now\'))',
         [tenantId, counterKey, nextNumber]
       );

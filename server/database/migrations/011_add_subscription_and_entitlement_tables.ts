@@ -1,15 +1,19 @@
 import type { IDatabase } from '../../types/database.types.js';
 
-const hasTable = (db: IDatabase, tableName: string): boolean => {
-  const result = db.getMany<{ name: string }>(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-    [tableName]
-  );
-  return result.length > 0;
+const hasTable = async (db: IDatabase, tableName: string): Promise<boolean> => {
+  try {
+    const result = await db.getMany<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+      [tableName]
+    );
+    return result.length > 0;
+  } catch {
+    return false;
+  }
 };
 
-export const up = (db: IDatabase): void => {
-  db.executeQuery(`
+export const up = async (db: IDatabase): Promise<void> => {
+  await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS subscription_plans (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       code TEXT UNIQUE NOT NULL,
@@ -25,7 +29,7 @@ export const up = (db: IDatabase): void => {
     )
   `);
 
-  db.executeQuery(`
+  await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS tenant_subscriptions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tenant_id INTEGER NOT NULL,
@@ -48,7 +52,7 @@ export const up = (db: IDatabase): void => {
     )
   `);
 
-  db.executeQuery(`
+  await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS tenant_entitlements (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tenant_id INTEGER NOT NULL,
@@ -63,10 +67,10 @@ export const up = (db: IDatabase): void => {
     )
   `);
 
-  db.executeQuery('CREATE INDEX IF NOT EXISTS idx_tenant_subscriptions_tenant_id ON tenant_subscriptions(tenant_id)');
-  db.executeQuery('CREATE INDEX IF NOT EXISTS idx_tenant_subscriptions_plan_id ON tenant_subscriptions(plan_id)');
-  db.executeQuery('CREATE INDEX IF NOT EXISTS idx_tenant_entitlements_tenant_id ON tenant_entitlements(tenant_id)');
-  db.executeQuery('CREATE INDEX IF NOT EXISTS idx_tenant_entitlements_key ON tenant_entitlements(key)');
+  await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_tenant_subscriptions_tenant_id ON tenant_subscriptions(tenant_id)');
+  await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_tenant_subscriptions_plan_id ON tenant_subscriptions(plan_id)');
+  await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_tenant_entitlements_tenant_id ON tenant_entitlements(tenant_id)');
+  await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_tenant_entitlements_key ON tenant_entitlements(key)');
 
   const trialFeatures = JSON.stringify({
     'reports.enabled': true,
@@ -83,51 +87,28 @@ export const up = (db: IDatabase): void => {
     'billing.max_invoices_per_month': 10000
   });
 
-  db.executeQuery(
-    `
-      INSERT OR IGNORE INTO subscription_plans (
-        code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
-      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, datetime('now'), datetime('now'))
-    `,
+  await db.executeQuery(
+    `INSERT OR IGNORE INTO subscription_plans (code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, datetime('now'), datetime('now'))`,
     ['trial', 'Trial', 0, 14, trialFeatures]
   );
-  db.executeQuery(
-    `
-      INSERT OR IGNORE INTO subscription_plans (
-        code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
-      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, datetime('now'), datetime('now'))
-    `,
+  await db.executeQuery(
+    `INSERT OR IGNORE INTO subscription_plans (code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, datetime('now'), datetime('now'))`,
     ['starter', 'Starter', 2900, 0, starterFeatures]
   );
 
-  if (hasTable(db, 'tenants')) {
-    db.executeQuery(`
+  if (await hasTable(db, 'tenants')) {
+    await db.executeQuery(`
       INSERT OR IGNORE INTO tenant_subscriptions (
-        tenant_id,
-        plan_id,
-        status,
-        started_at,
-        current_period_start,
-        current_period_end,
-        cancel_at_period_end,
-        provider,
-        created_at,
-        updated_at
+        tenant_id, plan_id, status, started_at, current_period_start, current_period_end,
+        cancel_at_period_end, provider, created_at, updated_at
       )
       SELECT
-        t.id,
-        sp.id,
+        t.id, sp.id,
         CASE WHEN sp.code = 'trial' THEN 'trialing' ELSE 'active' END,
-        datetime('now'),
-        datetime('now'),
-        datetime('now', '+1 month'),
-        0,
-        'internal',
-        datetime('now'),
-        datetime('now')
+        datetime('now'), datetime('now'), datetime('now', '+1 month'),
+        0, 'internal', datetime('now'), datetime('now')
       FROM tenants t
-      INNER JOIN subscription_plans sp
-        ON sp.code = 'starter'
+      INNER JOIN subscription_plans sp ON sp.code = 'starter'
     `);
   }
 };

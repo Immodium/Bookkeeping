@@ -21,6 +21,12 @@ import recurringInvoiceTemplateRoutes from './recurringInvoiceTemplateRoutes.js'
 import databaseRoutes from './databaseRoutes.js';
 import tenantRoutes from './tenantRoutes.js';
 import billingRoutes from './billingRoutes.js';
+import auditRoutes from './auditRoutes.js';
+import adminRoutes from './adminRoutes.js';
+import gdprRoutes from './gdprRoutes.js';
+import emailTemplateRoutes from './emailTemplateRoutes.js';
+import webhookRoutes from './webhookRoutes.js';
+import usageRoutes from './usageRoutes.js';
 
 const router: Router = Router();
 
@@ -43,6 +49,12 @@ router.use('/api/recurring-templates', recurringInvoiceTemplateRoutes);
 router.use('/api/db', databaseRoutes);
 router.use('/api/tenants', tenantRoutes);
 router.use('/api/billing', billingRoutes);
+router.use('/api/audit', auditRoutes);
+router.use('/api/admin', adminRoutes);
+router.use('/api/gdpr', gdprRoutes);
+router.use('/api/email-templates', emailTemplateRoutes);
+router.use('/api/webhooks', webhookRoutes);
+router.use('/api/usage', usageRoutes);
 
 // Health check routes
 router.use('/api/health', healthRoutes);

@@ -205,7 +205,7 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
     subject: resetEmailContent.subject,
     html: resetEmailContent.html,
     text: resetEmailContent.text
-  }, { tenantId });
+  });
 
   res.json({
     success: true,
@@ -470,7 +470,7 @@ export const registerTenant = asyncHandler(async (req: Request, res: Response): 
       subject: welcomeContent.subject,
       html: welcomeContent.html,
       text: welcomeContent.text
-    }, { tenantId }))
+    }))
     .catch(() => {
       // Ignore email errors — don't fail registration
     });

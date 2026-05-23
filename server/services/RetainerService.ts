@@ -47,6 +47,7 @@ export class RetainerService {
         r.id,
         r.client_id,
         COALESCE(c.name, 'Unknown Client') AS client_name,
+        c.email AS client_email,
         r.name,
         r.description,
         r.amount,

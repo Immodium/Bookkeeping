@@ -12,6 +12,8 @@ import {
 } from '../middleware/index.js';
 import { InvoiceStatus } from '../types/index.js';
 import { InvoiceRequest } from '../types/api.types.js';
+import { emailTemplateService } from '../services/EmailTemplateService.js';
+import { emailProviderService } from '../services/EmailProviderService.js';
 
 /**
  * Get all invoices
@@ -479,4 +481,75 @@ export const previewNextInvoiceNumber = asyncHandler(async (req: Request, res: R
       throw new ValidationError('Failed to preview invoice number');
     }
   }
+});
+
+/**
+ * Send invoice via email
+ */
+export const sendInvoiceEmail = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const invoiceId = parseInt(req.params.id, 10);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+
+  if (isNaN(invoiceId)) throw new ValidationError('Invalid invoice ID');
+
+  const invoice = await invoiceService.getInvoiceById(invoiceId, tenantId);
+  if (!invoice) throw new NotFoundError('Invoice');
+
+  const toEmail = req.body?.to || invoice.client_email;
+  if (!toEmail) throw new ValidationError('No recipient email address. Please set a client email.');
+
+  // Build line items HTML
+  let lineItemsHtml = '';
+  if (invoice.line_items || (invoice as Record<string, unknown>).items) {
+    try {
+      const rawItems = invoice.line_items || (invoice as Record<string, unknown>).items || '[]';
+      const items = JSON.parse(String(rawItems)) as Record<string, unknown>[];
+      if (Array.isArray(items) && items.length > 0) {
+        const rows = items.map((item: Record<string, unknown>) =>
+          `<tr>
+            <td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;">${item.description || item.name || ''}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;text-align:center;">${item.quantity || 1}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;text-align:right;">${item.unit_price || item.price || ''}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;text-align:right;">${item.total || item.amount || ''}</td>
+          </tr>`
+        ).join('');
+        lineItemsHtml = `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:20px 0;">
+          <thead><tr style="background-color:#f5f5f5;">
+            <th style="padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase;color:#666;">Description</th>
+            <th style="padding:10px 12px;text-align:center;font-size:12px;text-transform:uppercase;color:#666;">Qty</th>
+            <th style="padding:10px 12px;text-align:right;font-size:12px;text-transform:uppercase;color:#666;">Rate</th>
+            <th style="padding:10px 12px;text-align:right;font-size:12px;text-transform:uppercase;color:#666;">Amount</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+      }
+    } catch { /* ignore parse errors */ }
+  }
+
+  const currency = invoice.currency || 'USD';
+  const invoiceUrl = `${process.env.APP_URL || process.env.CLIENT_URL || 'http://localhost:5173'}/invoices`;
+
+  const emailContent = await emailTemplateService.render('invoice', {
+    client_name: invoice.client_name || 'Valued Client',
+    invoice_number: invoice.invoice_number,
+    invoice_date: invoice.issue_date || (invoice.created_at ? String(invoice.created_at).split('T')[0] : ''),
+    due_date: invoice.due_date || 'N/A',
+    total_amount: `${currency} ${(Number(invoice.total_amount || (invoice as Record<string, unknown>).amount || 0)).toFixed(2)}`,
+    currency,
+    invoice_url: invoiceUrl,
+    line_items_html: lineItemsHtml
+  }, tenantId);
+
+  const result = await emailProviderService.sendEmail({
+    to: toEmail,
+    subject: emailContent.subject,
+    html: emailContent.html,
+    text: emailContent.text
+  });
+
+  if (result.success) {
+    await invoiceService.markInvoiceAsSent(invoiceId, undefined, tenantId);
+  }
+
+  res.json({ success: result.success, message: result.message });
 });

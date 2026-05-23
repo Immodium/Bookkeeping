@@ -132,12 +132,12 @@ export interface ProjectSettings {
     secret_key?: string; // Optional for client-side use
     configured: boolean;
   };
-  email: {
+  email?: {
     enabled: boolean;
     smtp_host: string;
     smtp_port: number;
     smtp_user: string;
-    smtp_pass?: string; // Optional for client-side use
+    smtp_pass?: string;
     email_from: string;
     configured: boolean;
   };

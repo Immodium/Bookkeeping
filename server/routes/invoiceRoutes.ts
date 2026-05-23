@@ -15,7 +15,8 @@ import {
   markInvoiceAsSent,
   getOverdueInvoices,
   generateInvoiceNumber,
-  previewNextInvoiceNumber
+  previewNextInvoiceNumber,
+  sendInvoiceEmail
 } from '../controllers/index.js';
 import {
   requireAuth,
@@ -70,10 +71,17 @@ router.patch('/:id/status',
 );
 
 // Mark invoice as sent
-router.patch('/:id/sent', 
+router.patch('/:id/sent',
   validationSets.updateInvoice.slice(0, 1), // Just ID validation
   validateRequest,
   markInvoiceAsSent
+);
+
+// Send invoice via email
+router.post('/:id/email',
+  validationSets.updateInvoice.slice(0, 1), // Just ID validation
+  validateRequest,
+  sendInvoiceEmail
 );
 
 // Delete invoice

@@ -5,7 +5,8 @@ import {
   createRetainer,
   updateRetainer,
   deleteRetainer,
-  getRetainerStats
+  getRetainerStats,
+  sendRetainerEmail
 } from '../controllers/retainerController.js';
 import {
   requireAuth,
@@ -48,6 +49,13 @@ router.delete(
   validationSets.getRetainerById,
   validateRequest,
   deleteRetainer
+);
+
+router.post(
+  '/:id/email',
+  validationSets.getRetainerById,
+  validateRequest,
+  sendRetainerEmail
 );
 
 export default router;

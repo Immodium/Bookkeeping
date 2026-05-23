@@ -446,69 +446,6 @@ export function useGeneralSettings() {
   });
 }
 
-// Default email settings
-const defaultEmailSettings = {
-  email_provider: 'smtp',
-  smtp_host: '',
-  smtp_port: 587,
-  smtp_user: '',
-  smtp_password: '',
-  smtp_secure: true,
-  sendgrid_api_key: '',
-  sendgrid_from: '',
-  resend_api_key: '',
-  from_email: '',
-  from_name: '',
-  isEnabled: false
-} as const;
-
-// Specialized hook for email settings
-export function useEmailSettings() {
-  return useSettings({
-    settingsKey: 'email_settings',
-    apiEndpoint: '/api/settings/email.email_settings',
-    saveEndpoint: '/api/settings/',
-    category: 'email',
-    defaultSettings: defaultEmailSettings,
-    transformLoad: (data: unknown) => {
-      if (!data || typeof data !== 'object') {
-        return defaultEmailSettings;
-      }
-
-      const saved = data as Record<string, unknown>;
-      const smtpSecureValue = saved.smtp_secure;
-      const isSmtpSecure = typeof smtpSecureValue === 'string'
-        ? smtpSecureValue.toLowerCase() === 'true'
-        : Boolean(smtpSecureValue);
-
-      return {
-        email_provider: typeof saved.email_provider === 'string' ? saved.email_provider : defaultEmailSettings.email_provider,
-        smtp_host: typeof saved.smtp_host === 'string' ? saved.smtp_host : defaultEmailSettings.smtp_host,
-        smtp_port: typeof saved.smtp_port === 'number' ? saved.smtp_port : defaultEmailSettings.smtp_port,
-        smtp_user: typeof saved.smtp_user === 'string' ? saved.smtp_user : defaultEmailSettings.smtp_user,
-        smtp_password: typeof saved.smtp_password === 'string' ? saved.smtp_password : defaultEmailSettings.smtp_password,
-        smtp_secure: isSmtpSecure,
-        sendgrid_api_key: typeof saved.sendgrid_api_key === 'string' ? saved.sendgrid_api_key : defaultEmailSettings.sendgrid_api_key,
-        sendgrid_from: typeof saved.sendgrid_from === 'string' ? saved.sendgrid_from : defaultEmailSettings.sendgrid_from,
-        resend_api_key: typeof saved.resend_api_key === 'string' ? saved.resend_api_key : defaultEmailSettings.resend_api_key,
-        from_email: typeof saved.from_email === 'string' ? saved.from_email : defaultEmailSettings.from_email,
-        from_name: typeof saved.from_name === 'string' ? saved.from_name : defaultEmailSettings.from_name,
-        isEnabled: typeof saved.isEnabled === 'boolean' ? saved.isEnabled : Boolean(saved.is_enabled ?? defaultEmailSettings.isEnabled)
-      };
-    },
-    transformSave: (data) => ({
-      key: 'email_settings',
-      value: data,
-      category: 'email'
-    }),
-    onSaveSuccess: () => {
-      toast.success('Email settings saved successfully');
-    },
-    onSaveError: (error) => {
-      toast.error(`Failed to save email settings: ${error.message}`);
-    }
-  });
-}
 
 // Default notification settings
 const defaultNotificationSettings = {

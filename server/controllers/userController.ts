@@ -240,7 +240,7 @@ export const createUser = asyncHandler(async (req: Request<object, object, Creat
         subject: inviteContent.subject,
         html: inviteContent.html,
         text: inviteContent.text
-      }, { tenantId });
+      });
     }
 
     res.status(201).json({ 

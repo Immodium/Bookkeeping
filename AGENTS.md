@@ -10,6 +10,12 @@ Slimbooks is a self-hosted FreshBooks-clone invoicing app (React 18 + TypeScript
 - The backend auto-creates `data/slimbooks.db` on first run, runs migrations, and seeds sample data in development.
 - Default admin credentials: `admin@slimbooks.app` / `password`.
 
+### PostgreSQL Requirement (Cloud Preference)
+- If the current `main` branch requires PostgreSQL to start the backend, always install PostgreSQL (`postgresql` + `postgresql-client`) before restarting the app.
+- Ensure the PostgreSQL cluster is online, and create local dev credentials if missing (`slimbooks` role + `slimbooks` database).
+- Start dev sessions with `DATABASE_URL=postgresql://slimbooks:slimbooks@localhost:5432/slimbooks?sslmode=disable` so backend initialization and migrations can complete.
+- Confirm startup with both endpoints after restart: frontend `http://localhost:8080` and backend health `http://localhost:3002/api/health`.
+
 ### Key Commands
 | Task | Command |
 |------|---------|

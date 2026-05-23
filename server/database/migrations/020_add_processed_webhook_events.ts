@@ -3,10 +3,10 @@ import type { IDatabase } from '../../types/database.types.js';
 export const up = async (db: IDatabase): Promise<void> => {
   await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS processed_webhook_events (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      id          SERIAL PRIMARY KEY,
       event_id    TEXT NOT NULL UNIQUE,
       provider    TEXT NOT NULL DEFAULT 'stripe',
-      processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+      processed_at TEXT NOT NULL DEFAULT (NOW())
     )
   `);
 

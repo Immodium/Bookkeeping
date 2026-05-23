@@ -367,12 +367,12 @@ class EmailTemplateService {
     );
     if (existing) {
       await databaseService.executeQuery(
-        "UPDATE settings SET value = ?, updated_at = datetime('now') WHERE tenant_id = ? AND key = ?",
+        "UPDATE settings SET value = ?, updated_at = NOW() WHERE tenant_id = ? AND key = ?",
         [value, tenantId, key]
       );
     } else {
       await databaseService.executeQuery(
-        "INSERT INTO settings (tenant_id, key, value, category, created_at, updated_at) VALUES (?, ?, ?, 'email', datetime('now'), datetime('now'))",
+        "INSERT INTO settings (tenant_id, key, value, category, created_at, updated_at) VALUES (?, ?, ?, 'email', NOW(), NOW())",
         [tenantId, key, value]
       );
     }

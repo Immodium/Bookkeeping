@@ -2,14 +2,19 @@ import type { IDatabase } from '../../types/database.types.js';
 
 export const up = async (db: IDatabase): Promise<void> => {
   try {
-    const tableInfo = await db.getMany('PRAGMA table_info(clients)', []);
-    const columns = tableInfo.map((col: any) => col.name);
+    const checkColumn = async (columnName: string): Promise<boolean> => {
+      const rows = await db.getMany(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'clients' AND column_name = $1`,
+        [columnName]
+      );
+      return rows.length > 0;
+    };
 
-    if (!columns.includes('first_name')) {
+    if (!(await checkColumn('first_name'))) {
       await db.executeQuery('ALTER TABLE clients ADD COLUMN first_name TEXT');
     }
 
-    if (!columns.includes('last_name')) {
+    if (!(await checkColumn('last_name'))) {
       await db.executeQuery('ALTER TABLE clients ADD COLUMN last_name TEXT');
     }
 
@@ -19,7 +24,7 @@ export const up = async (db: IDatabase): Promise<void> => {
         first_name = CASE
           WHEN first_name IS NULL OR trim(first_name) = '' THEN
             CASE
-              WHEN instr(trim(name), ' ') > 0 THEN substr(trim(name), 1, instr(trim(name), ' ') - 1)
+              WHEN position(' ' IN trim(name)) > 0 THEN left(trim(name), position(' ' IN trim(name)) - 1)
               ELSE trim(name)
             END
           ELSE first_name
@@ -27,7 +32,7 @@ export const up = async (db: IDatabase): Promise<void> => {
         last_name = CASE
           WHEN last_name IS NULL OR trim(last_name) = '' THEN
             CASE
-              WHEN instr(trim(name), ' ') > 0 THEN substr(trim(name), instr(trim(name), ' ') + 1)
+              WHEN position(' ' IN trim(name)) > 0 THEN substring(trim(name) FROM position(' ' IN trim(name)) + 1)
               ELSE ''
             END
           ELSE last_name

@@ -1,36 +1,27 @@
-// Database configuration utilities
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+// Database configuration utilities - PostgreSQL-only
 import { databaseConfig } from './index.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
 /**
- * Get the absolute path to the database file
- * @returns {string} Absolute path to the database file
+ * Get the PostgreSQL connection URL
+ * @returns {string} PostgreSQL connection URL
  */
-export const getDatabasePath = (): string => {
-  // If dbPath is already absolute, use it as-is
-  if (path.isAbsolute(databaseConfig.dbPath)) {
-    return databaseConfig.dbPath;
-  }
-  
-  // Otherwise, resolve relative to project root
-  return path.resolve(path.join(__dirname, '..', '..', databaseConfig.dbPath));
+export const getDatabaseUrl = (): string => {
+  return databaseConfig.databaseUrl;
 };
 
 /**
- * Get the absolute path to the backup directory
- * @returns {string} Absolute path to the backup directory
+ * Get a hint for where backups should be stored.
+ * PostgreSQL backups are handled externally with pg_dump.
+ * @returns {string} Backup path hint
  */
 export const getBackupPath = (): string => {
-  // If backupPath is already absolute, use it as-is
-  if (path.isAbsolute(databaseConfig.backupPath)) {
-    return databaseConfig.backupPath;
-  }
-  
-  // Otherwise, resolve relative to project root
-  return path.resolve(path.join(__dirname, '..', '..', databaseConfig.backupPath));
+  return './data/backups';
+};
+
+/**
+ * @deprecated Use getDatabaseUrl() instead. This stub exists for compatibility.
+ * PostgreSQL does not use a file path.
+ */
+export const getDatabasePath = (): string => {
+  return databaseConfig.databaseUrl;
 };

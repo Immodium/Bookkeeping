@@ -18,13 +18,13 @@ export class SettingsService {
 
   private async upsertSetting(tenantId: number, key: string, value: string, category: string): Promise<void> {
     const updateResult = await databaseService.executeQuery(
-      "UPDATE settings SET value = ?, category = ?, updated_at = datetime('now') WHERE tenant_id = ? AND key = ?",
+      "UPDATE settings SET value = ?, category = ?, updated_at = NOW() WHERE tenant_id = ? AND key = ?",
       [value, category, tenantId, key]
     );
 
     if (updateResult.changes === 0) {
       await databaseService.executeQuery(
-        "INSERT INTO settings (tenant_id, key, value, category, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))",
+        "INSERT INTO settings (tenant_id, key, value, category, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())",
         [tenantId, key, value, category]
       );
     }

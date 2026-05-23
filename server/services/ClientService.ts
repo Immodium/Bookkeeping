@@ -266,7 +266,7 @@ export class ClientService {
     const values = Object.values(updateData);
     const setClause = keys.map((key) => `${key} = ?`).join(', ');
     const result = await databaseService.executeQuery(
-      `UPDATE clients SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+      `UPDATE clients SET ${setClause}, updated_at = NOW() WHERE id = ? AND tenant_id = ?`,
       [...values, id, scopedTenantId]
     );
     return result.changes;
@@ -306,7 +306,7 @@ export class ClientService {
 
     if (useSoftDelete === 'true' || useSoftDelete === '1') {
       const result = await databaseService.executeQuery(
-        "UPDATE clients SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+        "UPDATE clients SET deleted_at = NOW(), updated_at = NOW() WHERE id = ? AND tenant_id = ?",
         [id, scopedTenantId]
       );
       return result.changes;

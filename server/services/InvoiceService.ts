@@ -469,7 +469,7 @@ export class InvoiceService {
     const values = Object.values(updateData);
     const setClause = keys.map((key) => `${key} = ?`).join(', ');
     const result = await databaseService.executeQuery(
-      `UPDATE invoices SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+      `UPDATE invoices SET ${setClause}, updated_at = NOW() WHERE id = ? AND tenant_id = ?`,
       [...values, id, scopedTenantId]
     );
     return result.changes;
@@ -588,7 +588,7 @@ export class InvoiceService {
 
     const result = await databaseService.executeQuery(`
       UPDATE invoices 
-      SET status = ?, updated_at = datetime('now')
+      SET status = ?, updated_at = NOW()
       WHERE id = ? AND tenant_id = ?
     `, [status, id, scopedTenantId]);
 
@@ -608,7 +608,7 @@ export class InvoiceService {
     
     const result = await databaseService.executeQuery(`
       UPDATE invoices 
-      SET status = 'sent', email_status = 'sent', email_sent_at = ?, updated_at = datetime('now')
+      SET status = 'sent', email_status = 'sent', email_sent_at = ?, updated_at = NOW()
       WHERE id = ? AND tenant_id = ?
     `, [sentAt, id, scopedTenantId]);
 

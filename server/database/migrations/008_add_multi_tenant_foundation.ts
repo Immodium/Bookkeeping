@@ -2,8 +2,8 @@ import type { IDatabase } from '../../types/database.types.js';
 
 const hasTable = async (db: IDatabase, tableName: string): Promise<boolean> => {
   try {
-    const result = await db.getMany<{ name: string }>(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    const result = await db.getMany<{ table_name: string }>(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1",
       [tableName]
     );
     return result.length > 0;
@@ -16,13 +16,15 @@ const addTenantColumnIfMissing = async (db: IDatabase, tableName: string): Promi
   if (!(await hasTable(db, tableName))) return;
 
   try {
-    const tableInfo = await db.getMany<{ name: string }>(`PRAGMA table_info(${tableName})`, []);
-    const hasTenantId = tableInfo.some((col) => col.name === 'tenant_id');
-    if (!hasTenantId) {
+    const rows = await db.getMany(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'tenant_id'`,
+      [tableName]
+    );
+    if (rows.length === 0) {
       await db.executeQuery(`ALTER TABLE ${tableName} ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1`);
     }
   } catch {
-    // PRAGMA not supported (PostgreSQL)
+    // Column may already exist
   }
 
   try {
@@ -36,18 +38,19 @@ const addTenantColumnIfMissing = async (db: IDatabase, tableName: string): Promi
 export const up = async (db: IDatabase): Promise<void> => {
   await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS tenants (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       slug TEXT UNIQUE NOT NULL,
       status TEXT DEFAULT 'active',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()),
+      updated_at TEXT NOT NULL DEFAULT (NOW())
     )
   `);
 
   await db.executeQuery(`
-    INSERT OR IGNORE INTO tenants (id, name, slug, status)
+    INSERT INTO tenants (id, name, slug, status)
     VALUES (1, 'Default Tenant', 'default', 'active')
+    ON CONFLICT (id) DO NOTHING
   `);
 
   const tablesToBackfill = [

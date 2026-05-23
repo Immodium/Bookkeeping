@@ -247,8 +247,8 @@ export class SubscriptionService {
             provider_customer_id = COALESCE(?, provider_customer_id),
             provider_subscription_id = COALESCE(?, provider_subscription_id),
             metadata_json = COALESCE(?, metadata_json),
-            canceled_at = CASE WHEN ? = 1 THEN COALESCE(canceled_at, datetime('now')) ELSE NULL END,
-            updated_at = datetime('now')
+            canceled_at = CASE WHEN ? = 1 THEN COALESCE(canceled_at, NOW()) ELSE NULL END,
+            updated_at = NOW()
           WHERE tenant_id = ?
         `,
         [
@@ -266,7 +266,7 @@ export class SubscriptionService {
       );
       if (scopedTenantId !== 1 && (status === 'suspended' || status === 'canceled')) {
         await databaseService.executeQuery(
-          "UPDATE tenants SET status = 'suspended', updated_at = datetime('now') WHERE id = ?",
+          "UPDATE tenants SET status = 'suspended', updated_at = NOW() WHERE id = ?",
           [scopedTenantId]
         );
       }
@@ -309,7 +309,7 @@ export class SubscriptionService {
     );
     if (scopedTenantId !== 1 && (status === 'suspended' || status === 'canceled')) {
       await databaseService.executeQuery(
-        "UPDATE tenants SET status = 'suspended', updated_at = datetime('now') WHERE id = ?",
+        "UPDATE tenants SET status = 'suspended', updated_at = NOW() WHERE id = ?",
         [scopedTenantId]
       );
     }
@@ -401,7 +401,7 @@ export class SubscriptionService {
               value = ?,
               source = 'manual',
               updated_by_user_id = ?,
-              updated_at = datetime('now')
+              updated_at = NOW()
             WHERE tenant_id = ? AND key = ?
           `,
           [serializedValue, updatedByUserId || null, scopedTenantId, key]
@@ -418,7 +418,7 @@ export class SubscriptionService {
                 updated_by_user_id,
                 created_at,
                 updated_at
-              ) VALUES (?, ?, ?, 'manual', ?, datetime('now'), datetime('now'))
+              ) VALUES (?, ?, ?, 'manual', ?, NOW(), NOW())
             `,
             [scopedTenantId, key, serializedValue, updatedByUserId || null]
           );
@@ -509,7 +509,7 @@ export class SubscriptionService {
 
     if (tenantId !== 1 && (normalizedStatus === 'active' || normalizedStatus === 'trialing')) {
       await databaseService.executeQuery(
-        "UPDATE tenants SET status = CASE WHEN status = 'deleted' THEN status ELSE 'active' END, updated_at = datetime('now') WHERE id = ?",
+        "UPDATE tenants SET status = CASE WHEN status = 'deleted' THEN status ELSE 'active' END, updated_at = NOW() WHERE id = ?",
         [tenantId]
       );
     }
@@ -519,7 +519,7 @@ export class SubscriptionService {
       const dunningTableExists = await databaseService.tableExists('dunning_events');
       if (dunningTableExists) {
         await databaseService.executeQuery(
-          `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'payment_failed', datetime('now'))`,
+          `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'payment_failed', NOW())`,
           [tenantId]
         );
       }
@@ -601,7 +601,7 @@ export class SubscriptionService {
     if (daysElapsed >= 14 && sentTypes.has('final_notice')) {
       await tenantService.updateTenantStatus(tenantId, 'suspended');
       await databaseService.executeQuery(
-        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'suspended', datetime('now'))`,
+        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'suspended', NOW())`,
         [tenantId]
       );
       return true;
@@ -618,9 +618,9 @@ export class SubscriptionService {
         subject: finalContent.subject,
         html: finalContent.html,
         text: finalContent.text
-      }, { tenantId });
+      });
       await databaseService.executeQuery(
-        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'final_notice', datetime('now'))`,
+        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'final_notice', NOW())`,
         [tenantId]
       );
       return true;
@@ -638,9 +638,9 @@ export class SubscriptionService {
         subject: reminder2Content.subject,
         html: reminder2Content.html,
         text: reminder2Content.text
-      }, { tenantId });
+      });
       await databaseService.executeQuery(
-        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'reminder_2', datetime('now'))`,
+        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'reminder_2', NOW())`,
         [tenantId]
       );
       return true;
@@ -657,9 +657,9 @@ export class SubscriptionService {
         subject: reminder1Content.subject,
         html: reminder1Content.html,
         text: reminder1Content.text
-      }, { tenantId });
+      });
       await databaseService.executeQuery(
-        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'reminder_1', datetime('now'))`,
+        `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'reminder_1', NOW())`,
         [tenantId]
       );
       return true;

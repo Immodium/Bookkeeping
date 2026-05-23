@@ -2,8 +2,8 @@ import type { IDatabase } from '../../types/database.types.js';
 
 const hasTable = async (db: IDatabase, tableName: string): Promise<boolean> => {
   try {
-    const result = await db.getMany<{ name: string }>(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    const result = await db.getMany<{ table_name: string }>(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1",
       [tableName]
     );
     return result.length > 0;
@@ -18,13 +18,15 @@ export const up = async (db: IDatabase): Promise<void> => {
   }
 
   try {
-    const columns = await db.getMany<{ name: string }>('PRAGMA table_info(report_schedules)');
-    const hasTenantColumn = columns.some((column) => column.name === 'tenant_id');
-    if (!hasTenantColumn) {
+    const rows = await db.getMany(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'report_schedules' AND column_name = 'tenant_id'`,
+      []
+    );
+    if (rows.length === 0) {
       await db.executeQuery('ALTER TABLE report_schedules ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1');
     }
   } catch {
-    // PRAGMA not supported (PostgreSQL) - column already exists
+    // Column may already exist
   }
 
   try {

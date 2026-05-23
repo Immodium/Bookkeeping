@@ -364,7 +364,7 @@ export class RetainerService {
     const values = Object.values(updateData);
     const setClause = keys.map((key) => `${key} = ?`).join(', ');
     const result = await databaseService.executeQuery(
-      `UPDATE retainers SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
+      `UPDATE retainers SET ${setClause}, updated_at = NOW() WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL`,
       [...values, id, scopedTenantId]
     );
     return result.changes;
@@ -382,7 +382,7 @@ export class RetainerService {
     }
 
     const result = await databaseService.executeQuery(
-      "UPDATE retainers SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL",
+      "UPDATE retainers SET deleted_at = NOW(), updated_at = NOW() WHERE id = ? AND tenant_id = ? AND deleted_at IS NULL",
       [id, scopedTenantId]
     );
     return result.changes;

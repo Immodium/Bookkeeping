@@ -411,7 +411,7 @@ export const logout = asyncHandler(async (req: Request, res: Response): Promise<
   }
 
   await databaseService.executeQuery(
-    `UPDATE users SET token_version = COALESCE(token_version, 0) + 1, updated_at = datetime('now') WHERE id = ?`,
+    `UPDATE users SET token_version = COALESCE(token_version, 0) + 1, updated_at = NOW() WHERE id = ?`,
     [user.id]
   );
 
@@ -475,12 +475,10 @@ export const registerTenant = asyncHandler(async (req: Request, res: Response): 
       // Ignore email errors — don't fail registration
     });
 
-  const { password_hash, two_factor_secret, backup_codes, ...userResponse } = newUser;
-
   res.status(201).json({
     success: true,
     data: {
-      user: userResponse as UserPublic,
+      user: newUser as UserPublic,
       token
     },
     message: 'Tenant registered successfully'

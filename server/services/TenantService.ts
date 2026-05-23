@@ -130,8 +130,8 @@ export class TenantService {
     for (const counterName of this.provisioningCounters) {
       await databaseService.executeQuery(
         `
-          INSERT OR IGNORE INTO counters (tenant_id, name, value, created_at, updated_at)
-          VALUES (?, ?, 0, datetime('now'), datetime('now'))
+          INSERT INTO counters (tenant_id, name, value, created_at, updated_at)
+          VALUES (?, ?, 0, NOW(), NOW())
         `,
         [tenantId, this.getScopedCounterName(counterName, tenantId)]
       );
@@ -139,8 +139,8 @@ export class TenantService {
 
     await databaseService.executeQuery(
       `
-        INSERT OR IGNORE INTO counters (tenant_id, name, value, created_at, updated_at)
-        VALUES (?, ?, 0, datetime('now'), datetime('now'))
+        INSERT INTO counters (tenant_id, name, value, created_at, updated_at)
+        VALUES (?, ?, 0, NOW(), NOW())
       `,
       [tenantId, tenantId === 1 ? 'invoice_counter' : `invoice_counter__tenant_${tenantId}`]
     );
@@ -256,7 +256,7 @@ export class TenantService {
     this.assertTenantMutationAllowed(scopedTenantId, status);
 
     const result = await databaseService.executeQuery(
-      "UPDATE tenants SET status = ?, updated_at = datetime('now') WHERE id = ?",
+      "UPDATE tenants SET status = ?, updated_at = NOW() WHERE id = ?",
       [status, scopedTenantId]
     );
     if (result.changes === 0) {

@@ -6,19 +6,19 @@ export const up = async (db: IDatabase): Promise<void> => {
   // exists for databases that were created before the table separation.
   await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS invoice_design_templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       content TEXT NOT NULL,
       is_default INTEGER DEFAULT 0,
       variables TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()),
+      updated_at TEXT NOT NULL DEFAULT (NOW())
     )
   `);
 
   await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS recurring_invoice_templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       client_id INTEGER NOT NULL,
       amount REAL NOT NULL,
@@ -33,8 +33,8 @@ export const up = async (db: IDatabase): Promise<void> => {
       shipping_amount REAL DEFAULT 0,
       shipping_rate_id TEXT,
       notes TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (NOW()),
+      updated_at TEXT NOT NULL DEFAULT (NOW()),
       FOREIGN KEY (client_id) REFERENCES clients (id) ON DELETE CASCADE
     )
   `);

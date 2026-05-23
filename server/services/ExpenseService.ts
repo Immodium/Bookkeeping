@@ -285,7 +285,7 @@ export class ExpenseService {
     const values = Object.values(updateData);
     const setClause = keys.map((key) => `${key} = ?`).join(', ');
     const result = await databaseService.executeQuery(
-      `UPDATE expenses SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+      `UPDATE expenses SET ${setClause}, updated_at = NOW() WHERE id = ? AND tenant_id = ?`,
       [...values, id, scopedTenantId]
     );
     return result.changes;

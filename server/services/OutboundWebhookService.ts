@@ -35,8 +35,8 @@ export interface WebhookEndpointRecord {
   secret: string;
   events: string[];
   is_active: boolean;
-  description?: string;
-  last_triggered_at?: string;
+  description?: string | undefined;
+  last_triggered_at?: string | undefined;
   failure_count: number;
   created_at: string;
   updated_at: string;
@@ -173,7 +173,7 @@ class OutboundWebhookService {
       return false;
     }
 
-    fields.push("updated_at = datetime('now')");
+    fields.push("updated_at = NOW()");
     values.push(id, tenantId);
 
     const result = await databaseService.executeQuery(
@@ -247,7 +247,7 @@ class OutboundWebhookService {
         deliveredAt = new Date().toISOString();
         // Reset failure_count on success and update last_triggered_at
         await databaseService.executeQuery(
-          "UPDATE webhook_endpoints SET failure_count = 0, last_triggered_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
+          "UPDATE webhook_endpoints SET failure_count = 0, last_triggered_at = NOW(), updated_at = NOW() WHERE id = ?",
           [row.id]
         ).catch(() => {});
       } else {
@@ -270,7 +270,7 @@ class OutboundWebhookService {
   private async handleDeliveryFailure(endpointId: number): Promise<void> {
     try {
       await databaseService.executeQuery(
-        "UPDATE webhook_endpoints SET failure_count = failure_count + 1, updated_at = datetime('now') WHERE id = ?",
+        "UPDATE webhook_endpoints SET failure_count = failure_count + 1, updated_at = NOW() WHERE id = ?",
         [endpointId]
       );
       // Disable if failure_count >= 10

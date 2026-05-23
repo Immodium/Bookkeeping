@@ -3,11 +3,10 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { Server } from 'http';
-import { Database } from 'better-sqlite3';
 import { loggingConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
-interface SQLiteError extends Error {
+interface DatabaseError extends Error {
   code: string;
   errno?: number;
 }
@@ -133,7 +132,7 @@ export class RateLimitError extends AppError {
  * Should be the last middleware in the chain
  */
 export const errorHandler = (
-  err: Error | AppError | SQLiteError | MulterError | JWTError | ParseError,
+  err: Error | AppError | DatabaseError | MulterError | JWTError | ParseError,
   req: Request,
   res: Response,
   next: NextFunction
@@ -155,9 +154,9 @@ export const errorHandler = (
     return;
   }
   
-  // Handle SQLite errors
-  if ('code' in err && typeof err.code === 'string' && err.code.startsWith('SQLITE_')) {
-    handleSQLiteError(err as SQLiteError, res);
+  // Handle PostgreSQL errors (pg error codes are numeric strings like '23505')
+  if ('code' in err && typeof err.code === 'string' && /^\d+$/.test(err.code)) {
+    handlePostgreSQLError(err as DatabaseError, res);
     return;
   }
   
@@ -215,36 +214,37 @@ export const errorHandler = (
 };
 
 /**
- * Handle SQLite specific errors
+ * Handle PostgreSQL specific errors (pg error codes)
+ * See: https://www.postgresql.org/docs/current/errcodes-appendix.html
  */
-const handleSQLiteError = (err: SQLiteError, res: Response): void => {
-  logger.error({ err }, 'SQLite error');
-  
+const handlePostgreSQLError = (err: DatabaseError, res: Response): void => {
+  logger.error({ err }, 'PostgreSQL error');
+
   switch (err.code) {
-    case 'SQLITE_CONSTRAINT_UNIQUE':
+    case '23505': // unique_violation
       res.status(409).json({
         success: false,
         error: 'Resource already exists',
         type: 'DUPLICATE_ERROR'
       });
       break;
-      
-    case 'SQLITE_CONSTRAINT_FOREIGNKEY':
+
+    case '23503': // foreign_key_violation
       res.status(400).json({
         success: false,
         error: 'Invalid reference to related resource',
         type: 'FOREIGN_KEY_ERROR'
       });
       break;
-      
-    case 'SQLITE_CONSTRAINT_NOTNULL':
+
+    case '23502': // not_null_violation
       res.status(400).json({
         success: false,
         error: 'Required field is missing',
         type: 'NULL_CONSTRAINT_ERROR'
       });
       break;
-      
+
     default:
       res.status(500).json({
         success: false,
@@ -325,7 +325,7 @@ export const timeoutHandler = (timeout = 30000) => {
 /**
  * Graceful shutdown handler
  */
-export const gracefulShutdown = (server: Server, db?: Database): void => {
+export const gracefulShutdown = (server: Server, db?: { close?: () => void }): void => {
   const shutdown = (signal: string): void => {
     logger.info(`${signal} received. Starting graceful shutdown...`);
 

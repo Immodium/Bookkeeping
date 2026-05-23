@@ -456,6 +456,7 @@ const defaultEmailSettings = {
   smtp_secure: true,
   sendgrid_api_key: '',
   sendgrid_from: '',
+  resend_api_key: '',
   from_email: '',
   from_name: '',
   isEnabled: false
@@ -489,6 +490,7 @@ export function useEmailSettings() {
         smtp_secure: isSmtpSecure,
         sendgrid_api_key: typeof saved.sendgrid_api_key === 'string' ? saved.sendgrid_api_key : defaultEmailSettings.sendgrid_api_key,
         sendgrid_from: typeof saved.sendgrid_from === 'string' ? saved.sendgrid_from : defaultEmailSettings.sendgrid_from,
+        resend_api_key: typeof saved.resend_api_key === 'string' ? saved.resend_api_key : defaultEmailSettings.resend_api_key,
         from_email: typeof saved.from_email === 'string' ? saved.from_email : defaultEmailSettings.from_email,
         from_name: typeof saved.from_name === 'string' ? saved.from_name : defaultEmailSettings.from_name,
         isEnabled: typeof saved.isEnabled === 'boolean' ? saved.isEnabled : Boolean(saved.is_enabled ?? defaultEmailSettings.isEnabled)

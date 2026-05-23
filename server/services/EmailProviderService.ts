@@ -1,9 +1,10 @@
 import nodemailer from 'nodemailer';
 import sgMail from '@sendgrid/mail';
+import { Resend } from 'resend';
 import { settingsService } from './SettingsService.js';
 import { emailConfig } from '../config/index.js';
 
-type EmailProvider = 'smtp' | 'sendgrid';
+type EmailProvider = 'smtp' | 'sendgrid' | 'resend';
 
 export interface EmailSendResult {
   success: boolean;
@@ -32,6 +33,9 @@ interface ResolvedEmailSettings {
   sendgrid: {
     apiKey: string;
     from: string;
+  };
+  resend: {
+    apiKey: string;
   };
 }
 
@@ -86,7 +90,7 @@ export class EmailProviderService {
     const settings = { ...persisted, ...(overrides || {}) };
 
     const providerRaw = asString(settings.provider || process.env.EMAIL_PROVIDER || 'smtp').toLowerCase();
-    const provider: EmailProvider = providerRaw === 'sendgrid' ? 'sendgrid' : 'smtp';
+    const provider: EmailProvider = providerRaw === 'sendgrid' ? 'sendgrid' : providerRaw === 'resend' ? 'resend' : 'smtp';
 
     const fromEmail = asString(settings.from_email || settings.email_from || process.env.EMAIL_FROM || emailConfig.from);
     const fromName = asString(settings.from_name || process.env.EMAIL_FROM_NAME || 'Slimbooks');
@@ -111,6 +115,9 @@ export class EmailProviderService {
           process.env.EMAIL_FROM ||
           emailConfig.sendgridFrom
         )
+      },
+      resend: {
+        apiKey: asString(settings.resend_api_key || process.env.RESEND_API_KEY || '')
       }
     };
   }
@@ -134,6 +141,16 @@ export class EmailProviderService {
           message: `SendGrid connection failed: ${(error as Error).message}`
         };
       }
+    }
+
+    if (settings.provider === 'resend') {
+      if (!settings.resend.apiKey) {
+        return { success: false, message: 'Resend API key is required' };
+      }
+      if (!settings.fromEmail) {
+        return { success: false, message: 'From email is required for Resend' };
+      }
+      return { success: true, message: 'Resend configuration looks valid' };
     }
 
     if (!settings.smtp.host || !settings.smtp.user || !settings.smtp.pass) {
@@ -207,6 +224,31 @@ export class EmailProviderService {
         return { success: true, message: 'Email sent successfully via SendGrid' };
       } catch (error) {
         return { success: false, message: `SendGrid send failed: ${(error as Error).message}` };
+      }
+    }
+
+    if (settings.provider === 'resend') {
+      if (!settings.resend.apiKey) {
+        return { success: false, message: 'Resend API key is required' };
+      }
+      try {
+        const resend = new Resend(settings.resend.apiKey);
+        const from = settings.fromName
+          ? `${settings.fromName} <${settings.fromEmail}>`
+          : settings.fromEmail;
+        const { error } = await resend.emails.send({
+          from,
+          to: input.to,
+          subject: input.subject,
+          text: input.text || '',
+          html: input.html || input.text || ''
+        });
+        if (error) {
+          return { success: false, message: `Resend send failed: ${error.message}` };
+        }
+        return { success: true, message: 'Email sent successfully via Resend' };
+      } catch (error) {
+        return { success: false, message: `Resend send failed: ${(error as Error).message}` };
       }
     }
 

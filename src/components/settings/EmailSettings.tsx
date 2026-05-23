@@ -55,6 +55,7 @@ export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
     smtp_secure: settings.smtp_secure,
     sendgrid_api_key: settings.sendgrid_api_key,
     sendgrid_from: settings.sendgrid_from || settings.from_email,
+    resend_api_key: settings.resend_api_key,
     from_email: settings.from_email,
     from_name: settings.from_name
   });
@@ -70,6 +71,13 @@ export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
       }
       if (!settings.sendgrid_from && !settings.from_email) {
         return 'SendGrid sender email is required';
+      }
+      return null;
+    }
+
+    if (settings.email_provider === 'resend') {
+      if (!settings.resend_api_key) {
+        return 'Resend API key is required';
       }
       return null;
     }
@@ -268,6 +276,7 @@ export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
             >
               <option value="smtp">SMTP</option>
               <option value="sendgrid">SendGrid</option>
+              <option value="resend">Resend</option>
             </select>
           </div>
 
@@ -356,7 +365,7 @@ export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
                 </div>
               </div>
             </>
-          ) : (
+          ) : settings.email_provider === 'sendgrid' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-2">
@@ -393,6 +402,30 @@ export const EmailSettings = forwardRef<SettingsTabRef>((props, ref) => {
                   className={themeClasses.input}
                   disabled={!settings.isEnabled}
                 />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-muted-foreground mb-2">
+                Resend API Key *
+              </label>
+              <div className="relative max-w-md">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={settings.resend_api_key}
+                  onChange={(e) => handleInputChange('resend_api_key', e.target.value)}
+                  placeholder="re_xxxxx"
+                  className={themeClasses.input}
+                  disabled={!settings.isEnabled}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-muted-foreground hover:text-foreground"
+                  disabled={!settings.isEnabled}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
               </div>
             </div>
           )}

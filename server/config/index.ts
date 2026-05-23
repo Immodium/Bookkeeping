@@ -80,9 +80,10 @@ export interface AuthConfig {
  * Email configuration interface
  */
 export interface EmailConfig {
-  provider: 'smtp' | 'sendgrid';
+  provider: 'smtp' | 'sendgrid' | 'resend';
   sendgridApiKey: string | undefined;
   sendgridFrom: string;
+  resendApiKey: string | undefined;
   smtp: {
     host: string | undefined;
     port: number;
@@ -285,9 +286,10 @@ export const authConfig: AuthConfig = {
  * Email configuration
  */
 export const emailConfig: EmailConfig = {
-  provider: process.env.EMAIL_PROVIDER === 'sendgrid' ? 'sendgrid' : 'smtp',
+  provider: process.env.EMAIL_PROVIDER === 'sendgrid' ? 'sendgrid' : process.env.EMAIL_PROVIDER === 'resend' ? 'resend' : 'smtp',
   sendgridApiKey: process.env.SENDGRID_API_KEY,
   sendgridFrom: process.env.SENDGRID_FROM || process.env.EMAIL_FROM || 'noreply@slimbooks.app',
+  resendApiKey: process.env.RESEND_API_KEY,
   smtp: {
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || '587'),
@@ -317,7 +319,9 @@ export const emailConfig: EmailConfig = {
   isConfigured: (
     process.env.EMAIL_PROVIDER === 'sendgrid'
       ? !!(process.env.SENDGRID_API_KEY && (process.env.SENDGRID_FROM || process.env.EMAIL_FROM))
-      : !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+      : process.env.EMAIL_PROVIDER === 'resend'
+        ? !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM)
+        : !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
   )
 };
 

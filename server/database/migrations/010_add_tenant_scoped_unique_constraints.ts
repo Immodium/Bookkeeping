@@ -187,7 +187,7 @@ const recreateInvoicesTable = async (db: IDatabase): Promise<void> => {
       last_email_attempt, is_recurring, recurring_frequency, next_due_date, created_at, updated_at
     FROM invoices_legacy_010
   `);
-  await db.executeQuery('DROP TABLE invoices_legacy_010');
+  await db.executeQuery('DROP TABLE invoices_legacy_010 CASCADE');
   await db.executeQuery('CREATE INDEX IF NOT EXISTS idx_invoices_tenant_id ON invoices(tenant_id)');
   await db.executeQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_tenant_invoice_number ON invoices(tenant_id, invoice_number)');
 };

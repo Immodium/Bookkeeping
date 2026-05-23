@@ -24,6 +24,7 @@ export const tenantContextStorage = new AsyncLocalStorage<TenantContext>();
  * - Replace ? params with $1, $2...
  * - Replace SQLite datetime functions with PostgreSQL equivalents
  * - Replace INSERT OR IGNORE with INSERT ... ON CONFLICT DO NOTHING
+ * - Add OVERRIDING SYSTEM VALUE for explicit id inserts
  * - Replace json_array() with json_build_array()
  * - Replace LIKE ? with ILIKE $n
  */
@@ -39,6 +40,22 @@ function prepareQuery(sql: string, params: any[] = []): { sql: string; values: a
       prepared = prepared.trimEnd();
       if (!prepared.endsWith(';')) {
         prepared = prepared + ' ON CONFLICT DO NOTHING';
+      }
+    }
+  }
+
+  // Explicit id inserts are used by backfill/seed paths.
+  // GENERATED ALWAYS identity columns require OVERRIDING SYSTEM VALUE.
+  if (/^\s*INSERT\s+INTO/i.test(prepared) && !/OVERRIDING\s+(SYSTEM|USER)\s+VALUE/i.test(prepared)) {
+    const insertColumnsMatch = prepared.match(/^\s*INSERT\s+INTO\s+[^\(]+\(([\s\S]*?)\)\s*(VALUES|SELECT)\b/i);
+    if (insertColumnsMatch) {
+      const insertColumns = insertColumnsMatch[1] ?? '';
+      const columns = insertColumns
+        .split(',')
+        .map((column) => column.replace(/["`\s]/g, '').toLowerCase());
+
+      if (columns.includes('id')) {
+        prepared = prepared.replace(/\)\s*(VALUES|SELECT)\b/i, ') OVERRIDING SYSTEM VALUE $1');
       }
     }
   }
@@ -201,10 +218,11 @@ export class PostgreSQLDatabase implements IDatabase {
       const pgResult = client
         ? await client.query(finalSql, values)
         : await this.pool.query(finalSql, values);
+      const normalizedResult = Array.isArray(pgResult) ? pgResult[pgResult.length - 1] : pgResult;
 
       return {
-        changes: pgResult.rowCount ?? 0,
-        lastInsertRowid: pgResult.rows[0]?.id ?? 0
+        changes: normalizedResult?.rowCount ?? 0,
+        lastInsertRowid: normalizedResult?.rows?.[0]?.id ?? 0
       };
     } catch (error) {
       // If RETURNING id failed (e.g. trigger, no id column), retry without RETURNING

@@ -15,11 +15,13 @@ import {
   validateRequest,
   validationSets
 } from '../middleware/index.js';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 
 const router: Router = Router();
 
 // All template routes require authentication
 router.use(requireAuth);
+router.use(applyTenantSchema);
 router.use(requireRole(['admin', 'project_manager']));
 
 // Get all templates

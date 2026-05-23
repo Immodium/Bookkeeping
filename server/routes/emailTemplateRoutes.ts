@@ -2,6 +2,7 @@
 // Allows admins to list, preview, override, and delete per-tenant email templates
 
 import { Router, Request, Response } from 'express';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { emailTemplateService } from '../services/EmailTemplateService.js';
@@ -9,6 +10,7 @@ import { emailTemplateService } from '../services/EmailTemplateService.js';
 const router: Router = Router();
 
 router.use(requireAuth);
+router.use(applyTenantSchema);
 router.use(requireAdmin);
 
 const DUMMY_VARS: Record<string, string> = {

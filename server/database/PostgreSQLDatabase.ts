@@ -15,6 +15,10 @@ import { databaseConfig } from '../config/index.js';
 // Transaction context storage - allows nested calls to share same client
 const transactionContext = new AsyncLocalStorage<PoolClient>();
 
+// Tenant context storage - per-request schema-isolated client
+interface TenantContext { client: PoolClient; tenantId: number; }
+export const tenantContextStorage = new AsyncLocalStorage<TenantContext>();
+
 /**
  * Prepare a query for PostgreSQL:
  * - Replace ? params with $1, $2...
@@ -116,7 +120,7 @@ function prepareQuery(sql: string, params: any[] = []): { sql: string; values: a
  * PostgreSQL implementation of the abstract database interface
  */
 export class PostgreSQLDatabase implements IDatabase {
-  private pool: Pool;
+  protected pool: Pool;
   private _connected = false;
   private connectionTime = 0;
   private queryCount = 0;
@@ -164,9 +168,27 @@ export class PostgreSQLDatabase implements IDatabase {
     return this._connected;
   }
 
+  /**
+   * Acquire a dedicated pool client for a tenant and set search_path.
+   * Caller is responsible for releasing via the returned release function.
+   */
+  async acquireClientForTenant(tenantId: number): Promise<{ client: PoolClient; release: () => void }> {
+    const client = await this.pool.connect();
+    await client.query(`SET search_path = "tenant_${tenantId}", public`);
+    return { client, release: () => client.release() };
+  }
+
+  /**
+   * Run fn inside an AsyncLocalStorage context that makes the tenant client
+   * available to all database methods called from within fn.
+   */
+  withTenantClient(tenantId: number, client: PoolClient, fn: () => void): void {
+    tenantContextStorage.run({ client, tenantId }, fn);
+  }
+
   async executeQuery(query: string, params: any[] = []): Promise<QueryResult> {
     this.queryCount++;
-    const client = transactionContext.getStore();
+    const client = transactionContext.getStore() ?? tenantContextStorage.getStore()?.client;
     const { sql, values } = prepareQuery(query, params);
 
     try {
@@ -205,7 +227,7 @@ export class PostgreSQLDatabase implements IDatabase {
 
   async getOne<T = Record<string, unknown>>(query: string, params: unknown[] = []): Promise<T | null> {
     this.queryCount++;
-    const client = transactionContext.getStore();
+    const client = transactionContext.getStore() ?? tenantContextStorage.getStore()?.client;
     const { sql, values } = prepareQuery(query, params as any[]);
 
     try {
@@ -223,7 +245,7 @@ export class PostgreSQLDatabase implements IDatabase {
 
   async getMany<T = Record<string, unknown>>(query: string, params: unknown[] = []): Promise<T[]> {
     this.queryCount++;
-    const client = transactionContext.getStore();
+    const client = transactionContext.getStore() ?? tenantContextStorage.getStore()?.client;
     const { sql, values } = prepareQuery(query, params as any[]);
 
     try {
@@ -286,6 +308,11 @@ export class PostgreSQLDatabase implements IDatabase {
     return transactionContext.run(client, async () => {
       try {
         await client.query('BEGIN');
+        // Propagate tenant search_path into the transaction if one is active
+        const tenantCtx = tenantContextStorage.getStore();
+        if (tenantCtx) {
+          await client.query(`SET LOCAL search_path = "tenant_${tenantCtx.tenantId}", public`);
+        }
         const result = await callback();
         await client.query('COMMIT');
         return result;

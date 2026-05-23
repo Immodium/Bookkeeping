@@ -1,6 +1,7 @@
 // Database Module - PostgreSQL entry point
 import { PostgreSQLDatabase } from './PostgreSQLDatabase.js';
 import { createTables } from './schemas/tables.schema.js';
+import { provisionTenantSchema } from './schemas/tenantSchema.js';
 import { initializeAllSeeds } from './seeds/initial.seed.js';
 import { runMigrations } from './migrations/index.js';
 import { databaseConfig } from '../config/index.js';
@@ -66,6 +67,21 @@ export const initializeDatabase = async (includeSampleData = false): Promise<voi
         BEFORE UPDATE ON report_schedules
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
     `);
+
+    // Provision schemas for all existing tenants (idempotent — uses IF NOT EXISTS)
+    try {
+      const tenants = await db.getMany<{ id: number }>(
+        "SELECT id FROM tenants WHERE status != $1",
+        ['deleted']
+      );
+      for (const tenant of tenants) {
+        await provisionTenantSchema(db, tenant.id);
+      }
+      console.log(`✓ Tenant schemas provisioned (${tenants.length} tenant(s))`);
+    } catch (err) {
+      // Non-fatal: log and continue so startup isn't blocked if tenants table doesn't exist yet
+      console.warn('⚠ Could not provision tenant schemas (may be a fresh install):', (err as Error).message);
+    }
 
     await initializeAllSeeds(db, includeSampleData);
     console.log('✓ Database seed data initialized');

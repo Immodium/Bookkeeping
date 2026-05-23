@@ -1,6 +1,7 @@
 // GDPR compliance routes — data export and user erasure
 
 import { Router, Request, Response } from 'express';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { gdprService } from '../services/GdprService.js';
@@ -9,6 +10,7 @@ import { auditService } from '../services/AuditService.js';
 const router: Router = Router();
 
 router.use(requireAuth);
+router.use(applyTenantSchema);
 router.use(requireAdmin);
 
 /**

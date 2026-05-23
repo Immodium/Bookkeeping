@@ -22,6 +22,7 @@ import {
   validationRules,
   validationSets
 } from '../middleware/index.js';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 
 const router: Router = Router();
 
@@ -37,6 +38,7 @@ const requireSaasMode = (_req: Request, res: Response, next: NextFunction): void
 };
 
 router.use(requireAuth);
+router.use(applyTenantSchema);
 router.use(requireRole('admin'));
 router.use(requireSaasMode);
 router.use(requirePlatformAdmin);

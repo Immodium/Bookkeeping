@@ -17,11 +17,13 @@ import {
   validateRequest,
   validationSets
 } from '../middleware/index.js';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 
 const router: Router = Router();
 
 // All payment routes require authentication
 router.use(requireAuth);
+router.use(applyTenantSchema);
 
 // GET /api/payments - Get all payments with optional filtering
 router.get('/', getAllPayments);

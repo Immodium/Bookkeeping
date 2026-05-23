@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { authConfig } from '../config/index.js';
 import { databaseService } from '../core/DatabaseService.js';
+import { provisionTenantSchema, dropTenantSchema } from '../database/schemas/tenantSchema.js';
 import { Tenant, UserRole } from '../types/index.js';
 import { subscriptionService } from './SubscriptionService.js';
 
@@ -218,10 +219,21 @@ export class TenantService {
       await this.initializeTenantCounters(tenantId);
     });
 
+    // Provision the per-tenant PostgreSQL schema
+    await provisionTenantSchema(databaseService, tenantId);
+
     // Seed tenant onto a default subscription lifecycle if billing tables exist.
     await subscriptionService.bootstrapTenantSubscription(tenantId);
 
     return { tenantId, adminUserId, slug };
+  }
+
+  /**
+   * Drop the PostgreSQL schema for a tenant.
+   * This is a destructive operation — all tenant data will be lost.
+   */
+  async deleteTenantSchema(tenantId: number): Promise<void> {
+    await dropTenantSchema(databaseService, tenantId);
   }
 
   async bootstrapTenantAdmin(tenantId: number, admin: TenantAdminBootstrapInput): Promise<{ adminUserId: number }> {

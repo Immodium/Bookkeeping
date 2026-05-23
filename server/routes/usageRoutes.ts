@@ -1,6 +1,7 @@
 // Usage metering routes
 
 import { Router, Request, Response } from 'express';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { usageService, UsageMetric } from '../services/UsageService.js';
@@ -8,6 +9,7 @@ import { usageService, UsageMetric } from '../services/UsageService.js';
 const router: Router = Router();
 
 router.use(requireAuth);
+router.use(applyTenantSchema);
 
 const VALID_METRICS: UsageMetric[] = ['invoices_created', 'clients_created', 'api_calls', 'payments_recorded'];
 

@@ -20,6 +20,7 @@ import {
   validationSets,
   validateFileUpload
 } from '../middleware/index.js';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 import multer from 'multer';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -48,6 +49,7 @@ const uploadReceipt = multer({
 
 // All expense routes require authentication
 router.use(requireAuth);
+router.use(applyTenantSchema);
 
 // Get all expenses
 router.get('/', getAllExpenses);

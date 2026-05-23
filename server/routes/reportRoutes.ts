@@ -3,6 +3,7 @@
 
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireEntitlement, requireRole } from '../middleware/index.js';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 import {
   reportService,
   ReportData,
@@ -15,6 +16,7 @@ const router: Router = Router();
 
 // All report routes require authentication
 router.use(requireAuth);
+router.use(applyTenantSchema);
 router.use(requireRole(['admin', 'client_manager', 'project_manager']));
 router.use(requireEntitlement('reports.enabled'));
 

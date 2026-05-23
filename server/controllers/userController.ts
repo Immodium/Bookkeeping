@@ -567,7 +567,7 @@ export const inviteUser = asyncHandler(async (req: Request, res: Response): Prom
       subject: inviteContent.subject,
       html: inviteContent.html,
       text: inviteContent.text
-    }, { tenantId });
+    });
   }
 
   res.status(201).json({
@@ -622,7 +622,7 @@ export const resetUserPasswordByAdmin = asyncHandler(async (req: Request, res: R
         </div>
       `,
       text: `Hello ${user.name},\n\nAn administrator reset your Slimbooks password.\nNew password: ${newPassword}\n\nPlease log in and update it immediately.`
-    }, { tenantId });
+    });
   }
 
   res.json({

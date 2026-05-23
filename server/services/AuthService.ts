@@ -169,7 +169,7 @@ export class AuthService {
       // Reset failed attempts on successful login
       await databaseService.executeQuery(`
         UPDATE users 
-        SET failed_login_attempts = 0, account_locked_until = NULL, last_login = datetime('now'), updated_at = datetime('now')
+        SET failed_login_attempts = 0, account_locked_until = NULL, last_login = NOW(), updated_at = NOW()
         WHERE id = ?
       `, [userId]);
       return true;
@@ -198,7 +198,7 @@ export class AuthService {
     
     await databaseService.executeQuery(`
       UPDATE users 
-      SET failed_login_attempts = ?, account_locked_until = ?, updated_at = datetime('now')
+      SET failed_login_attempts = ?, account_locked_until = ?, updated_at = NOW()
       WHERE id = ?
     `, [newAttempts, lockedUntil, userId]);
 
@@ -248,7 +248,7 @@ export class AuthService {
     }
 
     await databaseService.executeQuery(
-      `UPDATE users SET password_hash = ?, password_updated_at = ?, token_version = COALESCE(token_version, 0) + 1, updated_at = datetime('now') WHERE id = ?`,
+      `UPDATE users SET password_hash = ?, password_updated_at = ?, token_version = COALESCE(token_version, 0) + 1, updated_at = NOW() WHERE id = ?`,
       [passwordHash, new Date().toISOString(), userId]
     );
     return true;

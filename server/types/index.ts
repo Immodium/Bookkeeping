@@ -94,6 +94,7 @@ export interface Invoice extends BaseEntity {
   client_phone?: string;
   client_address?: string;
   line_items?: string;
+  currency?: string;
   tax_rate_id?: string;
   shipping_amount: number;
   shipping_rate_id?: string;
@@ -150,6 +151,7 @@ export interface Payment extends BaseEntity {
 export interface Retainer extends BaseEntity {
   client_id: number;
   client_name?: string;
+  client_email?: string;
   name: string;
   description?: string;
   amount: number;

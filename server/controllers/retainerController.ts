@@ -8,6 +8,8 @@ import {
 } from '../middleware/index.js';
 import { RetainerBillingCycle, RetainerStatus } from '../types/index.js';
 import { RetainerRequest } from '../types/api.types.js';
+import { emailTemplateService } from '../services/EmailTemplateService.js';
+import { emailProviderService } from '../services/EmailProviderService.js';
 
 export const getAllRetainers = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const {
@@ -215,4 +217,39 @@ export const getRetainerStats = asyncHandler(async (req: Request, res: Response)
     success: true,
     data: stats
   });
+});
+
+export const sendRetainerEmail = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const retainerId = parseInt(req.params.id!, 10);
+  const tenantId = req.tenantId || req.user?.tenant_id || 1;
+
+  if (isNaN(retainerId)) throw new ValidationError('Invalid retainer ID');
+
+  const retainer = await retainerService.getRetainerById(retainerId, tenantId);
+  if (!retainer) throw new NotFoundError('Retainer');
+
+  const toEmail = req.body?.to || retainer.client_email;
+  if (!toEmail) throw new ValidationError('No recipient email address. Please set a client email.');
+
+  const currency = retainer.currency || 'USD';
+  const portalUrl = `${process.env.APP_URL || process.env.CLIENT_URL || 'http://localhost:5173'}/retainers`;
+
+  const emailContent = await emailTemplateService.render('retainer', {
+    client_name: retainer.client_name || 'Valued Client',
+    retainer_name: retainer.name,
+    amount: `${currency} ${(Number(retainer.amount || 0)).toFixed(2)}`,
+    currency,
+    billing_cycle: retainer.billing_cycle || 'monthly',
+    start_date: retainer.start_date || (retainer.created_at ? String(retainer.created_at).split('T')[0] : ''),
+    portal_url: portalUrl
+  }, tenantId);
+
+  const result = await emailProviderService.sendEmail({
+    to: toEmail,
+    subject: emailContent.subject,
+    html: emailContent.html,
+    text: emailContent.text
+  });
+
+  res.json({ success: result.success, message: result.message });
 });

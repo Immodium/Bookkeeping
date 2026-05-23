@@ -64,7 +64,7 @@ export class TokenService {
     const records = await databaseService.getMany<TokenRecord>(
       `SELECT * FROM password_reset_tokens
        WHERE used_at IS NULL
-       AND expires_at > datetime('now')
+       AND expires_at > NOW()
        ORDER BY created_at DESC`
     );
 
@@ -114,7 +114,7 @@ export class TokenService {
     const records = await databaseService.getMany<TokenRecord>(
       `SELECT * FROM email_verification_tokens
        WHERE used_at IS NULL
-       AND expires_at > datetime('now')
+       AND expires_at > NOW()
        ORDER BY created_at DESC`
     );
 

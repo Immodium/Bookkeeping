@@ -4,24 +4,24 @@
 import { databaseService } from '../core/DatabaseService.js';
 
 export interface AuditEvent {
-  tenantId?: number;
-  userId?: number;
+  tenantId?: number | undefined;
+  userId?: number | undefined;
   action: string;           // e.g. 'auth.login', 'user.create', 'invoice.delete'
-  resourceType?: string;    // e.g. 'user', 'invoice', 'client'
-  resourceId?: string | number;
-  ipAddress?: string;
-  userAgent?: string;
-  metadata?: Record<string, unknown>;
+  resourceType?: string | undefined;    // e.g. 'user', 'invoice', 'client'
+  resourceId?: string | number | undefined;
+  ipAddress?: string | undefined;
+  userAgent?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
 }
 
 export interface AuditLogFilter {
-  tenantId?: number;
-  userId?: number;
-  action?: string;
-  from?: string;   // ISO date
-  to?: string;     // ISO date
-  limit?: number;  // default 50, max 200
-  offset?: number;
+  tenantId?: number | undefined;
+  userId?: number | undefined;
+  action?: string | undefined;
+  from?: string | undefined;   // ISO date
+  to?: string | undefined;     // ISO date
+  limit?: number | undefined;  // default 50, max 200
+  offset?: number | undefined;
 }
 
 export interface AuditLogRow {

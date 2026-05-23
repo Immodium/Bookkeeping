@@ -385,7 +385,7 @@ export class PaymentService {
     const values = Object.values(updateData);
     const setClause = keys.map((key) => `${key} = ?`).join(', ');
     const result = await databaseService.executeQuery(
-      `UPDATE payments SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+      `UPDATE payments SET ${setClause}, updated_at = NOW() WHERE id = ? AND tenant_id = ?`,
       [...values, id, scopedTenantId]
     );
     return result.changes;
@@ -756,7 +756,7 @@ export class PaymentService {
 
     const result = await databaseService.executeQuery(`
       UPDATE payments 
-      SET status = ?, updated_at = datetime('now')
+      SET status = ?, updated_at = NOW()
       WHERE id = ? AND tenant_id = ?
     `, [status, id, scopedTenantId]);
 

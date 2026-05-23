@@ -349,5 +349,5 @@ export class PostgreSQLDatabase implements IDatabase {
   }
 }
 
-// Only export a singleton if DATABASE_URL is set
-export const postgresDatabase = databaseConfig.usePostgres ? new PostgreSQLDatabase() : null;
+// PostgreSQL is the only supported database
+export const postgresDatabase = new PostgreSQLDatabase();

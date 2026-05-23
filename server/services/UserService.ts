@@ -33,8 +33,8 @@ export class UserService {
     await databaseService.executeQuery(
       `
         INSERT INTO counters (tenant_id, name, value, created_at, updated_at)
-        VALUES (1, 'users', ?, datetime('now'), datetime('now'))
-        ON CONFLICT(tenant_id, name) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+        VALUES (1, 'users', ?, NOW(), NOW())
+        ON CONFLICT(tenant_id, name) DO UPDATE SET value = excluded.value, updated_at = NOW()
       `,
       [reconciledNextId]
     );
@@ -335,7 +335,7 @@ export class UserService {
     const values = Object.values(updateData);
     const setClause = keys.map((key) => `${key} = ?`).join(', ');
     const result = await databaseService.executeQuery(
-      `UPDATE users SET ${setClause}, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?`,
+      `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = ? AND tenant_id = ?`,
       [...values, id, scopedTenantId]
     );
     return result.changes;
@@ -393,7 +393,7 @@ export class UserService {
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const changes = await databaseService.executeQuery(
-      "UPDATE users SET failed_login_attempts = ?, account_locked_until = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+      "UPDATE users SET failed_login_attempts = ?, account_locked_until = ?, updated_at = NOW() WHERE id = ? AND tenant_id = ?",
       [attempts, lockedUntil, userId, scopedTenantId]
     );
 
@@ -410,7 +410,7 @@ export class UserService {
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const changes = await databaseService.executeQuery(
-      "UPDATE users SET last_login = datetime('now'), updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+      "UPDATE users SET last_login = NOW(), updated_at = NOW() WHERE id = ? AND tenant_id = ?",
       [userId, scopedTenantId]
     );
 
@@ -427,7 +427,7 @@ export class UserService {
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const changes = await databaseService.executeQuery(
-      "UPDATE users SET email_verified = 1, email_verified_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+      "UPDATE users SET email_verified = 1, email_verified_at = NOW(), updated_at = NOW() WHERE id = ? AND tenant_id = ?",
       [userId, scopedTenantId]
     );
 
@@ -503,7 +503,7 @@ export class UserService {
       SELECT id, name, email, username, role, email_verified,
              roles, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
       FROM users
-      WHERE tenant_id = ? AND account_locked_until IS NOT NULL AND account_locked_until > datetime('now')
+      WHERE tenant_id = ? AND account_locked_until IS NOT NULL AND account_locked_until > NOW()
       ORDER BY account_locked_until DESC
       LIMIT ? OFFSET ?
     `, [scopedTenantId, limit, offset]);
@@ -521,7 +521,7 @@ export class UserService {
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const changes = await databaseService.executeQuery(
-      "UPDATE users SET failed_login_attempts = 0, account_locked_until = NULL, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+      "UPDATE users SET failed_login_attempts = 0, account_locked_until = NULL, updated_at = NOW() WHERE id = ? AND tenant_id = ?",
       [userId, scopedTenantId]
     );
 
@@ -596,7 +596,7 @@ export class UserService {
     ))?.count || 0;
 
     const locked = (await databaseService.getOne<{count: number}>(
-      "SELECT COUNT(*) as count FROM users WHERE tenant_id = ? AND account_locked_until IS NOT NULL AND account_locked_until > datetime('now')",
+      "SELECT COUNT(*) as count FROM users WHERE tenant_id = ? AND account_locked_until IS NOT NULL AND account_locked_until > NOW()",
       [scopedTenantId]
     ))?.count || 0;
 
@@ -630,7 +630,7 @@ export class UserService {
     const primaryRole = getPrimaryRole(normalizedRoles, existingUser.role);
 
     await databaseService.executeQuery(
-      "UPDATE users SET role = ?, roles = ?, updated_at = datetime('now') WHERE id = ? AND tenant_id = ?",
+      "UPDATE users SET role = ?, roles = ?, updated_at = NOW() WHERE id = ? AND tenant_id = ?",
       [primaryRole, JSON.stringify(normalizedRoles), userId, scopedTenantId]
     );
   }

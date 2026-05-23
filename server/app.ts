@@ -266,7 +266,7 @@ export const startServer = async () => {
     // Graceful shutdown handling
     const { gracefulShutdown } = await import('./middleware/index.js');
     const { db } = await import('./models/index.js');
-    gracefulShutdown(server, db);
+    gracefulShutdown(server, { close: () => db.disconnect() });
 
     return server;
   } catch (error) {

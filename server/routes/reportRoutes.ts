@@ -8,6 +8,8 @@ import {
   ReportData,
   ReportScheduleData
 } from '../services/ReportService.js';
+import { emailTemplateService } from '../services/EmailTemplateService.js';
+import { emailProviderService } from '../services/EmailProviderService.js';
 
 const router: Router = Router();
 
@@ -373,6 +375,43 @@ router.post('/generate/client', async (req: Request, res: Response): Promise<voi
       success: false,
       error: error instanceof Error ? error.message : 'Failed to generate client report'
     });
+  }
+});
+
+// Send a report via email
+router.post('/email', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const tenantId = req.tenantId || req.user?.tenant_id || 1;
+    const { to, report_type, report_period, summary_html } = req.body as {
+      to?: string;
+      report_type?: string;
+      report_period?: string;
+      summary_html?: string;
+    };
+
+    if (!to) {
+      res.status(400).json({ success: false, error: 'Recipient email is required' });
+      return;
+    }
+
+    const emailContent = await emailTemplateService.render('report', {
+      recipient_name: req.user?.name || 'there',
+      report_type: report_type || 'Financial Report',
+      report_period: report_period || '',
+      summary_html: summary_html || '',
+      app_url: process.env.APP_URL || 'http://localhost:5173'
+    }, tenantId);
+
+    const result = await emailProviderService.sendEmail({
+      to,
+      subject: emailContent.subject,
+      html: emailContent.html,
+      text: emailContent.text
+    });
+
+    res.json({ success: result.success, message: result.message });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 

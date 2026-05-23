@@ -81,7 +81,7 @@ class GdprService {
          google_id = NULL,
          two_factor_secret = NULL,
          backup_codes = NULL,
-         updated_at = datetime('now')
+         updated_at = NOW()
        WHERE id = ?`,
       [`deleted-${userId}@erased.invalid`, `deleted-${userId}`, userId]
     );

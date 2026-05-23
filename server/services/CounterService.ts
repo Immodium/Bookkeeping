@@ -240,9 +240,8 @@ export class CounterService {
     const operations = async () => {
       for (const counterName of this.validCounters) {
         const scopedCounterName = this.getScopedCounterName(counterName, scopedTenantId);
-        // Use INSERT OR IGNORE to avoid errors if counter already exists
         await databaseService.executeQuery(
-          'INSERT OR IGNORE INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (?, ?, ?, datetime(\'now\'), datetime(\'now\'))',
+          'INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW()) ON CONFLICT (tenant_id, name) DO NOTHING',
           [scopedTenantId, scopedCounterName, 0]
         );
       }

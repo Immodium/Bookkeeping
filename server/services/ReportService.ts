@@ -85,8 +85,11 @@ export class ReportService {
       return cached;
     }
 
-    const rows = await databaseService.getMany<{ name: string }>(`PRAGMA table_info(${tableName})`);
-    const columns = new Set(rows.map((row) => row.name));
+    const rows = await databaseService.getMany<{ column_name: string }>(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1
+    `, [tableName]);
+    const columns = new Set(rows.map((row) => row.column_name));
     this.tableColumnCache.set(tableName, columns);
     return columns;
   }
@@ -296,7 +299,7 @@ export class ReportService {
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `
         : `
         INSERT INTO report_schedules (
@@ -314,7 +317,7 @@ export class ReportService {
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `,
       hasTenantColumn
         ? [

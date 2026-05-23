@@ -1,12 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Upload, Download, DollarSign } from 'lucide-react';
+import { X, Upload, Download, DollarSign, Mail } from 'lucide-react';
 import { getStatusColor } from '@/utils/themeUtils.util';
 import { formatDateSync } from '@/components/ui/FormattedDate';
 import { FormattedCurrency } from '@/components/ui/FormattedCurrency';
 import { pdfService } from '@/services/pdf.svc';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
 import { formatClientAddress } from '@/utils/formatting';
+import { authenticatedFetch } from '@/utils/api';
+import { toast } from 'sonner';
 import type { Invoice } from '@/types';
 
 interface InvoiceViewModalProps {
@@ -19,6 +21,33 @@ interface InvoiceViewModalProps {
 export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ invoice, isOpen, onClose, onMarkAsPaid }) => {
   const { settings: companySettings, isLoading: companySettingsLoading } = useCompanySettings();
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+
+  const handleSendEmail = async () => {
+    if (!invoice) return;
+    if (!invoice.client_email) {
+      toast.error('No email address on file for this client');
+      return;
+    }
+    setIsSendingEmail(true);
+    try {
+      const response = await authenticatedFetch(`/api/invoices/${invoice.id}/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: invoice.client_email })
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success(`Invoice emailed to ${invoice.client_email}`);
+      } else {
+        toast.error(`Failed to send: ${result.message}`);
+      }
+    } catch (err) {
+      toast.error('Failed to send invoice email');
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
 
   // Helper function to clean up stored client address that may contain "null" values
   const cleanClientAddress = (address: string) => {
@@ -234,6 +263,16 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ invoice, isO
               >
                 <DollarSign className="h-4 w-4 mr-2" />
                 Mark as Paid
+              </button>
+            )}
+            {invoice.client_email && (
+              <button
+                onClick={handleSendEmail}
+                disabled={isSendingEmail}
+                className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                {isSendingEmail ? 'Sending...' : 'Email Invoice'}
               </button>
             )}
             <button

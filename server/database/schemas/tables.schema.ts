@@ -10,12 +10,12 @@ import { createTokenTables } from './tokenTables.schema.js';
 const tenantsSchema: TableSchema = {
   name: 'tenants',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'slug', type: 'TEXT', constraints: ['UNIQUE NOT NULL'] },
     { name: 'status', type: 'TEXT', constraints: ["DEFAULT 'active'"] },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ]
 };
 
@@ -25,7 +25,7 @@ const tenantsSchema: TableSchema = {
 const subscriptionPlansSchema: TableSchema = {
   name: 'subscription_plans',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'code', type: 'TEXT', constraints: ['UNIQUE NOT NULL'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'status', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'active'"] },
@@ -34,8 +34,8 @@ const subscriptionPlansSchema: TableSchema = {
     { name: 'billing_interval', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'monthly'"] },
     { name: 'trial_days', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
     { name: 'features_json', type: 'TEXT' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ]
 };
 
@@ -45,7 +45,7 @@ const subscriptionPlansSchema: TableSchema = {
 const tenantSubscriptionsSchema: TableSchema = {
   name: 'tenant_subscriptions',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'plan_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'status', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'active'"] },
@@ -58,8 +58,8 @@ const tenantSubscriptionsSchema: TableSchema = {
     { name: 'provider_customer_id', type: 'TEXT' },
     { name: 'provider_subscription_id', type: 'TEXT' },
     { name: 'metadata_json', type: 'TEXT' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -74,14 +74,14 @@ const tenantSubscriptionsSchema: TableSchema = {
 const tenantEntitlementsSchema: TableSchema = {
   name: 'tenant_entitlements',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'key', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'value', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'source', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'manual'"] },
     { name: 'updated_by_user_id', type: 'INTEGER' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -95,7 +95,7 @@ const tenantEntitlementsSchema: TableSchema = {
 const usersSchema: TableSchema = {
   name: 'users',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'email', type: 'TEXT', constraints: ['UNIQUE NOT NULL'] },
@@ -113,8 +113,8 @@ const usersSchema: TableSchema = {
     { name: 'password_updated_at', type: 'TEXT' },
     { name: 'email_verified_at', type: 'TEXT' },
     { name: 'token_version', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
@@ -127,7 +127,7 @@ const usersSchema: TableSchema = {
 const clientsSchema: TableSchema = {
   name: 'clients',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'first_name', type: 'TEXT' },
@@ -145,8 +145,8 @@ const clientsSchema: TableSchema = {
     { name: 'stripe_customer_id', type: 'TEXT' },
     { name: 'is_active', type: 'INTEGER', constraints: ['DEFAULT 1'] },
     { name: 'deleted_at', type: 'TEXT' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
@@ -159,7 +159,7 @@ const clientsSchema: TableSchema = {
 const invoicesSchema: TableSchema = {
   name: 'invoices',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'invoice_number', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'client_id', type: 'INTEGER', constraints: ['NOT NULL'] },
@@ -197,8 +197,8 @@ const invoicesSchema: TableSchema = {
     { name: 'is_recurring', type: 'INTEGER', constraints: ['DEFAULT 0'] },
     { name: 'recurring_frequency', type: 'TEXT' },
     { name: 'next_due_date', type: 'TEXT' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -215,7 +215,7 @@ const invoicesSchema: TableSchema = {
 const invoiceItemsSchema: TableSchema = {
   name: 'invoice_items',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'invoice_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'description', type: 'TEXT', constraints: ['NOT NULL'] },
@@ -224,7 +224,7 @@ const invoiceItemsSchema: TableSchema = {
     { name: 'total', type: 'REAL', constraints: ['NOT NULL DEFAULT 0'] },
     { name: 'tax_rate', type: 'REAL', constraints: ['DEFAULT 0'] },
     { name: 'sort_order', type: 'INTEGER', constraints: ['DEFAULT 0'] },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -238,7 +238,7 @@ const invoiceItemsSchema: TableSchema = {
 const paymentsSchema: TableSchema = {
   name: 'payments',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'invoice_id', type: 'INTEGER' },
     { name: 'client_id', type: 'INTEGER', constraints: ['NOT NULL'] },
@@ -250,8 +250,8 @@ const paymentsSchema: TableSchema = {
     { name: 'stripe_payment_id', type: 'TEXT' },
     { name: 'notes', type: 'TEXT' },
     { name: 'date', type: 'TEXT', constraints: ['NOT NULL'] },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -266,7 +266,7 @@ const paymentsSchema: TableSchema = {
 const expensesSchema: TableSchema = {
   name: 'expenses',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'description', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'amount', type: 'REAL', constraints: ['NOT NULL'] },
@@ -280,8 +280,8 @@ const expensesSchema: TableSchema = {
     { name: 'client_id', type: 'INTEGER' },
     { name: 'project', type: 'TEXT' },
     { name: 'status', type: 'TEXT', constraints: ['NOT NULL DEFAULT \'pending\''] },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -295,7 +295,7 @@ const expensesSchema: TableSchema = {
 const retainersSchema: TableSchema = {
   name: 'retainers',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'client_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
@@ -310,8 +310,8 @@ const retainersSchema: TableSchema = {
     { name: 'auto_renew', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'notes', type: 'TEXT' },
     { name: 'deleted_at', type: 'TEXT' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -325,14 +325,14 @@ const retainersSchema: TableSchema = {
 const invoiceDesignTemplatesSchema: TableSchema = {
   name: 'invoice_design_templates',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'content', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'is_default', type: 'INTEGER', constraints: ['DEFAULT 0'] },
     { name: 'variables', type: 'TEXT' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
@@ -345,7 +345,7 @@ const invoiceDesignTemplatesSchema: TableSchema = {
 const recurringInvoiceTemplatesSchema: TableSchema = {
   name: 'recurring_invoice_templates',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'client_id', type: 'INTEGER', constraints: ['NOT NULL'] },
@@ -361,8 +361,8 @@ const recurringInvoiceTemplatesSchema: TableSchema = {
     { name: 'shipping_amount', type: 'REAL', constraints: ['DEFAULT 0'] },
     { name: 'shipping_rate_id', type: 'TEXT' },
     { name: 'notes', type: 'TEXT' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -376,15 +376,15 @@ const recurringInvoiceTemplatesSchema: TableSchema = {
 const settingsSchema: TableSchema = {
   name: 'settings',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'key', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'value', type: 'TEXT' },
     { name: 'type', type: 'TEXT', constraints: ['DEFAULT \'string\''] },
     { name: 'description', type: 'TEXT' },
     { name: 'is_public', type: 'INTEGER', constraints: ['DEFAULT 0'] },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -398,13 +398,13 @@ const settingsSchema: TableSchema = {
 const projectSettingsSchema: TableSchema = {
   name: 'project_settings',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'key', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'value', type: 'TEXT' },
     { name: 'enabled', type: 'INTEGER', constraints: ['DEFAULT 1'] },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -418,14 +418,14 @@ const projectSettingsSchema: TableSchema = {
 const reportsSchema: TableSchema = {
   name: 'reports',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'type', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'date_range_start', type: 'TEXT' },
     { name: 'date_range_end', type: 'TEXT' },
     { name: 'data', type: 'TEXT' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
@@ -438,12 +438,12 @@ const reportsSchema: TableSchema = {
 const countersSchema: TableSchema = {
   name: 'counters',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'value', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -457,7 +457,7 @@ const countersSchema: TableSchema = {
 const auditLogSchema: TableSchema = {
   name: 'audit_log',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER' },
     { name: 'user_id', type: 'INTEGER' },
     { name: 'action', type: 'TEXT', constraints: ['NOT NULL'] },
@@ -466,7 +466,7 @@ const auditLogSchema: TableSchema = {
     { name: 'ip_address', type: 'TEXT' },
     { name: 'user_agent', type: 'TEXT' },
     { name: 'metadata_json', type: 'TEXT' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE SET NULL'
@@ -479,10 +479,10 @@ const auditLogSchema: TableSchema = {
 const dunningEventsSchema: TableSchema = {
   name: 'dunning_events',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'event_type', type: 'TEXT', constraints: ['NOT NULL'] },
-    { name: 'sent_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
+    { name: 'sent_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
     { name: 'metadata_json', type: 'TEXT' }
   ],
   constraints: [
@@ -496,7 +496,7 @@ const dunningEventsSchema: TableSchema = {
 const apiKeysSchema: TableSchema = {
   name: 'api_keys',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'user_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
@@ -505,8 +505,8 @@ const apiKeysSchema: TableSchema = {
     { name: 'scopes', type: 'TEXT', constraints: ["NOT NULL DEFAULT '[\"read\",\"write\"]'"] },
     { name: 'last_used_at', type: 'TEXT' },
     { name: 'expires_at', type: 'TEXT' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -520,7 +520,7 @@ const apiKeysSchema: TableSchema = {
 const webhookEndpointsSchema: TableSchema = {
   name: 'webhook_endpoints',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'url', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'secret', type: 'TEXT', constraints: ['NOT NULL'] },
@@ -529,8 +529,8 @@ const webhookEndpointsSchema: TableSchema = {
     { name: 'description', type: 'TEXT' },
     { name: 'last_triggered_at', type: 'TEXT' },
     { name: 'failure_count', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE'
@@ -543,7 +543,7 @@ const webhookEndpointsSchema: TableSchema = {
 const webhookDeliveriesSchema: TableSchema = {
   name: 'webhook_deliveries',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'endpoint_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'event_type', type: 'TEXT', constraints: ['NOT NULL'] },
@@ -553,7 +553,7 @@ const webhookDeliveriesSchema: TableSchema = {
     { name: 'attempt_count', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 1'] },
     { name: 'delivered_at', type: 'TEXT' },
     { name: 'failed_at', type: 'TEXT' },
-    { name: 'created_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (endpoint_id) REFERENCES webhook_endpoints (id) ON DELETE CASCADE'
@@ -566,10 +566,10 @@ const webhookDeliveriesSchema: TableSchema = {
 const processedWebhookEventsSchema: TableSchema = {
   name: 'processed_webhook_events',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'event_id', type: 'TEXT', constraints: ['NOT NULL UNIQUE'] },
     { name: 'provider', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'stripe'"] },
-    { name: 'processed_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'processed_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ]
 };
 
@@ -579,13 +579,13 @@ const processedWebhookEventsSchema: TableSchema = {
 const usageRecordsSchema: TableSchema = {
   name: 'usage_records',
   columns: [
-    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY AUTOINCREMENT'] },
+    { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'tenant_id', type: 'INTEGER', constraints: ['NOT NULL'] },
     { name: 'metric', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'value', type: 'INTEGER', constraints: ['NOT NULL DEFAULT 0'] },
     { name: 'period', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'period_type', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'monthly'"] },
-    { name: 'updated_at', type: 'TEXT', constraints: ['NOT NULL DEFAULT (datetime(\'now\'))'] }
+    { name: 'updated_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ],
   constraints: [
     'FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE',
@@ -641,8 +641,9 @@ export const createTables = async (db: IDatabase): Promise<void> => {
 
   // Ensure a default tenant exists for backwards-compatible single-tenant mode.
   await db.executeQuery(`
-    INSERT OR IGNORE INTO tenants (id, name, slug, status)
+    INSERT INTO tenants (id, name, slug, status)
     VALUES (1, 'Default Tenant', 'default', 'active')
+    ON CONFLICT (id) DO NOTHING
   `);
 
   const trialFeatures = JSON.stringify({
@@ -662,23 +663,25 @@ export const createTables = async (db: IDatabase): Promise<void> => {
 
   await db.executeQuery(
     `
-      INSERT OR IGNORE INTO subscription_plans (
+      INSERT INTO subscription_plans (
         code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
-      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, datetime('now'), datetime('now'))
+      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, NOW(), NOW())
+      ON CONFLICT (code) DO NOTHING
     `,
     ['trial', 'Trial', 0, 14, trialFeatures]
   );
   await db.executeQuery(
     `
-      INSERT OR IGNORE INTO subscription_plans (
+      INSERT INTO subscription_plans (
         code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
-      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, datetime('now'), datetime('now'))
+      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, NOW(), NOW())
+      ON CONFLICT (code) DO NOTHING
     `,
     ['starter', 'Starter', 2900, 0, starterFeatures]
   );
 
   await db.executeQuery(`
-    INSERT OR IGNORE INTO tenant_subscriptions (
+    INSERT INTO tenant_subscriptions (
       tenant_id,
       plan_id,
       status,
@@ -694,16 +697,17 @@ export const createTables = async (db: IDatabase): Promise<void> => {
       1,
       sp.id,
       'active',
-      datetime('now'),
-      datetime('now'),
-      datetime('now', '+1 month'),
+      NOW(),
+      NOW(),
+      NOW() + INTERVAL '1 month',
       0,
       'internal',
-      datetime('now'),
-      datetime('now')
+      NOW(),
+      NOW()
     FROM subscription_plans sp
     WHERE sp.code = 'starter'
     LIMIT 1
+    ON CONFLICT (tenant_id) DO NOTHING
   `);
 
   // Create token tables for password reset and email verification

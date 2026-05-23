@@ -4,10 +4,10 @@ export const up = async (db: IDatabase): Promise<void> => {
   try {
     await db.executeQuery(`
       CREATE TABLE IF NOT EXISTS user_roles (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
         permissions TEXT DEFAULT '[]',
-        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        created_at TEXT NOT NULL DEFAULT (NOW())
       )
     `);
   } catch {

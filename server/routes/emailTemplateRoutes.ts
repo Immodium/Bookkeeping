@@ -41,7 +41,7 @@ router.get(
 router.get(
   '/:name',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { name } = req.params;
+    const name = req.params.name!;
     const tenantId = req.tenantId || req.user?.tenant_id || 1;
 
     const knownNames = emailTemplateService.getBuiltInTemplateNames();
@@ -63,7 +63,7 @@ router.get(
 router.put(
   '/:name',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { name } = req.params;
+    const name = req.params.name!;
     const tenantId = req.tenantId || req.user?.tenant_id || 1;
     const { subject, html, text } = req.body || {};
 
@@ -84,7 +84,7 @@ router.put(
 router.delete(
   '/:name',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const { name } = req.params;
+    const name = req.params.name!;
     const tenantId = req.tenantId || req.user?.tenant_id || 1;
 
     await emailTemplateService.deleteTemplate(name, tenantId);

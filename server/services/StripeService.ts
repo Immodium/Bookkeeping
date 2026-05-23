@@ -3,12 +3,12 @@ import { stripeConfig } from '../config/index.js';
 import { databaseService } from '../core/DatabaseService.js';
 
 export class StripeService {
-  private stripe: Stripe | null = null;
+  private stripe: InstanceType<typeof Stripe> | null = null;
 
   constructor() {
     if (stripeConfig.isConfigured && stripeConfig.secretKey) {
       this.stripe = new Stripe(stripeConfig.secretKey, {
-        apiVersion: '2025-04-30.basil'
+        apiVersion: '2026-04-22.dahlia'
       });
     }
   }
@@ -49,7 +49,7 @@ export class StripeService {
       // Store the customer ID
       await databaseService.executeQuery(
         `UPDATE tenant_subscriptions
-         SET provider_customer_id = ?, updated_at = datetime('now')
+         SET provider_customer_id = ?, updated_at = NOW()
          WHERE tenant_id = ?`,
         [customer.id, tenantId]
       );
@@ -135,7 +135,7 @@ export class StripeService {
   /**
    * Verify and parse an incoming Stripe webhook
    */
-  constructWebhookEvent(rawBody: Buffer, signature: string): Stripe.Event {
+  constructWebhookEvent(rawBody: Buffer, signature: string): ReturnType<InstanceType<typeof Stripe>['webhooks']['constructEvent']> {
     if (!this.stripe) {
       throw new Error('Stripe is not configured');
     }

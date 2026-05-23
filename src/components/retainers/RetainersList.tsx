@@ -1,9 +1,11 @@
-import React from 'react';
-import { Edit, Trash2, Calendar, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Edit, Trash2, Calendar, RefreshCw, Mail } from 'lucide-react';
 import { Retainer, RetainerStatus } from '@/types';
 import { getStatusColor } from '@/utils/themeUtils.util';
 import { FormattedCurrency } from '@/components/ui/FormattedCurrency';
 import { formatDateSync } from '@/components/ui/FormattedDate';
+import { authenticatedFetch } from '@/utils/api';
+import { toast } from 'sonner';
 
 interface RetainersListProps {
   retainers: Retainer[];
@@ -26,9 +28,38 @@ export const RetainersList: React.FC<RetainersListProps> = ({
   onDeleteRetainer,
   onViewRetainer
 }) => {
+  const [sendingEmailId, setSendingEmailId] = useState<number | null>(null);
+
   const handleDelete = (id: number, name: string) => {
     if (window.confirm(`Are you sure you want to delete retainer "${name}"?`)) {
       onDeleteRetainer(id);
+    }
+  };
+
+  const handleSendEmail = async (event: React.MouseEvent, retainer: Retainer) => {
+    event.stopPropagation();
+    const toEmail = retainer.client_email;
+    if (!toEmail) {
+      toast.error('No email address on file for this client');
+      return;
+    }
+    setSendingEmailId(retainer.id);
+    try {
+      const response = await authenticatedFetch(`/api/retainers/${retainer.id}/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: toEmail })
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success(`Retainer emailed to ${toEmail}`);
+      } else {
+        toast.error(`Failed to send: ${result.message}`);
+      }
+    } catch {
+      toast.error('Failed to send retainer email');
+    } finally {
+      setSendingEmailId(null);
     }
   };
 
@@ -109,6 +140,17 @@ export const RetainersList: React.FC<RetainersListProps> = ({
                 </td>
                 <td className="py-4 px-6">
                   <div className="flex space-x-2">
+                    {retainer.client_email && (
+                      <button
+                        onClick={(event) => handleSendEmail(event, retainer)}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        disabled={sendingEmailId === retainer.id}
+                        className="p-1 text-muted-foreground hover:text-blue-600 disabled:opacity-50"
+                        title="Email retainer"
+                      >
+                        <Mail className="h-4 w-4" />
+                      </button>
+                    )}
                     <button
                       onClick={(event) => {
                         event.stopPropagation();

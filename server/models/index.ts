@@ -1,42 +1,32 @@
 // Main database model module for Slimbooks
-// Exports database instance and initialization functions
+// PostgreSQL-only: exports database instance and initialization functions
 
-import Database from 'better-sqlite3';
+import { db } from '../database/index.js';
 import { createTables } from '../database/schemas/tables.schema.js';
-import { 
-  initializeCounters, 
-  initializeAdminUser, 
-  initializeSampleClients, 
-  initializeSampleInvoices, 
-  initializeSamplePayments 
+import {
+  initializeCounters,
+  initializeAdminUser,
+  initializeSampleClients,
+  initializeSampleInvoices,
+  initializeSamplePayments
 } from '../database/seeds/initial.seed.js';
 
-// Initialize database instance
-import { database } from '../database/SQLiteDatabase.js';
-export const db: Database.Database = database.getRawConnection();
+export { db };
 
 /**
  * Initialize the complete database setup
  */
 export const initializeCompleteDatabase = async (includeSampleData = false): Promise<void> => {
   try {
-    // Get the IDatabase interface for the seed functions
-    const idb = database;
-    
-    // Create tables using the new schema function
-    createTables(idb);
+    await createTables(db);
 
-    // Initialize counters
-    initializeCounters(idb);
+    await initializeCounters(db);
+    await initializeAdminUser(db);
 
-    // Initialize admin user
-    await initializeAdminUser(idb);
-
-    // Add sample data if requested (typically for development)
     if (includeSampleData && process.env.NODE_ENV !== 'production') {
-      initializeSampleClients(idb);
-      initializeSampleInvoices(idb);
-      initializeSamplePayments(idb);
+      await initializeSampleClients(db);
+      await initializeSampleInvoices(db);
+      await initializeSamplePayments(db);
     }
   } catch (error) {
     console.error('❌ Database initialization failed:', error);

@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Globe, CreditCard, Shield, AlertTriangle, CheckCircle, Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { themeClasses } from '@/utils/themeUtils.util';
 import { toast } from 'sonner';
-import { ProjectSettings, SettingsTabRef } from '@/types';
+import { ProjectSettings } from '@/types';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { EmailSettings } from './EmailSettings';
 
@@ -11,7 +11,6 @@ export interface ProjectSettingsRef {
 }
 
 export const ProjectSettingsTab = forwardRef<ProjectSettingsRef>((props, ref) => {
-  const emailSettingsRef = useRef<SettingsTabRef>(null);
   const [settings, setSettings] = useState<ProjectSettings>({
     google_oauth: {
       enabled: false,
@@ -23,15 +22,6 @@ export const ProjectSettingsTab = forwardRef<ProjectSettingsRef>((props, ref) =>
       enabled: false,
       publishable_key: '',
       secret_key: '',
-      configured: false
-    },
-    email: {
-      enabled: false,
-      smtp_host: '',
-      smtp_port: 587,
-      smtp_user: '',
-      smtp_pass: '',
-      email_from: '',
       configured: false
     },
     security: {
@@ -89,7 +79,7 @@ export const ProjectSettingsTab = forwardRef<ProjectSettingsRef>((props, ref) =>
     }
   };
 
-  const handleToggleEnabled = (section: 'google_oauth' | 'stripe' | 'email') => {
+  const handleToggleEnabled = (section: 'google_oauth' | 'stripe') => {
     setSettings(prev => {
       if (!prev) return prev;
       return {
@@ -125,9 +115,6 @@ export const ProjectSettingsTab = forwardRef<ProjectSettingsRef>((props, ref) =>
       }
 
       await sqliteService.updateProjectSettings(settings);
-      if (emailSettingsRef.current?.saveSettings) {
-        await emailSettingsRef.current.saveSettings();
-      }
       setOriginalSettings(settings); // Update original settings after successful save
       toast.success('Integration settings saved successfully');
     } catch (error) {
@@ -352,25 +339,15 @@ export const ProjectSettingsTab = forwardRef<ProjectSettingsRef>((props, ref) =>
             <div>
               <label className="text-sm font-medium text-card-foreground">Require Email Verification</label>
               <p className="text-sm text-muted-foreground">Users must verify their email before accessing the application</p>
-              {!settings?.email?.configured && (
-                <p className="text-sm text-amber-600 mt-1">⚠️ Email must be configured and tested first</p>
-              )}
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 checked={settings?.security?.require_email_verification || false}
-                onChange={(e) => {
-                  if (e.target.checked && !settings?.email?.configured) {
-                    toast.error('Please configure and test email settings first');
-                    return;
-                  }
-                  handleInputChange('security', 'require_email_verification', e.target.checked);
-                }}
-                disabled={!settings?.email?.configured}
-                className="sr-only peer disabled:opacity-50"
+                onChange={(e) => handleInputChange('security', 'require_email_verification', e.target.checked)}
+                className="sr-only peer"
               />
-              <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 ${!settings?.email?.configured ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
             </label>
           </div>
 

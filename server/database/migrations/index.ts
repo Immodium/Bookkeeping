@@ -71,7 +71,7 @@ const createMigrationsTable = async (db: IDatabase): Promise<void> => {
     CREATE TABLE IF NOT EXISTS migrations (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+      applied_at TEXT NOT NULL DEFAULT (NOW())
     )
   `);
 };

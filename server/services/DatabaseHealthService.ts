@@ -1,8 +1,16 @@
 // Database Health Service - Service for database health monitoring and diagnostics
-// Handles database health checks, statistics, and schema information
+// PostgreSQL implementation
 
 import { databaseService } from '../core/DatabaseService.js';
 
+interface ColumnInfo {
+  column_name: string;
+  data_type: string;
+  is_nullable: string;
+  column_default: string | null;
+}
+
+// Keep backward-compatible TableInfo interface shape
 interface TableInfo {
   cid: number;
   name: string;
@@ -26,9 +34,8 @@ export class DatabaseHealthService {
     timestamp: string;
   }> {
     try {
-      // Test basic database connectivity
       const testResult = await databaseService.getOne<{test: number}>('SELECT 1 as test');
-      
+
       if (!testResult || testResult.test !== 1) {
         throw new Error('Database connectivity test failed');
       }
@@ -59,14 +66,12 @@ export class DatabaseHealthService {
       const [clients, invoices, templates, expenses, payments, users] = await Promise.all([
         this.getTableCount('clients'),
         this.getTableCount('invoices'),
-        this.getTableCount('templates'),
+        this.getTableCount('invoice_design_templates'),
         this.getTableCount('expenses'),
         this.getTableCount('payments'),
         this.getTableCount('users')
       ]);
-      const stats = { clients, invoices, templates, expenses, payments, users };
-
-      return stats;
+      return { clients, invoices, templates, expenses, payments, users };
     } catch (error) {
       console.error('Error getting database statistics:', error);
       throw new Error('Failed to retrieve database statistics: ' + (error as Error).message);
@@ -81,17 +86,16 @@ export class DatabaseHealthService {
       if (!this.isValidTableName(tableName)) {
         throw new Error('Invalid table name');
       }
-
-      const result = await databaseService.getOne<{count: number}>(`SELECT COUNT(*) as count FROM ${tableName}`);
-      return result ? result.count : 0;
+      const result = await databaseService.getOne<{count: string}>(`SELECT COUNT(*) as count FROM ${tableName}`);
+      return result ? parseInt(result.count, 10) : 0;
     } catch (error) {
       console.error(`Error getting count for table ${tableName}:`, error);
-      return 0; // Return 0 if table doesn't exist or error occurs
+      return 0;
     }
   }
 
   /**
-   * Get database schema information
+   * Get database schema information using information_schema
    */
   async getDatabaseSchema(): Promise<{
     tables: string[];
@@ -103,12 +107,11 @@ export class DatabaseHealthService {
     }>;
   }> {
     try {
-      // Get all tables (excluding SQLite system tables)
-      const tables = await databaseService.getMany<{name: string; type: string}>(`
-        SELECT name, type
-        FROM sqlite_master
-        WHERE type='table' AND name NOT LIKE 'sqlite_%'
-        ORDER BY name
+      const tables = await databaseService.getMany<{table_name: string}>(`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+        ORDER BY table_name
       `);
 
       const tableInfo: Record<string, {
@@ -118,8 +121,8 @@ export class DatabaseHealthService {
       }> = {};
 
       for (const table of tables) {
-        const columns = await this.getTableColumns(table.name);
-        tableInfo[table.name] = {
+        const columns = await this.getTableColumns(table.table_name);
+        tableInfo[table.table_name] = {
           columns: columns.length,
           columnNames: columns.map(col => col.name),
           columnDetails: columns
@@ -127,7 +130,7 @@ export class DatabaseHealthService {
       }
 
       return {
-        tables: tables.map(t => t.name),
+        tables: tables.map(t => t.table_name),
         tableCount: tables.length,
         tableInfo
       };
@@ -138,7 +141,8 @@ export class DatabaseHealthService {
   }
 
   /**
-   * Get column information for a table
+   * Get column information for a table using information_schema
+   * Returns in legacy TableInfo shape for backward compatibility
    */
   async getTableColumns(tableName: string): Promise<TableInfo[]> {
     try {
@@ -146,7 +150,27 @@ export class DatabaseHealthService {
         throw new Error('Invalid table name');
       }
 
-      return await databaseService.getMany<TableInfo>(`PRAGMA table_info(${tableName})`);
+      const rows = await databaseService.getMany<ColumnInfo>(`
+        SELECT
+          column_name,
+          data_type,
+          is_nullable,
+          column_default,
+          ordinal_position
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1
+        ORDER BY ordinal_position
+      `, [tableName]);
+
+      // Map to legacy TableInfo shape
+      return rows.map((row, idx) => ({
+        cid: idx,
+        name: row.column_name,
+        type: row.data_type,
+        notnull: row.is_nullable === 'NO' ? 1 : 0,
+        dflt_value: row.column_default,
+        pk: 0 // PostgreSQL PK detection requires additional query; not needed for health checks
+      }));
     } catch (error) {
       console.error(`Error getting columns for table ${tableName}:`, error);
       return [];
@@ -154,7 +178,7 @@ export class DatabaseHealthService {
   }
 
   /**
-   * Get database file size and other metadata
+   * Get database metadata using PostgreSQL system views
    */
   async getDatabaseMetadata(): Promise<{
     pageCount: number;
@@ -165,24 +189,18 @@ export class DatabaseHealthService {
     applicationId: number;
   }> {
     try {
-      // Get database page count and page size
-      const pageCount = await databaseService.getOne<{page_count: number}>('PRAGMA page_count');
-      const pageSize = await databaseService.getOne<{page_size: number}>('PRAGMA page_size');
-      
-      const estimatedSize = pageCount && pageSize ? 
-        (pageCount.page_count * pageSize.page_size) : 0;
-
-      // Get database version info
-      const userVersion = await databaseService.getOne<{user_version: number}>('PRAGMA user_version');
-      const applicationId = await databaseService.getOne<{application_id: number}>('PRAGMA application_id');
+      const sizeRow = await databaseService.getOne<{size: string}>(`
+        SELECT pg_database_size(current_database()) AS size
+      `);
+      const estimatedSize = sizeRow ? parseInt(sizeRow.size, 10) : 0;
 
       return {
-        pageCount: pageCount?.page_count || 0,
-        pageSize: pageSize?.page_size || 0,
+        pageCount: 0,
+        pageSize: 8192, // Default PostgreSQL page size
         estimatedSizeBytes: estimatedSize,
         estimatedSizeMB: Math.round(estimatedSize / (1024 * 1024) * 100) / 100,
-        userVersion: userVersion?.user_version || 0,
-        applicationId: applicationId?.application_id || 0
+        userVersion: 0,
+        applicationId: 0
       };
     } catch (error) {
       console.error('Error getting database metadata:', error);
@@ -204,26 +222,23 @@ export class DatabaseHealthService {
     if (!tableName || typeof tableName !== 'string') {
       return false;
     }
-
-    // Allow only alphanumeric characters and underscores
     const validPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
     return validPattern.test(tableName);
   }
 
   /**
-   * Check if a table exists
+   * Check if a table exists using information_schema
    */
   async tableExists(tableName: string): Promise<boolean> {
     try {
       if (!this.isValidTableName(tableName)) {
         return false;
       }
-
-      const result = await databaseService.getOne<{name: string}>(`
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name=?
+      const result = await databaseService.getOne<{table_name: string}>(`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = $1
       `, [tableName]);
-
       return !!result;
     } catch (error) {
       console.error(`Error checking if table ${tableName} exists:`, error);
@@ -289,7 +304,7 @@ export class DatabaseHealthService {
   }
 
   /**
-   * Check database integrity
+   * Check database integrity using PostgreSQL
    */
   async checkDatabaseIntegrity(): Promise<{
     status: 'ok' | 'error';
@@ -297,15 +312,13 @@ export class DatabaseHealthService {
     timestamp: string;
   }> {
     try {
-      const result = await databaseService.getOne<{integrity_check: string}>('PRAGMA integrity_check');
-      
-      const isHealthy = result && (result.integrity_check === 'ok' || 
-                                   (typeof result.integrity_check === 'string' && 
-                                    result.integrity_check.toLowerCase() === 'ok'));
+      // PostgreSQL doesn't have PRAGMA integrity_check; use a simple SELECT as a health check
+      const result = await databaseService.getOne<{test: number}>('SELECT 1 AS test');
+      const isHealthy = result && result.test === 1;
 
       return {
         status: isHealthy ? 'ok' : 'error',
-        result: result?.integrity_check || 'unknown',
+        result: isHealthy ? 'ok' : 'connectivity check failed',
         timestamp: new Date().toISOString()
       };
     } catch (error) {
@@ -319,7 +332,7 @@ export class DatabaseHealthService {
   }
 
   /**
-   * Get database connection info
+   * Get database connection info (PostgreSQL equivalent)
    */
   async getConnectionInfo(): Promise<{
     journalMode: string;
@@ -328,15 +341,10 @@ export class DatabaseHealthService {
     timestamp: string;
   }> {
     try {
-      // Get various database settings
-      const journalMode = await databaseService.getOne<{journal_mode: string}>('PRAGMA journal_mode');
-      const synchronous = await databaseService.getOne<{synchronous: number}>('PRAGMA synchronous');
-      const foreignKeys = await databaseService.getOne<{foreign_keys: number}>('PRAGMA foreign_keys');
-      
       return {
-        journalMode: journalMode?.journal_mode || 'unknown',
-        synchronous: synchronous?.synchronous?.toString() || 'unknown',
-        foreignKeysEnabled: foreignKeys?.foreign_keys === 1,
+        journalMode: 'postgresql',
+        synchronous: 'on',
+        foreignKeysEnabled: true,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
@@ -381,7 +389,7 @@ export class DatabaseHealthService {
     try {
       const healthCheck = await this.performHealthCheck();
       const statistics = await this.getDatabaseStatistics();
-      
+
       return {
         status: healthCheck.status === 'healthy' ? 'ok' : 'error',
         database: {

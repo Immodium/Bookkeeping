@@ -23,9 +23,9 @@ class UsageService {
       const period = currentPeriod();
       await databaseService.executeQuery(
         `INSERT INTO usage_records (tenant_id, metric, value, period, period_type, updated_at)
-         VALUES (?, ?, ?, ?, 'monthly', datetime('now'))
+         VALUES (?, ?, ?, ?, 'monthly', NOW())
          ON CONFLICT(tenant_id, metric, period)
-         DO UPDATE SET value = value + ?, updated_at = datetime('now')`,
+         DO UPDATE SET value = value + ?, updated_at = NOW()`,
         [tenantId, metric, amount, period, amount]
       );
     } catch {

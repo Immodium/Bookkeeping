@@ -244,7 +244,7 @@ export const performanceMonitor = () => {
  * e.g. POST /api/invoices -> 'invoices.create'
  */
 function deriveAction(method: string, path: string): string {
-  const resource = path.replace(/^\/api\//, '').split('/')[0].replace(/-/g, '_');
+  const resource = (path.replace(/^\/api\//, '').split('/')[0] ?? '').replace(/-/g, '_');
   const verb = ({ POST: 'create', PUT: 'update', PATCH: 'update', DELETE: 'delete' } as Record<string, string>)[method] ?? 'mutate';
   return `${resource}.${verb}`;
 }

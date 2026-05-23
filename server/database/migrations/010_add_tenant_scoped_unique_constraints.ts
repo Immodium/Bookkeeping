@@ -2,8 +2,8 @@ import type { IDatabase } from '../../types/database.types.js';
 
 const hasTable = async (db: IDatabase, tableName: string): Promise<boolean> => {
   try {
-    const result = await db.getMany<{ name: string }>(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    const result = await db.getMany<{ table_name: string }>(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1",
       [tableName]
     );
     return result.length > 0;
@@ -15,8 +15,11 @@ const hasTable = async (db: IDatabase, tableName: string): Promise<boolean> => {
 const hasColumn = async (db: IDatabase, tableName: string, columnName: string): Promise<boolean> => {
   if (!(await hasTable(db, tableName))) return false;
   try {
-    const columns = await db.getMany<{ name: string }>(`PRAGMA table_info(${tableName})`);
-    return columns.some((column) => column.name === columnName);
+    const rows = await db.getMany<{ column_name: string }>(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2",
+      [tableName, columnName]
+    );
+    return rows.length > 0;
   } catch {
     return false;
   }
@@ -28,7 +31,7 @@ const recreateSettingsTable = async (db: IDatabase): Promise<void> => {
   await db.executeQuery('ALTER TABLE settings RENAME TO settings_legacy_010');
   await db.executeQuery(`
     CREATE TABLE settings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       tenant_id INTEGER NOT NULL DEFAULT 1,
       key TEXT NOT NULL,
       value TEXT,
@@ -36,8 +39,8 @@ const recreateSettingsTable = async (db: IDatabase): Promise<void> => {
       description TEXT,
       is_public INTEGER DEFAULT 0,
       category TEXT DEFAULT 'general',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (NOW()),
+      updated_at TEXT NOT NULL DEFAULT (NOW()),
       FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
       UNIQUE (tenant_id, key)
     )
@@ -66,13 +69,13 @@ const recreateProjectSettingsTable = async (db: IDatabase): Promise<void> => {
   await db.executeQuery('ALTER TABLE project_settings RENAME TO project_settings_legacy_010');
   await db.executeQuery(`
     CREATE TABLE project_settings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       tenant_id INTEGER NOT NULL DEFAULT 1,
       key TEXT NOT NULL,
       value TEXT,
       enabled INTEGER DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (NOW()),
+      updated_at TEXT NOT NULL DEFAULT (NOW()),
       FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
       UNIQUE (tenant_id, key)
     )
@@ -93,12 +96,12 @@ const recreateCountersTable = async (db: IDatabase): Promise<void> => {
   await db.executeQuery('ALTER TABLE counters RENAME TO counters_legacy_010');
   await db.executeQuery(`
     CREATE TABLE counters (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       tenant_id INTEGER NOT NULL DEFAULT 1,
       name TEXT NOT NULL,
       value INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (NOW()),
+      updated_at TEXT NOT NULL DEFAULT (NOW()),
       FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
       UNIQUE (tenant_id, name)
     )
@@ -119,7 +122,7 @@ const recreateInvoicesTable = async (db: IDatabase): Promise<void> => {
   await db.executeQuery('ALTER TABLE invoices RENAME TO invoices_legacy_010');
   await db.executeQuery(`
     CREATE TABLE invoices (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       tenant_id INTEGER NOT NULL DEFAULT 1,
       invoice_number TEXT NOT NULL,
       client_id INTEGER NOT NULL,
@@ -157,8 +160,8 @@ const recreateInvoicesTable = async (db: IDatabase): Promise<void> => {
       is_recurring INTEGER DEFAULT 0,
       recurring_frequency TEXT,
       next_due_date TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (NOW()),
+      updated_at TEXT NOT NULL DEFAULT (NOW()),
       FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE CASCADE,
       FOREIGN KEY (client_id) REFERENCES clients (id) ON DELETE CASCADE,
       FOREIGN KEY (design_template_id) REFERENCES invoice_design_templates (id) ON DELETE SET NULL,
@@ -190,21 +193,12 @@ const recreateInvoicesTable = async (db: IDatabase): Promise<void> => {
 };
 
 export const up = async (db: IDatabase): Promise<void> => {
-  await db.executeQuery('PRAGMA foreign_keys = OFF');
-  try {
-    await db.transaction(async () => {
-      await recreateSettingsTable(db);
-      await recreateProjectSettingsTable(db);
-      await recreateCountersTable(db);
-      await recreateInvoicesTable(db);
-    });
-  } catch {
-    // May fail on PostgreSQL due to PRAGMA - ignore
-  } finally {
-    try {
-      await db.executeQuery('PRAGMA foreign_keys = ON');
-    } catch {
-      // PostgreSQL doesn't have PRAGMA
-    }
-  }
+  // PostgreSQL: foreign key constraints cannot be disabled session-wide;
+  // run table recreations directly in a transaction.
+  await db.transaction(async () => {
+    await recreateSettingsTable(db);
+    await recreateProjectSettingsTable(db);
+    await recreateCountersTable(db);
+    await recreateInvoicesTable(db);
+  });
 };

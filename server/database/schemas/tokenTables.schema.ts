@@ -7,12 +7,12 @@ export async function createTokenTables(db: IDatabase): Promise<void> {
   // Password reset tokens table
   await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL,
       token_hash TEXT NOT NULL UNIQUE,
       expires_at DATETIME NOT NULL,
       used_at DATETIME DEFAULT NULL,
-      created_at DATETIME DEFAULT (datetime('now')),
+      created_at DATETIME DEFAULT (NOW()),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
@@ -30,12 +30,12 @@ export async function createTokenTables(db: IDatabase): Promise<void> {
   // Email verification tokens table
   await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS email_verification_tokens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL,
       token_hash TEXT NOT NULL UNIQUE,
       expires_at DATETIME NOT NULL,
       used_at DATETIME DEFAULT NULL,
-      created_at DATETIME DEFAULT (datetime('now')),
+      created_at DATETIME DEFAULT (NOW()),
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);

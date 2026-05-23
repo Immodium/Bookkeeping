@@ -12,8 +12,8 @@ export interface ApiKeyRecord {
   name: string;
   key_prefix: string;
   scopes: string[];
-  last_used_at?: string;
-  expires_at?: string;
+  last_used_at?: string | undefined;
+  expires_at?: string | undefined;
   created_at: string;
 }
 
@@ -132,7 +132,7 @@ class ApiKeyService {
 
       // Update last_used_at (fire-and-forget)
       databaseService.executeQuery(
-        "UPDATE api_keys SET last_used_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
+        "UPDATE api_keys SET last_used_at = NOW(), updated_at = NOW() WHERE id = ?",
         [row.id]
       ).catch(() => {});
 

@@ -52,7 +52,8 @@ export {
   getRecentInvoices,
   checkInvoiceNumberExists,
   generateInvoiceNumber,
-  previewNextInvoiceNumber
+  previewNextInvoiceNumber,
+  sendInvoiceEmail
 } from './invoiceController.js';
 
 // Expense controller

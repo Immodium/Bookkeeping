@@ -205,7 +205,7 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
     subject: resetEmailContent.subject,
     html: resetEmailContent.html,
     text: resetEmailContent.text
-  }, { tenantId });
+  });
 
   res.json({
     success: true,
@@ -411,7 +411,7 @@ export const logout = asyncHandler(async (req: Request, res: Response): Promise<
   }
 
   await databaseService.executeQuery(
-    `UPDATE users SET token_version = COALESCE(token_version, 0) + 1, updated_at = datetime('now') WHERE id = ?`,
+    `UPDATE users SET token_version = COALESCE(token_version, 0) + 1, updated_at = NOW() WHERE id = ?`,
     [user.id]
   );
 
@@ -470,17 +470,15 @@ export const registerTenant = asyncHandler(async (req: Request, res: Response): 
       subject: welcomeContent.subject,
       html: welcomeContent.html,
       text: welcomeContent.text
-    }, { tenantId }))
+    }))
     .catch(() => {
       // Ignore email errors — don't fail registration
     });
 
-  const { password_hash, two_factor_secret, backup_codes, ...userResponse } = newUser;
-
   res.status(201).json({
     success: true,
     data: {
-      user: userResponse as UserPublic,
+      user: newUser as UserPublic,
       token
     },
     message: 'Tenant registered successfully'

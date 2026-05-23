@@ -45,7 +45,7 @@ router.get('/detailed', async (req: Request, res: Response) => {
     const uptime = process.uptime();
 
     let activeTenants: number | undefined;
-    if (serverConfig.saasMode && healthData.status === 'healthy') {
+    if (serverConfig.saasMode && healthData.status === 'ok') {
       try {
         const row = await databaseService.getOne<{ count: number }>(
           `SELECT COUNT(*) AS count FROM tenants WHERE status = 'active'`

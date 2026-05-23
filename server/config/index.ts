@@ -47,16 +47,11 @@ export interface ServerConfig {
  * Database configuration interface
  */
 export interface DatabaseConfig {
-  dbPath: string;
-  backupPath: string;
-  timeout: number;
-  verbose: ((message: string) => void) | null;
-  pragmas: {
-    foreign_keys: string;
-    journal_mode: string;
-  };
-  databaseUrl: string | undefined;
-  usePostgres: boolean;
+  databaseUrl: string;
+  poolMax: number;
+  poolMin: number;
+  poolIdleTimeout: number;
+  poolConnectionTimeout: number;
 }
 
 /**
@@ -80,9 +75,10 @@ export interface AuthConfig {
  * Email configuration interface
  */
 export interface EmailConfig {
-  provider: 'smtp' | 'sendgrid';
+  provider: 'smtp' | 'sendgrid' | 'resend';
   sendgridApiKey: string | undefined;
   sendgridFrom: string;
+  resendApiKey: string | undefined;
   smtp: {
     host: string | undefined;
     port: number;
@@ -236,23 +232,11 @@ export const serverConfig: ServerConfig = {
  * Database configuration
  */
 export const databaseConfig: DatabaseConfig = {
-  // Database file path (relative to project root)
-  dbPath: process.env.DB_PATH || 'data/slimbooks.db',
-  backupPath: process.env.DB_BACKUP_PATH || 'data/backups',
-
-  // Connection settings
-  timeout: 5000,
-  verbose: serverConfig.isDevelopment ? console.log : null,
-
-  // SQLite pragmas
-  pragmas: {
-    foreign_keys: 'ON',
-    journal_mode: 'WAL'
-  },
-
-  // PostgreSQL support
-  databaseUrl: process.env.DATABASE_URL,
-  usePostgres: !!process.env.DATABASE_URL
+  databaseUrl: process.env.DATABASE_URL || '',
+  poolMax: parseInt(process.env.DB_POOL_MAX || '20'),
+  poolMin: parseInt(process.env.DB_POOL_MIN || '2'),
+  poolIdleTimeout: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000'),
+  poolConnectionTimeout: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '5000'),
 };
 
 /**
@@ -285,9 +269,10 @@ export const authConfig: AuthConfig = {
  * Email configuration
  */
 export const emailConfig: EmailConfig = {
-  provider: process.env.EMAIL_PROVIDER === 'sendgrid' ? 'sendgrid' : 'smtp',
+  provider: process.env.EMAIL_PROVIDER === 'sendgrid' ? 'sendgrid' : process.env.EMAIL_PROVIDER === 'resend' ? 'resend' : 'smtp',
   sendgridApiKey: process.env.SENDGRID_API_KEY,
   sendgridFrom: process.env.SENDGRID_FROM || process.env.EMAIL_FROM || 'noreply@slimbooks.app',
+  resendApiKey: process.env.RESEND_API_KEY,
   smtp: {
     host: process.env.SMTP_HOST,
     port: parseInt(process.env.SMTP_PORT || '587'),
@@ -317,7 +302,9 @@ export const emailConfig: EmailConfig = {
   isConfigured: (
     process.env.EMAIL_PROVIDER === 'sendgrid'
       ? !!(process.env.SENDGRID_API_KEY && (process.env.SENDGRID_FROM || process.env.EMAIL_FROM))
-      : !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+      : process.env.EMAIL_PROVIDER === 'resend'
+        ? !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM)
+        : !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
   )
 };
 
@@ -433,6 +420,11 @@ export const validateConfig = (): void => {
   const requiredVars: string[] = [];
   const warnings: string[] = [];
 
+  // DATABASE_URL is always required
+  if (!databaseConfig.databaseUrl) {
+    requiredVars.push('DATABASE_URL (PostgreSQL connection string required)');
+  }
+
   if (serverConfig.isProduction) {
     // JWT_SECRET must be set and >= 32 chars in production
     if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
@@ -442,11 +434,6 @@ export const validateConfig = (): void => {
     // SESSION_SECRET must be set and >= 32 chars in production
     if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
       requiredVars.push('SESSION_SECRET (must be set and at least 32 characters)');
-    }
-
-    // DATABASE_URL required when usePostgres is true
-    if (databaseConfig.usePostgres && !process.env.DATABASE_URL) {
-      requiredVars.push('DATABASE_URL (required when usePostgres is true)');
     }
 
     // STRIPE_WEBHOOK_SECRET required when STRIPE_SECRET_KEY is set

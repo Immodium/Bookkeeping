@@ -220,7 +220,7 @@ export const getRetainerStats = asyncHandler(async (req: Request, res: Response)
 });
 
 export const sendRetainerEmail = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const retainerId = parseInt(req.params.id, 10);
+  const retainerId = parseInt(req.params.id!, 10);
   const tenantId = req.tenantId || req.user?.tenant_id || 1;
 
   if (isNaN(retainerId)) throw new ValidationError('Invalid retainer ID');

@@ -94,6 +94,7 @@ export interface Invoice extends BaseEntity {
   client_phone?: string;
   client_address?: string;
   line_items?: string;
+  currency?: string;
   tax_rate_id?: string;
   shipping_amount: number;
   shipping_rate_id?: string;

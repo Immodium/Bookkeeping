@@ -57,7 +57,7 @@ router.patch(
   '/:id',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.tenantId || req.user?.tenant_id || 1;
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id!, 10);
 
     if (isNaN(id)) {
       res.status(400).json({ success: false, error: 'Invalid webhook ID' });
@@ -88,7 +88,7 @@ router.delete(
   '/:id',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.tenantId || req.user?.tenant_id || 1;
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id!, 10);
 
     if (isNaN(id)) {
       res.status(400).json({ success: false, error: 'Invalid webhook ID' });
@@ -112,7 +112,7 @@ router.get(
   '/:id/deliveries',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.tenantId || req.user?.tenant_id || 1;
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id!, 10);
 
     if (isNaN(id)) {
       res.status(400).json({ success: false, error: 'Invalid webhook ID' });

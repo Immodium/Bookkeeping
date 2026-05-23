@@ -487,7 +487,7 @@ export const previewNextInvoiceNumber = asyncHandler(async (req: Request, res: R
  * Send invoice via email
  */
 export const sendInvoiceEmail = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const invoiceId = parseInt(req.params.id, 10);
+  const invoiceId = parseInt(req.params.id!, 10);
   const tenantId = req.tenantId || req.user?.tenant_id || 1;
 
   if (isNaN(invoiceId)) throw new ValidationError('Invalid invoice ID');
@@ -500,9 +500,9 @@ export const sendInvoiceEmail = asyncHandler(async (req: Request, res: Response)
 
   // Build line items HTML
   let lineItemsHtml = '';
-  if (invoice.line_items || (invoice as Record<string, unknown>).items) {
+  if (invoice.line_items || (invoice as unknown as Record<string, unknown>).items) {
     try {
-      const rawItems = invoice.line_items || (invoice as Record<string, unknown>).items || '[]';
+      const rawItems = invoice.line_items || (invoice as unknown as Record<string, unknown>).items || '[]';
       const items = JSON.parse(String(rawItems)) as Record<string, unknown>[];
       if (Array.isArray(items) && items.length > 0) {
         const rows = items.map((item: Record<string, unknown>) =>
@@ -534,7 +534,7 @@ export const sendInvoiceEmail = asyncHandler(async (req: Request, res: Response)
     invoice_number: invoice.invoice_number,
     invoice_date: invoice.issue_date || (invoice.created_at ? String(invoice.created_at).split('T')[0] : ''),
     due_date: invoice.due_date || 'N/A',
-    total_amount: `${currency} ${(Number(invoice.total_amount || (invoice as Record<string, unknown>).amount || 0)).toFixed(2)}`,
+    total_amount: `${currency} ${(Number(invoice.total_amount || (invoice as unknown as Record<string, unknown>).amount || 0)).toFixed(2)}`,
     currency,
     invoice_url: invoiceUrl,
     line_items_html: lineItemsHtml

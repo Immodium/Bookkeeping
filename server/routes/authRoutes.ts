@@ -161,7 +161,7 @@ router.delete(
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.tenantId || req.user?.tenant_id || 1;
     const userId = req.user!.id;
-    const id = parseInt(req.params.id, 10);
+    const id = parseInt(req.params.id!, 10);
 
     if (isNaN(id)) {
       res.status(400).json({ success: false, error: 'Invalid API key ID' });

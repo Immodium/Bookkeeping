@@ -98,7 +98,7 @@ export class DatabaseService {
     validateTableName(table);
     try {
       const result = await this.executeQuery(
-        `UPDATE ${table} SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
+        `UPDATE ${table} SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?`,
         [id]
       );
       return result.changes > 0;
@@ -198,7 +198,7 @@ export class DatabaseService {
       if (!counter) {
         // Create counter if it doesn't exist
         await this.executeQuery(
-          "INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (1, ?, 1, datetime('now'), datetime('now'))",
+          "INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (1, ?, 1, NOW(), NOW())",
           [counterName]
         );
         return 1;
@@ -207,7 +207,7 @@ export class DatabaseService {
       // Increment counter
       const nextValue = counter.value + 1;
       await this.executeQuery(
-        "UPDATE counters SET value = ?, updated_at = datetime('now') WHERE tenant_id = 1 AND name = ?",
+        "UPDATE counters SET value = ?, updated_at = NOW() WHERE tenant_id = 1 AND name = ?",
         [nextValue, counterName]
       );
 

@@ -6,7 +6,7 @@ import { Server } from 'http';
 import { loggingConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
-interface DatabaseError extends Error {
+interface PgError extends Error {
   code: string;
   errno?: number;
 }
@@ -156,7 +156,7 @@ export const errorHandler = (
   
   // Handle PostgreSQL errors (pg error codes are numeric strings like '23505')
   if ('code' in err && typeof err.code === 'string' && /^\d+$/.test(err.code)) {
-    handlePostgreSQLError(err as DatabaseError, res);
+    handlePostgreSQLError(err as PgError, res);
     return;
   }
   
@@ -217,7 +217,7 @@ export const errorHandler = (
  * Handle PostgreSQL specific errors (pg error codes)
  * See: https://www.postgresql.org/docs/current/errcodes-appendix.html
  */
-const handlePostgreSQLError = (err: DatabaseError, res: Response): void => {
+const handlePostgreSQLError = (err: PgError, res: Response): void => {
   logger.error({ err }, 'PostgreSQL error');
 
   switch (err.code) {

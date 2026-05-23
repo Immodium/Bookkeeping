@@ -99,7 +99,7 @@ export interface TableSchema {
 
 export interface ColumnDefinition {
   name: string;
-  type: 'TEXT' | 'INTEGER' | 'REAL' | 'BLOB' | 'NUMERIC';
+  type: 'TEXT' | 'INTEGER' | 'REAL' | 'BLOB' | 'NUMERIC' | 'TIMESTAMPTZ' | 'BOOLEAN' | 'JSONB' | 'BIGINT';
   constraints?: string[];
 }
 

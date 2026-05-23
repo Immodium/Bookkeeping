@@ -1,10 +1,29 @@
 import express, { Router, Request, Response } from 'express';
 import crypto from 'crypto';
+import Stripe from 'stripe';
 import { serverConfig, stripeConfig } from '../config/index.js';
 import { subscriptionService, BillingWebhookEvent } from '../services/SubscriptionService.js';
 import { stripeService } from '../services/StripeService.js';
 import { requireAuth, requireAdmin } from '../middleware/index.js';
 import { db } from '../database/index.js';
+
+type StripeInstance = InstanceType<typeof Stripe>;
+type StripeEvent = ReturnType<StripeInstance['webhooks']['constructEvent']>;
+
+// Local shapes for webhook event data objects (differ from API response types)
+interface StripeWebhookSubscription {
+  id: string;
+  status: string;
+  customer: string | { id: string } | null;
+  metadata: Record<string, string>;
+  current_period_end: number | null;
+}
+
+interface StripeWebhookInvoice {
+  customer: string | { id: string } | null;
+  subscription: string | { id: string } | null;
+  metadata?: Record<string, string>;
+}
 
 function timingSafeEqual(a: string, b: string): boolean {
   const ba = Buffer.from(a);
@@ -176,7 +195,7 @@ router.post('/webhook',
           // Record as processed
           if (eventId) {
             db.executeQuery(
-              "INSERT OR IGNORE INTO processed_webhook_events (event_id, provider) VALUES (?, 'stripe')",
+              "INSERT INTO processed_webhook_events (event_id, provider) VALUES (?, 'stripe') ON CONFLICT (event_id) DO NOTHING",
               [eventId]
             ).catch(() => {});
           }
@@ -191,7 +210,7 @@ router.post('/webhook',
       // Record as processed even for unhandled event types
       if (eventId) {
         db.executeQuery(
-          "INSERT OR IGNORE INTO processed_webhook_events (event_id, provider) VALUES (?, 'stripe')",
+          "INSERT INTO processed_webhook_events (event_id, provider) VALUES (?, 'stripe') ON CONFLICT (event_id) DO NOTHING",
           [eventId]
         ).catch(() => {});
       }
@@ -263,11 +282,11 @@ router.post('/webhook',
  * Map a Stripe event to the BillingWebhookEvent shape used by syncSubscriptionFromWebhook.
  * Returns null for unhandled event types.
  */
-function mapStripeEvent(event: import('stripe').default.Event): BillingWebhookEvent | null {
+function mapStripeEvent(event: StripeEvent): BillingWebhookEvent | null {
   const type = event.type;
 
   if (type === 'customer.subscription.created' || type === 'customer.subscription.updated' || type === 'customer.subscription.deleted') {
-    const sub = event.data.object as import('stripe').default.Subscription;
+    const sub = event.data.object as unknown as StripeWebhookSubscription;
     const tenantIdStr = sub.metadata?.tenantId;
     const tenantId = tenantIdStr ? parseInt(tenantIdStr, 10) : undefined;
     const status = type === 'customer.subscription.deleted' ? 'canceled' : (sub.status as string);
@@ -280,14 +299,15 @@ function mapStripeEvent(event: import('stripe').default.Event): BillingWebhookEv
       type === 'customer.subscription.updated' ? 'subscription.updated' :
       'subscription.deleted';
 
+    const providerCustomerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id;
     return {
       provider: 'stripe',
       eventType,
       data: {
-        tenantId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
         status,
-        currentPeriodEnd,
-        providerCustomerId: typeof sub.customer === 'string' ? sub.customer : sub.customer?.id,
+        ...(currentPeriodEnd !== undefined ? { currentPeriodEnd } : {}),
+        ...(providerCustomerId !== undefined ? { providerCustomerId } : {}),
         providerSubscriptionId: sub.id,
         metadata: sub.metadata as Record<string, unknown>
       }
@@ -295,36 +315,40 @@ function mapStripeEvent(event: import('stripe').default.Event): BillingWebhookEv
   }
 
   if (type === 'invoice.paid') {
-    const inv = event.data.object as import('stripe').default.Invoice;
+    const inv = event.data.object as unknown as StripeWebhookInvoice;
     const sub = inv.subscription;
-    const tenantId = (inv as Record<string, unknown>).metadata
-      ? parseInt(((inv as Record<string, unknown>).metadata as Record<string, string>)?.tenantId || '0', 10) || undefined
+    const tenantId = inv.metadata?.tenantId
+      ? parseInt(inv.metadata.tenantId, 10) || undefined
       : undefined;
+    const providerCustomerId = typeof inv.customer === 'string' ? inv.customer : (inv.customer as { id: string } | null)?.id;
+    const providerSubscriptionId = typeof sub === 'string' ? sub : sub?.id ?? undefined;
     return {
       provider: 'stripe',
       eventType: 'invoice.paid',
       data: {
-        tenantId,
-        providerCustomerId: typeof inv.customer === 'string' ? inv.customer : (inv.customer as { id: string } | null)?.id,
-        providerSubscriptionId: typeof sub === 'string' ? sub : sub?.id ?? undefined
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        ...(providerCustomerId !== undefined ? { providerCustomerId } : {}),
+        ...(providerSubscriptionId !== undefined ? { providerSubscriptionId } : {})
       }
     };
   }
 
   if (type === 'invoice.payment_failed') {
-    const inv = event.data.object as import('stripe').default.Invoice;
+    const inv = event.data.object as unknown as StripeWebhookInvoice;
     const sub = inv.subscription;
-    const tenantId = (inv as Record<string, unknown>).metadata
-      ? parseInt(((inv as Record<string, unknown>).metadata as Record<string, string>)?.tenantId || '0', 10) || undefined
+    const tenantId = inv.metadata?.tenantId
+      ? parseInt(inv.metadata.tenantId, 10) || undefined
       : undefined;
+    const providerCustomerId = typeof inv.customer === 'string' ? inv.customer : (inv.customer as { id: string } | null)?.id;
+    const providerSubscriptionId = typeof sub === 'string' ? sub : sub?.id ?? undefined;
     return {
       provider: 'stripe',
       eventType: 'invoice.payment_failed',
       data: {
-        tenantId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
         status: 'past_due',
-        providerCustomerId: typeof inv.customer === 'string' ? inv.customer : (inv.customer as { id: string } | null)?.id,
-        providerSubscriptionId: typeof sub === 'string' ? sub : sub?.id ?? undefined
+        ...(providerCustomerId !== undefined ? { providerCustomerId } : {}),
+        ...(providerSubscriptionId !== undefined ? { providerSubscriptionId } : {})
       }
     };
   }

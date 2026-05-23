@@ -27,7 +27,6 @@ import gdprRoutes from './gdprRoutes.js';
 import emailTemplateRoutes from './emailTemplateRoutes.js';
 import webhookRoutes from './webhookRoutes.js';
 import usageRoutes from './usageRoutes.js';
-
 const router: Router = Router();
 
 // API routes with /api prefix

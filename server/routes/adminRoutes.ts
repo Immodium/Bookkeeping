@@ -2,6 +2,7 @@
 // Requires auth + platform admin (tenant_id === 1)
 
 import { Router, Request, Response } from 'express';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 import { requireAuth, requireAdmin, requirePlatformAdmin } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { databaseService } from '../core/DatabaseService.js';
@@ -12,6 +13,7 @@ import { usageService } from '../services/UsageService.js';
 const router: Router = Router();
 
 router.use(requireAuth);
+router.use(applyTenantSchema);
 router.use(requireAdmin);
 router.use(requirePlatformAdmin);
 

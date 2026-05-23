@@ -2,6 +2,7 @@
 // Requires auth + admin. Platform admin (tenant_id=1) may query any tenant.
 
 import { Router, Request, Response } from 'express';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 import { requireAuth, requireAdmin, requirePlatformAdmin } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { auditService } from '../services/AuditService.js';
@@ -9,6 +10,7 @@ import { auditService } from '../services/AuditService.js';
 const router: Router = Router();
 
 router.use(requireAuth);
+router.use(applyTenantSchema);
 router.use(requireAdmin);
 
 /**

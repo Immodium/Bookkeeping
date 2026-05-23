@@ -14,10 +14,12 @@ import {
   validateRequest,
   validationSets
 } from '../middleware/index.js';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 
 const router: Router = Router();
 
 router.use(requireAuth);
+router.use(applyTenantSchema);
 router.use(requireRole(['admin', 'client_manager', 'project_manager']));
 
 router.get('/', getAllRetainers);

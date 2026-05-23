@@ -63,3 +63,6 @@ export {
   createSecurityHeaders,
   createCorsOptions
 } from './security.js';
+
+// Tenant schema middleware
+export { applyTenantSchema } from './tenantSchema.js';

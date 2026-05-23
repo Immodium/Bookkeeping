@@ -23,6 +23,7 @@ import { up as migration018 } from './018_add_outbound_webhooks.js';
 import { up as migration019 } from './019_add_usage_records.js';
 import { up as migration020 } from './020_add_processed_webhook_events.js';
 import { up as migration021 } from './021_add_fk_indexes.js';
+import { up as migration022 } from './022_provision_tenant_schemas.js';
 
 /**
  * Whether migrations have completed successfully.
@@ -61,6 +62,7 @@ const migrations: Migration[] = [
   { id: '019', name: 'add_usage_records', up: migration019 },
   { id: '020', name: 'add_processed_webhook_events', up: migration020 },
   { id: '021', name: 'add_fk_indexes', up: migration021 },
+  { id: '022', name: 'provision_tenant_schemas', up: migration022 },
 ];
 
 /**

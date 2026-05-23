@@ -1,6 +1,7 @@
 // Outbound webhook management routes
 
 import { Router, Request, Response } from 'express';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { outboundWebhookService } from '../services/OutboundWebhookService.js';
@@ -8,6 +9,7 @@ import { outboundWebhookService } from '../services/OutboundWebhookService.js';
 const router: Router = Router();
 
 router.use(requireAuth);
+router.use(applyTenantSchema);
 
 /**
  * GET /api/webhooks

@@ -3,6 +3,7 @@
 
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/index.js';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 import { userHasRole } from '../auth/roles.js';
 import { counterService } from '../services/CounterService.js';
 
@@ -14,6 +15,7 @@ const router: Router = Router();
 
 // All counter routes require authentication
 router.use(requireAuth);
+router.use(applyTenantSchema);
 
 // Get next ID for a counter
 router.get('/:counterName/next', async (req: Request, res: Response): Promise<void> => {

@@ -23,6 +23,7 @@ import {
   validateRequest,
   validationSets
 } from '../middleware/index.js';
+import { applyTenantSchema } from '../middleware/tenantSchema.js';
 
 const router: Router = Router();
 
@@ -32,6 +33,7 @@ router.get('/public/:id', getPublicInvoiceById);
 
 // All other invoice routes require authentication
 router.use(requireAuth);
+router.use(applyTenantSchema);
 
 // Get all invoices
 router.get('/', getAllInvoices);

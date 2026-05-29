@@ -33,4 +33,3 @@ Slimbooks is a self-hosted FreshBooks-clone invoicing app (React 18 + TypeScript
 - Migration files in `server/database/migrations/` are `.ts` files imported with `.js` extensions (standard ESM TypeScript convention with tsx).
 - The `@/utils/data` barrel module (`src/utils/data/index.ts`) exports validation, CSV import/export, and date-range filtering utilities used across invoice/client/expense/payment components.
 - SMTP, Stripe, and Google OAuth are optional services; the app runs fully without them.
-- Pre-existing lint error in `server/database/PostgreSQLDatabase.ts:50:70` (`no-useless-escape`) and 3 failing tests in `tenantAuthorizationAttackPaths.test.ts` are known issues unrelated to environment setup.

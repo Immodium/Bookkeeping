@@ -46,7 +46,8 @@ const createTenantWithAdmin = async (label: string): Promise<TenantContext> => {
   // context can find it.
   await db.executeQuery(
     `INSERT INTO "tenant_${tenantId}".users
-       SELECT * FROM public.users WHERE id = ?
+     OVERRIDING SYSTEM VALUE
+     SELECT * FROM public.users WHERE id = ?
      ON CONFLICT DO NOTHING`,
     [userId]
   );

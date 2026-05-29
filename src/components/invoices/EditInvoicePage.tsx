@@ -146,7 +146,7 @@ export const EditInvoicePage = () => {
               const savedTaxRate = (savedTaxRates as TaxRate[]).find((r: TaxRate) => r.id === invoiceRecord.tax_rate_id);
               setSelectedTaxRate(savedTaxRate || null);
             } else {
-              // Do not auto-select default tax; keep unselected unless invoice has saved rate ID.
+              // Do not force a default tax rate; keep unselected unless persisted.
               setSelectedTaxRate(null);
             }
           }
@@ -160,7 +160,7 @@ export const EditInvoicePage = () => {
               const savedShippingRate = (savedShippingRates as ShippingRate[]).find((r: ShippingRate) => r.id === invoiceRecord.shipping_rate_id);
               setSelectedShippingRate(savedShippingRate || null);
             } else {
-              // Do not auto-select default shipping; keep unselected unless invoice has saved rate ID.
+              // Do not force a default shipping rate; keep unselected unless persisted.
               setSelectedShippingRate(null);
             }
           }

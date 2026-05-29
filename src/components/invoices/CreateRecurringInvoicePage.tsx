@@ -77,7 +77,7 @@ export const CreateRecurringInvoicePage: React.FC<CreateRecurringInvoicePageProp
         if (savedTaxRates) {
           const rates = JSON.parse(savedTaxRates);
           setTaxRates(rates);
-          setSelectedTaxRate(rates.find((r: TaxRate) => r.isDefault) || rates[0]);
+          setSelectedTaxRate(null);
         }
 
         // Load shipping rates from settings
@@ -85,7 +85,7 @@ export const CreateRecurringInvoicePage: React.FC<CreateRecurringInvoicePageProp
         if (savedShippingRates) {
           const rates = JSON.parse(savedShippingRates);
           setShippingRates(rates);
-          setSelectedShippingRate(rates.find((r: TaxRate) => r.isDefault) || rates[0]);
+          setSelectedShippingRate(null);
         }
 
       } catch (error) {

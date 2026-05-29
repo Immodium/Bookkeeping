@@ -34,9 +34,9 @@ export const TaxSettings = forwardRef<SettingsTabRef>((props, ref) => {
         } else {
           // Default tax rates
           const defaultRates = [
-            { id: '1', name: 'No Tax', rate: 0, isDefault: true },
-            { id: '2', name: 'State Tax', rate: 8.25, isDefault: false },
-            { id: '3', name: 'City Tax', rate: 2.5, isDefault: false }
+            { id: '1', name: 'No Tax', rate: 0 },
+            { id: '2', name: 'State Tax', rate: 8.25 },
+            { id: '3', name: 'City Tax', rate: 2.5 }
           ];
           setTaxRates(defaultRates);
           await sqliteService.setSetting('tax_rates', defaultRates, 'tax');
@@ -64,8 +64,7 @@ export const TaxSettings = forwardRef<SettingsTabRef>((props, ref) => {
     const newRate: TaxRate = {
       id: Date.now().toString(),
       name: 'New Tax Rate',
-      rate: 0,
-      isDefault: false
+      rate: 0
     };
     const updated = [...taxRates, newRate];
     saveTaxRates(updated);
@@ -92,14 +91,6 @@ export const TaxSettings = forwardRef<SettingsTabRef>((props, ref) => {
 
   const deleteTaxRate = (id: string) => {
     const updated = taxRates.filter(rate => rate.id !== id);
-    saveTaxRates(updated);
-  };
-
-  const setDefault = (id: string) => {
-    const updated = taxRates.map(rate => ({
-      ...rate,
-      isDefault: rate.id === id
-    }));
     saveTaxRates(updated);
   };
 
@@ -153,23 +144,10 @@ export const TaxSettings = forwardRef<SettingsTabRef>((props, ref) => {
                 <div className="flex items-center space-x-3">
                   <div>
                     <span className="font-medium text-card-foreground">{rate.name}</span>
-                    {rate.isDefault && (
-                      <span className="ml-2 px-2 py-1 bg-primary/10 text-primary text-xs rounded">
-                        Default
-                      </span>
-                    )}
                   </div>
                   <span className="text-muted-foreground">{rate.rate}%</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {!rate.isDefault && (
-                    <button
-                      onClick={() => setDefault(rate.id)}
-                      className="px-2 py-1 text-primary hover:bg-accent hover:text-accent-foreground rounded text-sm"
-                    >
-                      Set Default
-                    </button>
-                  )}
                   <button
                     onClick={() => startEdit(rate)}
                     className="p-1 text-muted-foreground hover:text-foreground"

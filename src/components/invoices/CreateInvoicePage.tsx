@@ -84,7 +84,6 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
         if (savedTaxRates) {
           const rates = JSON.parse(savedTaxRates);
           setTaxRates(rates as TaxRate[]);
-          // Do not auto-select a default rate; let users explicitly choose.
           setSelectedTaxRate(null);
         }
 
@@ -93,7 +92,6 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
         if (savedShippingRates) {
           const rates = JSON.parse(savedShippingRates);
           setShippingRates(rates as ShippingRate[]);
-          // Do not auto-select a default rate; let users explicitly choose.
           setSelectedShippingRate(null);
         }
 
@@ -291,7 +289,6 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
         await response.json();
 
         toast.success('Invoice saved successfully');
-        // Creating a new invoice should close the creation view and return to invoices.
         navigate('/invoices');
       }
     } catch (error) {

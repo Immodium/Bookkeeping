@@ -6,6 +6,7 @@ import { subscriptionService, BillingWebhookEvent } from '../services/Subscripti
 import { stripeService } from '../services/StripeService.js';
 import { requireAuth, requireAdmin } from '../middleware/index.js';
 import { db } from '../database/index.js';
+import { logger } from '../utils/logger.js';
 
 type StripeInstance = InstanceType<typeof Stripe>;
 type StripeEvent = ReturnType<StripeInstance['webhooks']['constructEvent']>;
@@ -150,7 +151,7 @@ router.post('/webhook',
     if (stripeService.isConfigured()) {
       // Stripe webhook secret must be present when Stripe is configured
       if (!stripeConfig.webhookSecret) {
-        console.error('Stripe is configured but STRIPE_WEBHOOK_SECRET is not set — cannot verify webhook');
+        logger.error('Stripe is configured but STRIPE_WEBHOOK_SECRET is not set — cannot verify webhook');
         res.status(400).json({ success: false, error: 'Stripe webhook secret not configured' });
         return;
       }

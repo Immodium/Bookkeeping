@@ -30,6 +30,7 @@ const router: Router = Router();
 // Apply login rate limiting to authentication endpoints
 const loginRateLimit = createLoginRateLimit();
 const passwordResetRateLimit = createLoginRateLimit();
+const apiKeyCreateRateLimit = createLoginRateLimit();
 
 // User login
 router.post('/login', 
@@ -126,6 +127,7 @@ router.get(
  */
 router.post(
   '/api-keys',
+  apiKeyCreateRateLimit,
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.tenantId || req.user?.tenant_id || 1;

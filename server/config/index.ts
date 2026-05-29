@@ -59,6 +59,7 @@ export interface DatabaseConfig {
  */
 export interface AuthConfig {
   jwtSecret: string;
+  jwtSecretPrevious: string | undefined;
   jwtRefreshSecret: string;
   sessionSecret: string;
   accessTokenExpiry: number;
@@ -245,6 +246,8 @@ export const databaseConfig: DatabaseConfig = {
 export const authConfig: AuthConfig = {
   // JWT configuration — no insecure defaults; empty string if not set
   jwtSecret: process.env.JWT_SECRET || '',
+  // Previous secret kept during rotation grace period — tokens signed with it remain valid
+  jwtSecretPrevious: process.env.JWT_SECRET_PREVIOUS || undefined,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || '',
   sessionSecret: process.env.SESSION_SECRET || '',
 

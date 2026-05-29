@@ -101,9 +101,18 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    // Verify JWT token
+    // Verify JWT token — try current secret first, then previous secret (rotation grace period)
     try {
-      const decoded = jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
+      let decoded: JWTPayload;
+      try {
+        decoded = jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
+      } catch (primaryErr) {
+        if (authConfig.jwtSecretPrevious) {
+          decoded = jwt.verify(token, authConfig.jwtSecretPrevious, { algorithms: ['HS256'] }) as JWTPayload;
+        } else {
+          throw primaryErr;
+        }
+      }
 
       // Get user from database via service
       const user = await authService.getUserById(decoded.userId);
@@ -282,7 +291,16 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
     
     if (token) {
       try {
-        const decoded = jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
+        let decoded: JWTPayload;
+        try {
+          decoded = jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
+        } catch {
+          if (authConfig.jwtSecretPrevious) {
+            decoded = jwt.verify(token, authConfig.jwtSecretPrevious, { algorithms: ['HS256'] }) as JWTPayload;
+          } else {
+            throw new Error('Invalid token');
+          }
+        }
         const user = await authService.getUserById(decoded.userId);
         
         const tenantIsActive = user
@@ -337,7 +355,14 @@ export const generateToken = (user: TokenGenerationUser): string => {
  * @returns Decoded token payload
  */
 export const verifyToken = (token: string): JWTPayload => {
-  return jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
+  try {
+    return jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
+  } catch (err) {
+    if (authConfig.jwtSecretPrevious) {
+      return jwt.verify(token, authConfig.jwtSecretPrevious, { algorithms: ['HS256'] }) as JWTPayload;
+    }
+    throw err;
+  }
 };
 
 /**

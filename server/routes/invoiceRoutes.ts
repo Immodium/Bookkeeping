@@ -44,6 +44,12 @@ router.get('/stats', getInvoiceStats);
 // Get overdue invoices
 router.get('/overdue', getOverdueInvoices);
 
+// Generate next invoice number
+router.post('/generate-number', generateInvoiceNumber);
+
+// Preview next invoice number (without incrementing counter)
+router.get('/preview-number', previewNextInvoiceNumber);
+
 // Get invoice by ID
 router.get('/:id', 
   validationSets.updateInvoice.slice(0, 1), // Just ID validation
@@ -100,11 +106,5 @@ router.post('/:id/public-token',
   requireAuth,
   generatePublicInvoiceToken
 );
-
-// Generate next invoice number
-router.post('/generate-number', generateInvoiceNumber);
-
-// Preview next invoice number (without incrementing counter)
-router.get('/preview-number', previewNextInvoiceNumber);
 
 export default router;

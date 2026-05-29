@@ -264,7 +264,8 @@ export class AuthService {
 
     return await databaseService.getOne<User>(`
       SELECT id, tenant_id, name, email, username, password_hash, role, roles, email_verified, 
-             failed_login_attempts, account_locked_until, last_login
+             failed_login_attempts, account_locked_until, last_login,
+             COALESCE(token_version, 0) as token_version
       FROM users WHERE email = ?
     `, [email]);
   }

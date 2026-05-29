@@ -4,6 +4,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { loggingConfig } from '../config/index.js';
 import { auditService } from '../services/AuditService.js';
+import { logger } from '../utils/logger.js';
 
 interface RequestInfo {
   timestamp: string;
@@ -58,15 +59,14 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
   if (!loggingConfig.enableRequestLogging) {
     return next();
   }
-  
+
   const start = Date.now();
   const originalSend = res.send.bind(res);
-  
-  // Capture request details
+
   const userAgent = req.get('User-Agent');
   const contentLength = req.get('Content-Length');
   const referer = req.get('Referer');
-  
+
   const requestInfo: RequestInfo = {
     timestamp: new Date().toISOString(),
     method: req.method,
@@ -76,13 +76,11 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
     ...(contentLength && { contentLength }),
     ...(referer && { referer })
   };
-  
-  // Override res.send to capture response details
+
   res.send = function(data: any): Response {
     const duration = Date.now() - start;
     const responseSize = Buffer.isBuffer(data) ? data.length : Buffer.byteLength(data || '', 'utf8');
-    
-    // Log request completion
+
     logRequest({
       ...requestInfo,
       userAgent: requestInfo.userAgent || 'unknown',
@@ -92,11 +90,10 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
       duration,
       responseSize
     });
-    
-    // Call original send method
+
     return originalSend(data);
   };
-  
+
   next();
 };
 
@@ -104,60 +101,22 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
  * Log request details
  */
 const logRequest = (info: Required<RequestInfo>): void => {
-  const { timestamp, method, url, ip, statusCode, duration, responseSize } = info;
-  
-  // Color code based on status
-  const statusColor = getStatusColor(statusCode);
-  const durationColor = getDurationColor(duration);
-  
-  console.log(
-    `${timestamp} ${statusColor}${statusCode}\x1b[0m ${method} ${url} ` +
-    `${durationColor}${duration}ms\x1b[0m ${formatBytes(responseSize)} ${ip}`
-  );
-  
-  // Log slow requests
+  const { method, url, ip, statusCode, duration, responseSize } = info;
+
+  const logFn = statusCode >= 500 ? logger.error.bind(logger)
+    : statusCode >= 400 ? logger.warn.bind(logger)
+    : logger.info.bind(logger);
+
+  logFn({ method, url, ip, statusCode, duration, responseSize }, `${method} ${url} ${statusCode} ${duration}ms`);
+
   if (duration > 1000) {
-    console.warn(`⚠️  Slow request detected: ${method} ${url} took ${duration}ms`);
+    logger.warn({ method, url, duration }, 'Slow request detected');
   }
-  
-  // TODO: Write to log file if file logging is enabled
-  // writeToAccessLog(info);
 };
 
 /**
- * Get color code for HTTP status
- */
-const getStatusColor = (status: number): string => {
-  if (status >= 500) return '\x1b[31m'; // Red
-  if (status >= 400) return '\x1b[33m'; // Yellow
-  if (status >= 300) return '\x1b[36m'; // Cyan
-  if (status >= 200) return '\x1b[32m'; // Green
-  return '\x1b[0m'; // Default
-};
-
-/**
- * Get color code for request duration
- */
-const getDurationColor = (duration: number): string => {
-  if (duration > 1000) return '\x1b[31m'; // Red (slow)
-  if (duration > 500) return '\x1b[33m';  // Yellow (moderate)
-  return '\x1b[32m'; // Green (fast)
-};
-
-/**
- * Format bytes to human readable format
- */
-const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-};
-
-/**
- * Security audit logging middleware
- * Logs security-related events
+ * Security audit logging
+ * Logs security-related events as structured JSON via pino
  */
 export const securityLogger = (event: string, details: Record<string, unknown> = {}): void => {
   const logEntry: SecurityLogEntry = {
@@ -166,35 +125,45 @@ export const securityLogger = (event: string, details: Record<string, unknown> =
     details,
     level: 'SECURITY'
   };
-  
-  console.log(`🔒 SECURITY: ${event}`, details);
-  
-  // TODO: Send to security monitoring system
-  // sendToSecurityMonitoring(logEntry);
+
+  logger.warn({ security: true, event, ...details }, `SECURITY: ${event}`);
+
+  // Persist high-severity events to audit log
+  const highSeverityEvents = [
+    'failed_login', 'account_locked', 'privilege_escalation',
+    'invalid_token', 'unauthorized_access', 'suspicious_activity'
+  ];
+  if (highSeverityEvents.some(e => event.toLowerCase().includes(e.replace('_', '')))) {
+    auditService.log({ action: `security.${event}`, metadata: details });
+  }
+
+  void logEntry;
 };
 
 /**
  * Database operation logging middleware
- * Logs database queries and operations
+ * Logs database queries and operations (debug level only)
  */
 export const dbLogger = (operation: string, table: string, details: Record<string, unknown> = {}): void => {
   if (loggingConfig.level !== 'debug') {
     return;
   }
-  
+
   const logEntry: DBLogEntry = {
     timestamp: new Date().toISOString(),
     operation,
     table,
     details
   };
-  
-  console.log(`📊 DB: ${operation} on ${table}`, details);
+
+  logger.debug({ db: true, operation, table, ...details }, `DB: ${operation} on ${table}`);
+
+  void logEntry;
 };
 
 /**
  * Performance monitoring middleware
- * Tracks application performance metrics
+ * Tracks application performance metrics and logs summaries every 5 minutes
  */
 export const performanceMonitor = () => {
   const metrics: PerformanceMetrics = {
@@ -203,38 +172,42 @@ export const performanceMonitor = () => {
     slowRequests: 0,
     errors: 0
   };
-  
-  // Log metrics every 5 minutes
-  const intervalId = setInterval(() => {
+
+  setInterval(() => {
     if (metrics.requests > 0) {
       const avgDuration = metrics.totalDuration / metrics.requests;
-      console.log(`📈 Performance metrics (5min): ${metrics.requests} requests, ` +
-                 `avg ${avgDuration.toFixed(2)}ms, ${metrics.slowRequests} slow, ${metrics.errors} errors`);
-      
-      // Reset metrics
+      logger.info(
+        { requests: metrics.requests, avgDurationMs: parseFloat(avgDuration.toFixed(2)), slowRequests: metrics.slowRequests, errors: metrics.errors },
+        'Performance metrics (5min)'
+      );
+
+      if (metrics.errors / metrics.requests > 0.1) {
+        logger.warn({ errorRate: (metrics.errors / metrics.requests).toFixed(3) }, 'Elevated error rate in last 5-minute window');
+      }
+
       Object.keys(metrics).forEach(key => {
         metrics[key as keyof PerformanceMetrics] = 0;
       });
     }
   }, 5 * 60 * 1000);
-  
+
   return (req: Request, res: Response, next: NextFunction): void => {
     const start = Date.now();
-    
+
     res.on('finish', () => {
       const duration = Date.now() - start;
       metrics.requests++;
       metrics.totalDuration += duration;
-      
+
       if (duration > 1000) {
         metrics.slowRequests++;
       }
-      
+
       if (res.statusCode >= 400) {
         metrics.errors++;
       }
     });
-    
+
     next();
   };
 };
@@ -273,9 +246,9 @@ export function userActivityLogger(
       details,
       level: 'USER_ACTIVITY'
     };
-    console.log(`👤 USER: ${action} by user ${userId}`, details);
-    // Persist to audit log (fire-and-forget)
+    logger.info({ userId, action, ...details }, `USER: ${action} by user ${userId}`);
     auditService.log({ action, userId, metadata: details });
+    void logEntry;
     return;
   }
 
@@ -303,27 +276,22 @@ export function userActivityLogger(
 
 /**
  * API endpoint usage tracking
- * Tracks which endpoints are being used
+ * Tracks which endpoints are being used and logs the top 10 every hour
  */
 export const endpointTracker = () => {
   const endpointStats = new Map<string, number>();
-  
-  // Log endpoint usage every hour
-  const intervalId = setInterval(() => {
+
+  setInterval(() => {
     if (endpointStats.size > 0) {
-      console.log('📊 Endpoint usage (1hr):');
       const sorted = Array.from(endpointStats.entries())
         .sort((a, b) => b[1] - a[1])
         .slice(0, 10);
-      
-      sorted.forEach(([endpoint, count]) => {
-        console.log(`  ${endpoint}: ${count} requests`);
-      });
-      
+
+      logger.info({ endpoints: Object.fromEntries(sorted) }, 'Endpoint usage (1hr top-10)');
       endpointStats.clear();
     }
   }, 60 * 60 * 1000);
-  
+
   return (req: Request, res: Response, next: NextFunction): void => {
     const endpoint = `${req.method} ${(req as any).route?.path || req.path}`;
     endpointStats.set(endpoint, (endpointStats.get(endpoint) || 0) + 1);
@@ -333,54 +301,58 @@ export const endpointTracker = () => {
 
 /**
  * Error rate monitoring
- * Tracks error rates and alerts on high error rates
+ * Tracks error rates over a rolling window and logs a warning when > 10%
  */
 export const errorRateMonitor = () => {
   const errorWindow: boolean[] = [];
-  const windowSize = 100; // Track last 100 requests
-  const errorThreshold = 0.1; // Alert if error rate > 10%
-  
+  const windowSize = 100;
+  const errorThreshold = 0.1;
+
   return (req: Request, res: Response, next: NextFunction): void => {
     res.on('finish', () => {
       const isError = res.statusCode >= 400;
       errorWindow.push(isError);
-      
-      // Keep window size
+
       if (errorWindow.length > windowSize) {
         errorWindow.shift();
       }
-      
-      // Check error rate
+
       if (errorWindow.length >= windowSize) {
         const errorCount = errorWindow.filter(Boolean).length;
         const errorRate = errorCount / windowSize;
-        
+
         if (errorRate > errorThreshold) {
-          console.warn(`🚨 High error rate detected: ${(errorRate * 100).toFixed(1)}% (${errorCount}/${windowSize})`);
-          
-          // TODO: Send alert to monitoring system
-          // sendErrorRateAlert(errorRate);
+          logger.warn(
+            { errorRate: errorRate.toFixed(3), errorCount, windowSize },
+            'High error rate detected'
+          );
         }
       }
     });
-    
+
     next();
   };
 };
 
 /**
  * Health check logging
- * Logs system health information
+ * Logs system health information every 10 minutes
  */
 export const healthLogger = (): void => {
-  const logHealth = (): void => {
-    const memUsage = process.memoryUsage();
-    const uptime = process.uptime();
-
-    console.log(`💚 Health check: Uptime ${Math.floor(uptime)}s, ` +
-               `Memory ${formatBytes(memUsage.heapUsed)}/${formatBytes(memUsage.heapTotal)}`);
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  // Log health every 10 minutes (no initial log)
-  setInterval(logHealth, 10 * 60 * 1000);
+  setInterval(() => {
+    const memUsage = process.memoryUsage();
+    const uptime = process.uptime();
+    logger.info(
+      { uptimeSeconds: Math.floor(uptime), heapUsed: formatBytes(memUsage.heapUsed), heapTotal: formatBytes(memUsage.heapTotal) },
+      'Health check'
+    );
+  }, 10 * 60 * 1000);
 };

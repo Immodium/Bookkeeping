@@ -3,6 +3,7 @@
 
 import crypto from 'crypto';
 import { databaseService } from '../core/DatabaseService.js';
+import { encryptWebhookSecret, decryptWebhookSecret } from '../utils/webhookCrypto.js';
 
 // SSRF protection: block private/metadata IP ranges and non-HTTP protocols
 const BLOCKED_HOSTNAMES = new Set([
@@ -94,18 +95,19 @@ class OutboundWebhookService {
   ): Promise<WebhookEndpointRecord & { plainSecret: string }> {
     validateWebhookUrl(url);
     const plainSecret = crypto.randomBytes(32).toString('hex');
+    const storedSecret = encryptWebhookSecret(plainSecret);
     const eventsJson = JSON.stringify(events && events.length > 0 ? events : ['*']);
     const now = new Date().toISOString();
 
     await databaseService.executeQuery(
       `INSERT INTO webhook_endpoints (tenant_id, url, secret, events, is_active, description, failure_count, created_at, updated_at)
        VALUES (?, ?, ?, ?, 1, ?, 0, ?, ?)`,
-      [tenantId, url, plainSecret, eventsJson, description || null, now, now]
+      [tenantId, url, storedSecret, eventsJson, description || null, now, now]
     );
 
     const row = await databaseService.getOne<WebhookEndpointRow>(
       'SELECT * FROM webhook_endpoints WHERE tenant_id = ? AND url = ? AND secret = ?',
-      [tenantId, url, plainSecret]
+      [tenantId, url, storedSecret]
     );
 
     if (!row) {
@@ -216,8 +218,9 @@ class OutboundWebhookService {
   ): Promise<void> {
     const timestamp = Math.floor(Date.now() / 1000);
     const payloadJson = JSON.stringify({ event: eventType, timestamp, data: payload });
+    const plainSecret = decryptWebhookSecret(row.secret);
     const signature = 'sha256=' + crypto
-      .createHmac('sha256', row.secret)
+      .createHmac('sha256', plainSecret)
       .update(payloadJson)
       .digest('hex');
 

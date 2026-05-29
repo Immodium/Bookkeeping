@@ -101,9 +101,18 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    // Verify JWT token
+    // Verify JWT token — try current secret first, then previous secret (rotation grace period)
     try {
-      const decoded = jwt.verify(token, authConfig.jwtSecret) as JWTPayload;
+      let decoded: JWTPayload;
+      try {
+        decoded = jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
+      } catch (primaryErr) {
+        if (authConfig.jwtSecretPrevious) {
+          decoded = jwt.verify(token, authConfig.jwtSecretPrevious, { algorithms: ['HS256'] }) as JWTPayload;
+        } else {
+          throw primaryErr;
+        }
+      }
 
       // Get user from database via service
       const user = await authService.getUserById(decoded.userId);
@@ -282,7 +291,16 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
     
     if (token) {
       try {
-        const decoded = jwt.verify(token, authConfig.jwtSecret) as JWTPayload;
+        let decoded: JWTPayload;
+        try {
+          decoded = jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
+        } catch {
+          if (authConfig.jwtSecretPrevious) {
+            decoded = jwt.verify(token, authConfig.jwtSecretPrevious, { algorithms: ['HS256'] }) as JWTPayload;
+          } else {
+            throw new Error('Invalid token');
+          }
+        }
         const user = await authService.getUserById(decoded.userId);
         
         const tenantIsActive = user
@@ -337,7 +355,14 @@ export const generateToken = (user: TokenGenerationUser): string => {
  * @returns Decoded token payload
  */
 export const verifyToken = (token: string): JWTPayload => {
-  return jwt.verify(token, authConfig.jwtSecret) as JWTPayload;
+  try {
+    return jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
+  } catch (err) {
+    if (authConfig.jwtSecretPrevious) {
+      return jwt.verify(token, authConfig.jwtSecretPrevious, { algorithms: ['HS256'] }) as JWTPayload;
+    }
+    throw err;
+  }
 };
 
 /**
@@ -457,6 +482,41 @@ export const requirePlatformAdmin = (req: Request, res: Response, next: NextFunc
     });
     return;
   }
+  next();
+};
+
+/**
+ * Middleware that asserts the tenant_id URL param (or body field) matches the
+ * authenticated user's tenant. Use on routes where a tenantId flows through
+ * the URL or request body to prevent cross-tenant IDOR.
+ *
+ * Example:
+ *   router.get('/tenants/:tenantId/invoices', requireAuth, requireTenantMatch, listInvoices)
+ */
+export const requireTenantMatch = (req: Request, res: Response, next: NextFunction): void => {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return;
+  }
+
+  const paramTenantId = req.params.tenantId ? parseInt(req.params.tenantId, 10) : undefined;
+  const bodyTenantId = req.body?.tenant_id ? parseInt(String(req.body.tenant_id), 10) : undefined;
+  const candidate = paramTenantId ?? bodyTenantId;
+
+  if (candidate === undefined) {
+    // No tenant ID in request — nothing to check
+    next();
+    return;
+  }
+
+  const userTenantId = req.tenantId ?? req.user.tenant_id ?? 1;
+  const isPlatformAdmin = roleListHasRole(req.user.roles, 'admin') && userTenantId === 1;
+
+  if (!isPlatformAdmin && candidate !== userTenantId) {
+    res.status(403).json({ success: false, error: 'Tenant access denied' });
+    return;
+  }
+
   next();
 };
 

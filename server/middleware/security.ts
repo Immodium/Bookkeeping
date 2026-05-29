@@ -6,6 +6,7 @@ import helmet, { HelmetOptions } from 'helmet';
 import { Request, Response, NextFunction } from 'express';
 import { body, param, query, validationResult, ValidationChain } from 'express-validator';
 import { serverConfig } from '../config/index.js';
+import { logger } from '../utils/logger.js';
 
 interface RateLimitConfig {
   windowMs?: number;
@@ -94,9 +95,17 @@ export const createSecurityHeaders = (corsOrigin = 'http://localhost:8080') => {
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
         frameSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        formAction: ["'self'"],
+        baseUri: ["'self'"],
+        upgradeInsecureRequests: []
       },
     },
-    crossOriginEmbedderPolicy: false, // Disable for compatibility
+    crossOriginEmbedderPolicy: false, // Disabled for compatibility
+    frameguard: { action: 'deny' },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    noSniff: true,
+    xssFilter: true,
     hsts: {
       maxAge: 31536000,
       includeSubDomains: true,
@@ -239,65 +248,14 @@ export const sanitizeSQL = (query: string, params: unknown[] = []): SQLSanitizeR
   return { query, params: sanitizedParams };
 };
 
-// Request logging middleware
-export const requestLogger = (req: Request, res: Response, next: NextFunction): void => {
-  const start = Date.now();
-  const originalSend = res.send.bind(res);
-  
-  res.send = function(data: any): Response {
-    const duration = Date.now() - start;
-    console.log(`${new Date().toISOString()} ${req.method} ${req.path} ${res.statusCode} ${duration}ms`);
-    return originalSend(data);
-  };
-  
-  next();
-};
-
-// Error handling middleware
-export const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction): void => {
-  console.error('Error:', err);
-  
-  // Don't leak error details in production
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  
-  const statusCode = 'status' in err && typeof err.status === 'number' ? err.status : 500;
-  
-  res.status(statusCode).json({
-    success: false,
-    error: isDevelopment ? err.message : 'Internal server error',
-    ...(isDevelopment && { stack: err.stack })
-  });
-};
-
-// Authentication middleware
-export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  
-  if (!token) {
-    res.status(401).json({
-      success: false,
-      error: 'Authentication required'
-    });
-    return;
-  }
-  
-  // TODO: Implement JWT verification here
-  // For now, just pass through
-  next();
-};
-
-// Admin role middleware
-export const requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
-  // TODO: Implement admin role check
-  // For now, just pass through
-  next();
-};
-
 // CORS configuration
 export const createCorsOptions = (
   origin = serverConfig.corsOrigin,
   credentials = serverConfig.corsCredentials
 ): CorsOptions => {
+  if (process.env.NODE_ENV === 'production' && (!origin || origin === '*')) {
+    throw new Error('CORS_ORIGIN must be explicitly set to a specific domain in production');
+  }
   return {
     origin: origin,
     credentials: credentials,
@@ -305,4 +263,59 @@ export const createCorsOptions = (
     allowedHeaders: ['Content-Type', 'Authorization'],
     maxAge: 86400 // 24 hours
   };
+};
+
+/**
+ * CSRF protection via Origin/Referer header enforcement.
+ *
+ * State-changing requests (POST/PUT/PATCH/DELETE) must originate from the
+ * configured CORS origin. Browsers always send the Origin header for
+ * cross-origin requests, so this blocks CSRF attacks regardless of whether
+ * the caller uses cookies or Authorization headers.
+ *
+ * Exempted paths (receive legitimate cross-origin calls):
+ *   - /api/billing/webhook  — Stripe / external billing providers
+ *   - /api/auth/register-tenant — public self-service signup
+ */
+export const csrfProtection = (req: Request, res: Response, next: NextFunction): void => {
+  const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+  const EXEMPT_PATHS = ['/api/billing/webhook', '/api/auth/register-tenant'];
+
+  if (SAFE_METHODS.has(req.method)) {
+    return next();
+  }
+
+  if (EXEMPT_PATHS.some(p => req.path.startsWith(p))) {
+    return next();
+  }
+
+  // In development skip enforcement but log for visibility
+  const isProd = serverConfig.isProduction;
+
+  const allowedOrigin = serverConfig.corsOrigin;
+  const origin = req.headers.origin as string | undefined;
+  const referer = req.headers.referer as string | undefined;
+
+  const source = origin || referer;
+
+  if (!source) {
+    // No Origin/Referer — allow server-to-server calls (API keys, Postman)
+    // but log a warning in production so it's observable
+    if (isProd) {
+      logger.warn({ method: req.method, path: req.path }, 'CSRF: state-changing request with no Origin/Referer header');
+    }
+    return next();
+  }
+
+  const normalise = (s: string) => s.replace(/\/$/, '').toLowerCase();
+  const allowed = normalise(allowedOrigin);
+  const incoming = normalise(source.split('/').slice(0, 3).join('/'));
+
+  if (incoming !== allowed) {
+    logger.warn({ method: req.method, path: req.path, incoming, allowed }, 'CSRF: origin mismatch — request blocked');
+    res.status(403).json({ success: false, error: 'CSRF check failed: origin not allowed' });
+    return;
+  }
+
+  next();
 };

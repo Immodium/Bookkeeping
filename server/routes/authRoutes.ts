@@ -29,6 +29,8 @@ const router: Router = Router();
 
 // Apply login rate limiting to authentication endpoints
 const loginRateLimit = createLoginRateLimit();
+const passwordResetRateLimit = createLoginRateLimit();
+const apiKeyCreateRateLimit = createLoginRateLimit();
 
 // User login
 router.post('/login', 
@@ -50,25 +52,29 @@ router.post('/register-tenant', registerTenant);
 
 // Request password reset email
 router.post('/forgot-password',
+  passwordResetRateLimit,
   validationSets.forgotPassword,
   validateRequest,
   requestPasswordReset
 );
 
 // Reset password with token
-router.post('/reset-password', 
+router.post('/reset-password',
+  passwordResetRateLimit,
   validationSets.resetPassword,
   validateRequest,
   resetPassword
 );
 
 // Verify email with token
-router.post('/verify-email', 
+router.post('/verify-email',
+  passwordResetRateLimit,
   verifyEmail
 );
 
 // Refresh JWT token
-router.post('/refresh-token', 
+router.post('/refresh-token',
+  passwordResetRateLimit,
   refreshToken
 );
 
@@ -121,6 +127,7 @@ router.get(
  */
 router.post(
   '/api-keys',
+  apiKeyCreateRateLimit,
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
     const tenantId = req.tenantId || req.user?.tenant_id || 1;

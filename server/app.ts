@@ -28,6 +28,7 @@ import {
   createGeneralRateLimit,
   createSecurityHeaders,
   createCorsOptions,
+  csrfProtection,
   requestLogger,
   errorHandler,
   notFoundHandler,
@@ -103,6 +104,7 @@ export const createApp = async () => {
   app.use(createSecurityHeaders(serverConfig.corsOrigin));
   app.use(cors(createCorsOptions(serverConfig.corsOrigin)));
   app.use(createGeneralRateLimit());
+  app.use(csrfProtection);
 
   // Logging and monitoring middleware
   app.use(requestLogger);

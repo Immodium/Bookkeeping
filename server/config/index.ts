@@ -34,6 +34,7 @@ export interface ServerConfig {
   allowDatabaseImportExport: boolean;
   cronJobSecret: string | undefined;
   billingWebhookSecret: string | undefined;
+  webhookEncryptionKey: string | undefined;
   serveStaticFiles: boolean;
   rateLimiting: {
     windowMs: number;
@@ -218,6 +219,8 @@ export const serverConfig: ServerConfig = {
     (process.env.NODE_ENV !== 'production' && process.env.SAAS_MODE !== 'true'),
   cronJobSecret: process.env.CRON_JOB_SECRET,
   billingWebhookSecret: process.env.BILLING_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET,
+  // AES-256-GCM key for encrypting outbound webhook secrets at rest (64 hex chars = 32 bytes)
+  webhookEncryptionKey: process.env.WEBHOOK_ENCRYPTION_KEY || undefined,
   serveStaticFiles: process.env.SERVE_STATIC_FILES !== 'false',
 
   // Rate limiting configuration

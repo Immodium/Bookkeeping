@@ -11,6 +11,7 @@ export {
   requirePermission,
   requireEntitlement,
   requirePlatformAdmin,
+  requireTenantMatch,
   userHasRole,
   requireEmailVerified,
   optionalAuth,
@@ -61,7 +62,8 @@ export {
   createGeneralRateLimit,
   createLoginRateLimit,
   createSecurityHeaders,
-  createCorsOptions
+  createCorsOptions,
+  csrfProtection
 } from './security.js';
 
 // Tenant schema middleware

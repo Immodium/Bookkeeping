@@ -485,4 +485,39 @@ export const requirePlatformAdmin = (req: Request, res: Response, next: NextFunc
   next();
 };
 
+/**
+ * Middleware that asserts the tenant_id URL param (or body field) matches the
+ * authenticated user's tenant. Use on routes where a tenantId flows through
+ * the URL or request body to prevent cross-tenant IDOR.
+ *
+ * Example:
+ *   router.get('/tenants/:tenantId/invoices', requireAuth, requireTenantMatch, listInvoices)
+ */
+export const requireTenantMatch = (req: Request, res: Response, next: NextFunction): void => {
+  if (!req.user) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return;
+  }
+
+  const paramTenantId = req.params.tenantId ? parseInt(req.params.tenantId, 10) : undefined;
+  const bodyTenantId = req.body?.tenant_id ? parseInt(String(req.body.tenant_id), 10) : undefined;
+  const candidate = paramTenantId ?? bodyTenantId;
+
+  if (candidate === undefined) {
+    // No tenant ID in request — nothing to check
+    next();
+    return;
+  }
+
+  const userTenantId = req.tenantId ?? req.user.tenant_id ?? 1;
+  const isPlatformAdmin = roleListHasRole(req.user.roles, 'admin') && userTenantId === 1;
+
+  if (!isPlatformAdmin && candidate !== userTenantId) {
+    res.status(403).json({ success: false, error: 'Tenant access denied' });
+    return;
+  }
+
+  next();
+};
+
 // updateLoginAttempts has been removed - use authService.updateLoginAttempts directly

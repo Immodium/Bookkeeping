@@ -8,7 +8,6 @@ import { GeneralSettingsTab } from './settings/GeneralSettingsTab';
 import { StripeSettingsTab } from './settings/StripeSettingsTab';
 import { NotificationSettingsTab } from './settings/NotificationSettingsTab';
 import { AppearanceSettingsTab } from './settings/AppearanceSettingsTab';
-import { ProjectSettingsTab, ProjectSettingsRef } from './settings/ProjectSettingsTab';
 import { DatabaseBackupSection } from './settings/DatabaseBackupSection';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { toast } from 'sonner';
@@ -30,9 +29,8 @@ export const ResponsiveSettings = () => {
   const [isMobileTabsOpen, setIsMobileTabsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const projectSettingsRef = useRef<ProjectSettingsRef>(null);
   const { settings: projectSettings } = useProjectSettings();
-  const { canManageUsers, canManageSettings, canManageProjects } = usePermissions();
+  const { canManageUsers } = usePermissions();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Refs for all settings tabs
@@ -53,7 +51,6 @@ export const ResponsiveSettings = () => {
     { id: 'notifications', name: 'Notifications' },
     { id: 'appearance', name: 'Appearance' },
     ...(canManageUsers ? [{ id: 'user-management', name: 'User Management' }] : []),
-    ...(canManageProjects ? [{ id: 'project', name: 'Integration Settings' }] : []),
     { id: 'backup', name: 'Backup & Restore' }
   ];
 
@@ -69,8 +66,6 @@ export const ResponsiveSettings = () => {
     
     if (hash && tabIds.includes(hash)) {
       setActiveTab(hash);
-    } else if (hash === 'stripe' && !projectSettings?.stripe?.enabled) {
-      setActiveTab('project');
     } else {
       setActiveTab('company');
     }
@@ -86,7 +81,7 @@ export const ResponsiveSettings = () => {
     setIsLoading(true);
     try {
       // Get the appropriate settings ref based on active tab
-      let settingsRef: SettingsTabRef | ProjectSettingsRef | null = null;
+      let settingsRef: SettingsTabRef | null = null;
 
       switch (activeTab) {
         case 'company':
@@ -112,9 +107,6 @@ export const ResponsiveSettings = () => {
           break;
         case 'user-management':
           settingsRef = userManagementRef.current;
-          break;
-        case 'project':
-          settingsRef = projectSettingsRef.current;
           break;
         default:
           // For backup and other tabs that don't have save functionality
@@ -150,7 +142,6 @@ export const ResponsiveSettings = () => {
       case 'notifications': return <NotificationSettingsTab ref={notificationSettingsRef} />;
       case 'appearance': return <AppearanceSettingsTab ref={appearanceSettingsRef} />;
       case 'user-management': return canManageUsers ? <UserManagementTab ref={userManagementRef} /> : null;
-      case 'project': return <ProjectSettingsTab ref={projectSettingsRef} />;
       case 'backup': return <DatabaseBackupSection />;
       default: return <CompanySettings ref={companySettingsRef} />;
     }

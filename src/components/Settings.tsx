@@ -10,7 +10,6 @@ import { StripeSettingsTab } from './settings/StripeSettingsTab';
 import { NotificationSettingsTab } from './settings/NotificationSettingsTab';
 import { AppearanceSettingsTab } from './settings/AppearanceSettingsTab';
 import { UserManagementTab } from './settings/UserManagementTab';
-import { ProjectSettingsTab, ProjectSettingsRef } from './settings/ProjectSettingsTab';
 import { DatabaseBackupSection } from './settings/DatabaseBackupSection';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { toast } from 'sonner';
@@ -31,11 +30,10 @@ export const Settings = () => {
   const stripeSettingsRef = useRef<SettingsTabRef>(null);
   const notificationSettingsRef = useRef<SettingsTabRef>(null);
   const appearanceSettingsRef = useRef<SettingsTabRef>(null);
-  const projectSettingsRef = useRef<ProjectSettingsRef>(null);
   const userManagementRef = useRef<SettingsTabRef>(null);
 
   const { settings: projectSettings } = useProjectSettings();
-  const { canManageUsers, canManageSettings } = usePermissions();
+  const { canManageUsers } = usePermissions();
 
   useEffect(() => {
     const hash = location.hash.replace('#', '');
@@ -46,21 +44,17 @@ export const Settings = () => {
       'shipping',
       'notifications',
       'appearance',
-      'project',
       ...(canManageUsers ? ['users'] : []),
       'backup'
     ];
-    
+
     // Add stripe tab only if the integration is enabled
     if (projectSettings?.stripe?.enabled) {
       availableTabs.push('stripe');
     }
-    
+
     if (hash && availableTabs.includes(hash)) {
       setActiveTab(hash);
-    } else if (hash === 'stripe' && !projectSettings?.stripe?.enabled) {
-      // If trying to access stripe tab but it's disabled, redirect to project settings
-      setActiveTab('project');
     } else {
       setActiveTab('company');
     }
@@ -70,7 +64,7 @@ export const Settings = () => {
     setIsLoading(true);
     try {
       // Get the appropriate settings ref based on active tab
-      let settingsRef: SettingsTabRef | ProjectSettingsRef | null = null;
+      let settingsRef: SettingsTabRef | null = null;
 
       switch (activeTab) {
         case 'company':
@@ -93,9 +87,6 @@ export const Settings = () => {
           break;
         case 'appearance':
           settingsRef = appearanceSettingsRef.current;
-          break;
-        case 'project':
-          settingsRef = projectSettingsRef.current;
           break;
         case 'users':
           settingsRef = userManagementRef.current;
@@ -151,7 +142,6 @@ export const Settings = () => {
               ...(projectSettings?.stripe?.enabled ? [{ key: 'stripe', label: 'Stripe' }] : []),
               { key: 'notifications', label: 'Notifications' },
               { key: 'appearance', label: 'Appearance' },
-              { key: 'project', label: 'Integration Settings' },
               ...(canManageUsers ? [{ key: 'users', label: 'User Management' }] : []),
               { key: 'backup', label: 'Backup' }
             ].map(tab => (
@@ -184,7 +174,6 @@ export const Settings = () => {
           {activeTab === 'stripe' && projectSettings?.stripe?.enabled && <StripeSettingsTab ref={stripeSettingsRef} />}
           {activeTab === 'notifications' && <NotificationSettingsTab ref={notificationSettingsRef} />}
           {activeTab === 'appearance' && <AppearanceSettingsTab ref={appearanceSettingsRef} />}
-          {activeTab === 'project' && <ProjectSettingsTab ref={projectSettingsRef} />}
           {activeTab === 'users' && canManageUsers && <UserManagementTab ref={userManagementRef} />}
           {activeTab === 'backup' && <DatabaseBackupSection />}
         </div>

@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import type { Express } from 'express';
 import { db } from '../../../server/database/index.js';
 import { generateToken } from '../../../server/middleware/auth.js';
+import { provisionTenantSchema } from '../../../server/database/schemas/tenantSchema.js';
 
 interface TestTenantContext {
   tenantId: number;
@@ -21,7 +22,7 @@ const createTenantWithAdmin = async (label: string): Promise<TestTenantContext> 
   const slug = `tenant-${label}-${timestamp}`;
   const tenantInsert = await db.executeQuery(
     `
-      INSERT INTO tenants (name, slug, status, created_at, updated_at)
+      INSERT INTO public.tenants (name, slug, status, created_at, updated_at)
       VALUES (?, ?, 'active', datetime('now'), datetime('now'))
     `,
     [`Tenant ${label}`, slug]
@@ -29,17 +30,32 @@ const createTenantWithAdmin = async (label: string): Promise<TestTenantContext> 
   const tenantId = tenantInsert.lastInsertRowid;
   createdTenantIds.push(tenantId);
 
+  // Provision the tenant schema so per-tenant tables exist and cross-tenant
+  // isolation works correctly in integration tests.
+  await provisionTenantSchema(db, tenantId);
+
   const email = `${label}.${timestamp}@example.test`;
   const passwordHash = await bcrypt.hash(`Pass-${label}-123!`, 4);
+
+  // Insert the user into public.users (used by requireAuth which runs outside
+  // tenant context) and into the tenant schema (used by controllers that run
+  // inside applyTenantSchema context).
   const userInsert = await db.executeQuery(
     `
-      INSERT INTO users (
+      INSERT INTO public.users (
         tenant_id, name, email, username, password_hash, role, roles, email_verified, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, 'admin', '["admin"]', 1, datetime('now'), datetime('now'))
     `,
     [tenantId, `Admin ${label}`, email, email, passwordHash]
   );
   const userId = userInsert.lastInsertRowid;
+
+  await db.executeQuery(
+    `INSERT INTO "tenant_${tenantId}".users
+       SELECT * FROM public.users WHERE id = ?
+     ON CONFLICT DO NOTHING`,
+    [userId]
+  );
 
   const token = generateToken({
     id: userId,

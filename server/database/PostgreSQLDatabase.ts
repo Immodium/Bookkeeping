@@ -47,7 +47,7 @@ function prepareQuery(sql: string, params: any[] = []): { sql: string; values: a
   // Explicit id inserts are used by backfill/seed paths.
   // GENERATED ALWAYS identity columns require OVERRIDING SYSTEM VALUE.
   if (/^\s*INSERT\s+INTO/i.test(prepared) && !/OVERRIDING\s+(SYSTEM|USER)\s+VALUE/i.test(prepared)) {
-    const insertColumnsMatch = prepared.match(/^\s*INSERT\s+INTO\s+[^\(]+\(([\s\S]*?)\)\s*(VALUES|SELECT)\b/i);
+    const insertColumnsMatch = prepared.match(/^\s*INSERT\s+INTO\s+[^(]+\(([\s\S]*?)\)\s*(VALUES|SELECT)\b/i);
     if (insertColumnsMatch) {
       const insertColumns = insertColumnsMatch[1] ?? '';
       const columns = insertColumns
@@ -192,7 +192,12 @@ export class PostgreSQLDatabase implements IDatabase {
   async acquireClientForTenant(tenantId: number): Promise<{ client: PoolClient; release: () => void }> {
     const client = await this.pool.connect();
     await client.query(`SET search_path = "tenant_${tenantId}", public`);
-    return { client, release: () => client.release() };
+    const release = () => {
+      // Reset search_path before returning to pool so unscoped queries (e.g. in
+      // requireAuth) always resolve against the public schema.
+      client.query('SET search_path TO DEFAULT').catch(() => {}).finally(() => client.release());
+    };
+    return { client, release };
   }
 
   /**

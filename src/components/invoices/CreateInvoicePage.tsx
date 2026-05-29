@@ -84,7 +84,8 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
         if (savedTaxRates) {
           const rates = JSON.parse(savedTaxRates);
           setTaxRates(rates as TaxRate[]);
-          setSelectedTaxRate((rates as TaxRate[]).find((r: TaxRate) => r.isDefault) || (rates as TaxRate[])[0]);
+          // Do not auto-select a default rate; let users explicitly choose.
+          setSelectedTaxRate(null);
         }
 
         // Load shipping rates from settings
@@ -92,7 +93,8 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
         if (savedShippingRates) {
           const rates = JSON.parse(savedShippingRates);
           setShippingRates(rates as ShippingRate[]);
-          setSelectedShippingRate((rates as ShippingRate[]).find((r: ShippingRate) => r.isDefault) || (rates as ShippingRate[])[0]);
+          // Do not auto-select a default rate; let users explicitly choose.
+          setSelectedShippingRate(null);
         }
 
         // Load email configuration
@@ -286,13 +288,12 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
           throw new Error(`Failed to create invoice: ${response.statusText}`);
         }
 
-        const result = await response.json();
-        const createdInvoice = result.data;
+        await response.json();
 
         toast.success('Invoice saved successfully');
+        // Creating a new invoice should close the creation view and return to invoices.
+        navigate('/invoices');
       }
-
-      // Don't navigate away - stay on the page so user can print or send
     } catch (error) {
       console.error('Error saving invoice:', error);
       toast.error('Error saving invoice. Please try again.');

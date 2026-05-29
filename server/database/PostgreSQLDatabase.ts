@@ -218,10 +218,20 @@ export class PostgreSQLDatabase implements IDatabase {
    * Acquire a dedicated pool client for a tenant and set search_path.
    * Caller is responsible for releasing via the returned release function.
    */
-  async acquireClientForTenant(tenantId: number): Promise<{ client: PoolClient; release: () => void }> {
+  async acquireClientForTenant(tenantId: number): Promise<{ client: PoolClient; release: () => Promise<void> }> {
     const client = await this.pool.connect();
     await client.query(`SET search_path = "tenant_${tenantId}", public`);
-    return { client, release: () => client.release() };
+    return {
+      client,
+      release: async () => {
+        try {
+          await client.query('RESET search_path');
+          client.release();
+        } catch {
+          client.release(true);
+        }
+      }
+    };
   }
 
   /**

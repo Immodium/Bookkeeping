@@ -98,12 +98,12 @@ export class RecurringInvoiceTemplateService {
     if (tenantId) {
       const scopedTenantId = this.normalizeTenantId(tenantId);
       return await databaseService.getMany<RecurringInvoiceTemplate>(
-        'SELECT * FROM recurring_invoice_templates WHERE tenant_id = ? AND is_active = 1 AND next_invoice_date <= DATE(\'now\') ORDER BY next_invoice_date ASC',
+        'SELECT * FROM recurring_invoice_templates WHERE tenant_id = ? AND is_active = 1 AND (next_invoice_date)::date <= CURRENT_DATE ORDER BY next_invoice_date ASC',
         [scopedTenantId]
       );
     }
     return await databaseService.getMany<RecurringInvoiceTemplate>(
-      'SELECT * FROM recurring_invoice_templates WHERE is_active = 1 AND next_invoice_date <= DATE(\'now\') ORDER BY next_invoice_date ASC'
+      'SELECT * FROM recurring_invoice_templates WHERE is_active = 1 AND (next_invoice_date)::date <= CURRENT_DATE ORDER BY next_invoice_date ASC'
     );
   }
 

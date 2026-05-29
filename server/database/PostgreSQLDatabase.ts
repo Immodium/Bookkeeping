@@ -47,7 +47,7 @@ function prepareQuery(sql: string, params: any[] = []): { sql: string; values: a
   // Explicit id inserts are used by backfill/seed paths.
   // GENERATED ALWAYS identity columns require OVERRIDING SYSTEM VALUE.
   if (/^\s*INSERT\s+INTO/i.test(prepared) && !/OVERRIDING\s+(SYSTEM|USER)\s+VALUE/i.test(prepared)) {
-    const insertColumnsMatch = prepared.match(/^\s*INSERT\s+INTO\s+[^\(]+\(([\s\S]*?)\)\s*(VALUES|SELECT)\b/i);
+    const insertColumnsMatch = prepared.match(/^\s*INSERT\s+INTO\s+[^()]+\(([\s\S]*?)\)\s*(VALUES|SELECT)\b/i);
     if (insertColumnsMatch) {
       const insertColumns = insertColumnsMatch[1] ?? '';
       const columns = insertColumns
@@ -82,6 +82,35 @@ function prepareQuery(sql: string, params: any[] = []): { sql: string; values: a
   // Convert datetime('now') → NOW()
   prepared = prepared.replace(/datetime\s*\(\s*'now'\s*\)/gi, 'NOW()');
   prepared = prepared.replace(/DATETIME\s*\(\s*'now'\s*\)/g, 'NOW()');
+
+  // Convert date('now', '+X unit') → SQLite-compatible YYYY-MM-DD text
+  prepared = prepared.replace(/date\s*\(\s*'now'\s*,\s*'([^']+)'\s*\)/gi, (_match, interval) => {
+    const trimmed = interval.trim();
+    const signMatch = trimmed.match(/^([+-]?\d+)\s+(\w+)$/);
+    if (signMatch) {
+      const amount = signMatch[1];
+      const unit = signMatch[2];
+      if (amount.startsWith('-')) {
+        return `TO_CHAR(CURRENT_DATE - INTERVAL '${amount.substring(1)} ${unit}', 'YYYY-MM-DD')`;
+      }
+      const cleanAmount = amount.startsWith('+') ? amount.substring(1) : amount;
+      return `TO_CHAR(CURRENT_DATE + INTERVAL '${cleanAmount} ${unit}', 'YYYY-MM-DD')`;
+    }
+    return `TO_CHAR(CURRENT_DATE + INTERVAL '${trimmed}', 'YYYY-MM-DD')`;
+  });
+
+  // Convert date('now') → SQLite-compatible YYYY-MM-DD text
+  prepared = prepared.replace(/date\s*\(\s*'now'\s*\)/gi, `TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')`);
+
+  // Convert SQLite strftime date bucketing to PostgreSQL to_char
+  prepared = prepared.replace(/strftime\s*\(\s*'%Y-%m'\s*,\s*([^)]+?)\s*\)/gi, (_match, expression) => {
+    const normalized = String(expression).trim();
+    return `TO_CHAR((${normalized})::date, 'YYYY-MM')`;
+  });
+  prepared = prepared.replace(/strftime\s*\(\s*'%Y'\s*,\s*([^)]+?)\s*\)/gi, (_match, expression) => {
+    const normalized = String(expression).trim();
+    return `TO_CHAR((${normalized})::date, 'YYYY')`;
+  });
 
   // Convert DEFAULT (datetime('now')) in CREATE TABLE → DEFAULT NOW()
   prepared = prepared.replace(/DEFAULT\s+\(datetime\('now'\)\)/gi, 'DEFAULT NOW()');
@@ -189,20 +218,10 @@ export class PostgreSQLDatabase implements IDatabase {
    * Acquire a dedicated pool client for a tenant and set search_path.
    * Caller is responsible for releasing via the returned release function.
    */
-  async acquireClientForTenant(tenantId: number): Promise<{ client: PoolClient; release: () => Promise<void> }> {
+  async acquireClientForTenant(tenantId: number): Promise<{ client: PoolClient; release: () => void }> {
     const client = await this.pool.connect();
     await client.query(`SET search_path = "tenant_${tenantId}", public`);
-    return {
-      client,
-      release: async () => {
-        try {
-          await client.query('RESET search_path');
-          client.release();
-        } catch {
-          client.release(true);
-        }
-      }
-    };
+    return { client, release: () => client.release() };
   }
 
   /**

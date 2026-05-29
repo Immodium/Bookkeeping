@@ -103,7 +103,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 
     // Verify JWT token
     try {
-      const decoded = jwt.verify(token, authConfig.jwtSecret) as JWTPayload;
+      const decoded = jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
 
       // Get user from database via service
       const user = await authService.getUserById(decoded.userId);
@@ -282,7 +282,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
     
     if (token) {
       try {
-        const decoded = jwt.verify(token, authConfig.jwtSecret) as JWTPayload;
+        const decoded = jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
         const user = await authService.getUserById(decoded.userId);
         
         const tenantIsActive = user
@@ -337,7 +337,7 @@ export const generateToken = (user: TokenGenerationUser): string => {
  * @returns Decoded token payload
  */
 export const verifyToken = (token: string): JWTPayload => {
-  return jwt.verify(token, authConfig.jwtSecret) as JWTPayload;
+  return jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as JWTPayload;
 };
 
 /**

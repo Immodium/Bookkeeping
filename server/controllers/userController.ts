@@ -573,10 +573,9 @@ export const inviteUser = asyncHandler(async (req: Request, res: Response): Prom
   res.status(201).json({
     success: true,
     data: {
-      id: userId,
-      tempPassword
+      id: userId
     },
-    message: 'User invited successfully'
+    message: 'User invited successfully. Temporary password sent via email.'
   });
 });
 
@@ -616,12 +615,11 @@ export const resetUserPasswordByAdmin = asyncHandler(async (req: Request, res: R
         <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
           <h2>Password reset</h2>
           <p>Hello ${user.name},</p>
-          <p>An administrator reset your password.</p>
-          <p><strong>New password:</strong> ${newPassword}</p>
-          <p>Please log in and update it immediately.</p>
+          <p>An administrator has reset your password. Please log in using your new credentials and update your password immediately.</p>
+          <p>If you did not expect this change, contact your administrator right away.</p>
         </div>
       `,
-      text: `Hello ${user.name},\n\nAn administrator reset your Slimbooks password.\nNew password: ${newPassword}\n\nPlease log in and update it immediately.`
+      text: `Hello ${user.name},\n\nAn administrator has reset your Slimbooks password. Please log in with your new credentials and update your password immediately.\n\nIf you did not expect this change, contact your administrator right away.`
     });
   }
 

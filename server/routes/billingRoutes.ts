@@ -28,12 +28,12 @@ interface StripeWebhookInvoice {
 function timingSafeEqual(a: string, b: string): boolean {
   const ba = Buffer.from(a);
   const bb = Buffer.from(b);
-  if (ba.length !== bb.length) {
-    // Still run compare to avoid length-based timing leak
-    crypto.timingSafeEqual(ba, Buffer.alloc(ba.length));
-    return false;
-  }
-  return crypto.timingSafeEqual(ba, bb);
+  const maxLen = Math.max(ba.length, bb.length);
+  const paddedA = Buffer.alloc(maxLen);
+  const paddedB = Buffer.alloc(maxLen);
+  ba.copy(paddedA);
+  bb.copy(paddedB);
+  return crypto.timingSafeEqual(paddedA, paddedB) && ba.length === bb.length;
 }
 
 const router: Router = Router();

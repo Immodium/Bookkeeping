@@ -94,9 +94,17 @@ export const createSecurityHeaders = (corsOrigin = 'http://localhost:8080') => {
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
         frameSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        formAction: ["'self'"],
+        baseUri: ["'self'"],
+        upgradeInsecureRequests: []
       },
     },
-    crossOriginEmbedderPolicy: false, // Disable for compatibility
+    crossOriginEmbedderPolicy: false, // Disabled for compatibility
+    frameguard: { action: 'deny' },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    noSniff: true,
+    xssFilter: true,
     hsts: {
       maxAge: 31536000,
       includeSubDomains: true,
@@ -298,6 +306,9 @@ export const createCorsOptions = (
   origin = serverConfig.corsOrigin,
   credentials = serverConfig.corsCredentials
 ): CorsOptions => {
+  if (process.env.NODE_ENV === 'production' && (!origin || origin === '*')) {
+    throw new Error('CORS_ORIGIN must be explicitly set to a specific domain in production');
+  }
   return {
     origin: origin,
     credentials: credentials,

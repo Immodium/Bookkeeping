@@ -372,12 +372,12 @@ export const loggingConfig: LoggingConfig = {
 export const validationConfig: ValidationConfig = {
   // Password requirements
   password: {
-    minLength: 8,
+    minLength: 12,
     maxLength: 128,
-    requireUppercase: false,
-    requireLowercase: false,
-    requireNumbers: false,
-    requireSpecialChars: false
+    requireUppercase: true,
+    requireLowercase: true,
+    requireNumbers: true,
+    requireSpecialChars: true
   },
   
   // File upload restrictions

@@ -57,7 +57,10 @@ export const initializeAdminUser = async (db: IDatabase): Promise<void> => {
   const userCheck = await db.getOne<{ count: number }>('SELECT COUNT(*) as count FROM users');
 
   if (!userCheck || userCheck.count === 0) {
-    const defaultPassword = process.env.ADMIN_PASSWORD || 'password';
+    if (!process.env.ADMIN_PASSWORD) {
+      throw new Error('ADMIN_PASSWORD environment variable must be set before seeding the database');
+    }
+    const defaultPassword = process.env.ADMIN_PASSWORD;
     const hashedPassword = await bcrypt.hash(defaultPassword, 12);
 
     const adminUser: SeedData = {

@@ -312,9 +312,14 @@ export const refreshToken = asyncHandler(async (req: Request<object, RefreshToke
   }
 
   try {
-    // Verify the current token (even if expired, we can still decode it)
-    const decoded = jwt.decode(token) as DecodedToken | null;
-    
+    // Verify the token signature and expiry — reject tampered or expired tokens
+    let decoded: DecodedToken | null;
+    try {
+      decoded = jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as DecodedToken;
+    } catch {
+      throw new AuthenticationError('Invalid or expired token');
+    }
+
     if (!decoded || !decoded.userId) {
       throw new AuthenticationError('Invalid token');
     }

@@ -548,7 +548,7 @@ export class SubscriptionService {
     // Get all tenants with past_due subscriptions
     const pastDueTenants = await databaseService.getMany<{ tenant_id: number; email: string; name: string }>(
       `
-        SELECT ts.tenant_id, u.email, u.name
+        SELECT ts.tenant_id, MIN(u.email) AS email, MIN(u.name) AS name
         FROM tenant_subscriptions ts
         LEFT JOIN users u ON u.tenant_id = ts.tenant_id AND u.role = 'admin'
         WHERE ts.status = 'past_due'

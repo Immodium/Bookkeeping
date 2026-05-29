@@ -2,7 +2,6 @@
 // Implements the abstract database interface with PostgreSQL-specific functionality
 
 import { AsyncLocalStorage } from 'async_hooks';
-import { appendFileSync } from 'fs';
 import { Pool, PoolClient } from 'pg';
 import type {
   IDatabase,
@@ -193,22 +192,13 @@ export class PostgreSQLDatabase implements IDatabase {
   async acquireClientForTenant(tenantId: number): Promise<{ client: PoolClient; release: () => Promise<void> }> {
     const client = await this.pool.connect();
     await client.query(`SET search_path = "tenant_${tenantId}", public`);
-    // #region agent log
-    appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify({ hypothesisId: 'C', location: 'server/database/PostgreSQLDatabase.ts:194', message: 'Acquired tenant client and applied search_path', data: { tenantId, clientPid: (client as { processID?: number }).processID ?? null }, timestamp: Date.now() }) + '\n');
-    // #endregion
     return {
       client,
       release: async () => {
-        // #region agent log
-        appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify({ hypothesisId: 'C', location: 'server/database/PostgreSQLDatabase.ts:199', message: 'Resetting search_path before tenant client release', data: { tenantId, clientPid: (client as { processID?: number }).processID ?? null }, timestamp: Date.now() }) + '\n');
-        // #endregion
         try {
           await client.query('RESET search_path');
           client.release();
         } catch {
-          // #region agent log
-          appendFileSync('/opt/cursor/logs/debug.log', JSON.stringify({ hypothesisId: 'E', location: 'server/database/PostgreSQLDatabase.ts:206', message: 'Reset search_path failed; destroying client', data: { tenantId, clientPid: (client as { processID?: number }).processID ?? null }, timestamp: Date.now() }) + '\n');
-          // #endregion
           client.release(true);
         }
       }

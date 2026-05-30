@@ -191,26 +191,30 @@ export class SettingsService {
         settingsMap[setting.key] = setting.value;
       });
 
-      // Create settings object with .env defaults and database overrides
+      const hasGoogleSecret = !!(
+        settingsMap['google_oauth.client_secret'] || process.env.GOOGLE_CLIENT_SECRET
+      );
+      const hasStripeSecret = !!(
+        settingsMap['stripe.secret_key'] || process.env.STRIPE_SECRET_KEY
+      );
+      const hasSmtpPass = !!(settingsMap['email.smtp_pass'] || process.env.SMTP_PASS);
+
+      // Never return secrets to clients — only non-sensitive fields and configured flags
       const projectSettings: ProjectSettings = {
         google_oauth: {
           enabled: settingsMap['google_oauth.enabled'] === 'true' || false,
           client_id: settingsMap['google_oauth.client_id'] || process.env.GOOGLE_CLIENT_ID || '',
-          ...(settingsMap['google_oauth.client_secret'] && { client_secret: settingsMap['google_oauth.client_secret'] }),
-          ...(process.env.GOOGLE_CLIENT_SECRET && { client_secret: process.env.GOOGLE_CLIENT_SECRET }),
           configured: !!(
-            (settingsMap['google_oauth.client_id'] || process.env.GOOGLE_CLIENT_ID) && 
-            (settingsMap['google_oauth.client_secret'] || process.env.GOOGLE_CLIENT_SECRET)
+            (settingsMap['google_oauth.client_id'] || process.env.GOOGLE_CLIENT_ID) &&
+            hasGoogleSecret
           )
         },
         stripe: {
           enabled: settingsMap['stripe.enabled'] === 'true' || false,
           publishable_key: settingsMap['stripe.publishable_key'] || process.env.STRIPE_PUBLISHABLE_KEY || '',
-          ...(settingsMap['stripe.secret_key'] && { secret_key: settingsMap['stripe.secret_key'] }),
-          ...(process.env.STRIPE_SECRET_KEY && { secret_key: process.env.STRIPE_SECRET_KEY }),
           configured: !!(
-            (settingsMap['stripe.publishable_key'] || process.env.STRIPE_PUBLISHABLE_KEY) && 
-            (settingsMap['stripe.secret_key'] || process.env.STRIPE_SECRET_KEY)
+            (settingsMap['stripe.publishable_key'] || process.env.STRIPE_PUBLISHABLE_KEY) &&
+            hasStripeSecret
           )
         },
         email: {
@@ -218,18 +222,15 @@ export class SettingsService {
           smtp_host: settingsMap['email.smtp_host'] || process.env.SMTP_HOST || '',
           smtp_port: parseInt(settingsMap['email.smtp_port'] || process.env.SMTP_PORT || '587') || 587,
           smtp_user: settingsMap['email.smtp_user'] || process.env.SMTP_USER || '',
-          ...(settingsMap['email.smtp_pass'] && { smtp_pass: settingsMap['email.smtp_pass'] }),
-          ...(process.env.SMTP_PASS && { smtp_pass: process.env.SMTP_PASS }),
           email_from: settingsMap['email.email_from'] || process.env.EMAIL_FROM || '',
           configured: !!(
-            (settingsMap['email.smtp_host'] || process.env.SMTP_HOST) && 
-            (settingsMap['email.smtp_user'] || process.env.SMTP_USER) && 
-            (settingsMap['email.email_from'] || process.env.EMAIL_FROM)
+            (settingsMap['email.smtp_host'] || process.env.SMTP_HOST) &&
+            (settingsMap['email.smtp_user'] || process.env.SMTP_USER) &&
+            (settingsMap['email.email_from'] || process.env.EMAIL_FROM) &&
+            hasSmtpPass
           )
         },
         security: {
-          jwt_secret: process.env.JWT_SECRET || '',
-          session_secret: process.env.SESSION_SECRET || '',
           require_email_verification: settingsMap['security.require_email_verification'] === 'true' || process.env.REQUIRE_EMAIL_VERIFICATION === 'true',
           max_failed_login_attempts: parseInt(settingsMap['security.max_failed_login_attempts'] || process.env.MAX_FAILED_LOGIN_ATTEMPTS || '5') || 5,
           account_lockout_duration: parseInt(settingsMap['security.account_lockout_duration'] || process.env.ACCOUNT_LOCKOUT_DURATION || '1800000') || 1800000,

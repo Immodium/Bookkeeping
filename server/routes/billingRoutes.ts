@@ -227,14 +227,14 @@ router.post('/webhook',
     const normalizedIncoming = Array.isArray(incomingSecret) ? incomingSecret[0] : incomingSecret;
 
     if (!configuredSecret) {
-      if (serverConfig.saasMode || serverConfig.isProduction) {
-        res.status(503).json({
-          success: false,
-          error: 'Billing webhook secret is not configured'
-        });
-        return;
-      }
-    } else if (!normalizedIncoming || !timingSafeEqual(normalizedIncoming, configuredSecret)) {
+      res.status(503).json({
+        success: false,
+        error: 'Billing webhook secret is not configured'
+      });
+      return;
+    }
+
+    if (!normalizedIncoming || !timingSafeEqual(normalizedIncoming, configuredSecret)) {
       res.status(401).json({
         success: false,
         error: 'Invalid billing webhook secret'

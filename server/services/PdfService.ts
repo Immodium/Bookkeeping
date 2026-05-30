@@ -3,6 +3,8 @@
 
 import puppeteer, { Browser, Page } from 'puppeteer';
 import { databaseService } from '../core/DatabaseService.js';
+import { serverConfig } from '../config/index.js';
+import { validatePdfSourceUrl } from '../utils/urlValidation.js';
 import { settingsService } from './SettingsService.js';
 import { InvoiceWithClient } from '../types/index.js';
 
@@ -204,6 +206,9 @@ export class PdfService {
     if (!this.browser) {
       throw new Error('Browser not initialized');
     }
+
+    const allowedOrigin = serverConfig.corsOrigin || process.env.CLIENT_URL || 'http://localhost:8080';
+    validatePdfSourceUrl(url, allowedOrigin);
 
     const page: Page = await this.browser.newPage();
     

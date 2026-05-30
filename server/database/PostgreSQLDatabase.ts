@@ -187,6 +187,16 @@ export class PostgreSQLDatabase implements IDatabase {
         ? { rejectUnauthorized: false }
         : undefined
     });
+
+    // Reset search_path when connections return to the pool (tenant middleware safety)
+    this.pool.on('connect', (client: PoolClient) => {
+      const originalRelease = client.release.bind(client);
+      client.release = (err?: boolean | Error) => {
+        void client.query('RESET search_path').finally(() => {
+          originalRelease(err);
+        });
+      };
+    });
   }
 
   async connect(_config: DatabaseConfig): Promise<void> {
@@ -377,6 +387,11 @@ export class PostgreSQLDatabase implements IDatabase {
         await client.query('ROLLBACK');
         throw e;
       } finally {
+        try {
+          await client.query('RESET search_path');
+        } catch {
+          // ignore reset errors before release
+        }
         client.release();
       }
     });

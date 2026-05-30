@@ -27,17 +27,16 @@ describe('InvoiceNumberService tenant scoping', () => {
     settingsMock.mockResolvedValue({ prefix: 'INV' });
 
     const dbGetOneMock = databaseService.getOne as unknown as ReturnType<typeof vi.fn>;
-    dbGetOneMock.mockResolvedValue(null);
-
-    const dbExecuteMock = databaseService.executeQuery as unknown as ReturnType<typeof vi.fn>;
-    dbExecuteMock.mockReturnValue({ changes: 1, lastInsertRowid: 1 });
+    dbGetOneMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ value: 1 });
 
     const number = await invoiceNumberService.generateInvoiceNumber(2);
 
     expect(number).toMatch(/^INV-T2-\d{6}-0001$/);
-    expect(dbExecuteMock).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO counters'),
-      expect.arrayContaining([2, 'invoice_counter__tenant_2', 1])
+    expect(dbGetOneMock).toHaveBeenCalledWith(
+      expect.stringContaining('ON CONFLICT (tenant_id, name)'),
+      expect.arrayContaining([2, 'invoice_counter__tenant_2'])
     );
   });
 

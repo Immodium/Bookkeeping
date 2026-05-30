@@ -17,6 +17,8 @@ export {
   optionalAuth,
   generateToken,
   verifyToken,
+  verifyTokenAllowExpired,
+  isTokenVersionRevoked,
   isAccountLocked
 } from './auth.js';
 

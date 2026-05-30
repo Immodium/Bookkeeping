@@ -69,11 +69,18 @@ router.post('/bulk-import',
       // Import the payment service
       const { paymentService } = await import('../services/PaymentService.js');
 
+      const tenantId = req.tenantId || req.user?.tenant_id;
+      if (!tenantId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Tenant context is required'
+        });
+      }
+
       for (let i = 0; i < payments.length; i++) {
         const paymentData = payments[i];
         try {
-          // Use the payment service directly instead of the controller
-          await paymentService.createPayment(paymentData);
+          await paymentService.createPayment(paymentData, tenantId);
           successCount++;
         } catch (error) {
           errorCount++;

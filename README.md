@@ -1,6 +1,6 @@
 # Slimbooks
 
-Slimbooks is a self-hosted invoicing and bookkeeping app built with React, TypeScript, Express, and SQLite.
+Slimbooks is a self-hosted invoicing and bookkeeping app built with React, TypeScript, Express, and PostgreSQL.
 It is designed for small teams that want full control of business data without relying on a hosted SaaS billing platform.
 
 ## What is in the current app
@@ -28,7 +28,7 @@ It is designed for small teams that want full control of business data without r
 - Role-based route protection (admin, user manager, project manager, client manager, viewer-style access controls)
 
 ### Data and deployment
-- SQLite database (single file)
+- PostgreSQL 16 database (multi-tenant schema isolation)
 - In-app backup/export and import/restore support
 - Docker + docker-compose deployment
 - Raspberry Pi-friendly scripts
@@ -36,7 +36,7 @@ It is designed for small teams that want full control of business data without r
 ## Tech stack
 
 - Frontend: React 18, TypeScript, Vite, Tailwind, shadcn/radix UI
-- Backend: Express (ESM), TypeScript, SQLite (`better-sqlite3`)
+- Backend: Express (ESM), TypeScript, PostgreSQL (`pg`)
 - Security: Helmet, express-rate-limit, express-validator, JWT, bcrypt
 - OCR/PDF: `tesseract.js`, `pdf-lib`, Puppeteer-based PDF routes
 
@@ -47,7 +47,28 @@ It is designed for small teams that want full control of business data without r
 npm install
 ```
 
-### 2) Configure env
+### 2) PostgreSQL database
+PostgreSQL 16 is required. For local development:
+
+```bash
+# Start PostgreSQL (Debian/Ubuntu example)
+sudo pg_ctlcluster 16 main start
+
+# Create role + database (once)
+sudo -u postgres createuser -s slimbooks || true
+sudo -u postgres psql -c "ALTER USER slimbooks WITH PASSWORD 'slimbooks';"
+sudo -u postgres createdb -O slimbooks slimbooks || true
+```
+
+Set `DATABASE_URL` when running the app:
+
+```bash
+export DATABASE_URL=postgresql://slimbooks:slimbooks@localhost:5432/slimbooks?sslmode=disable
+```
+
+Migrations run automatically on server startup.
+
+### 3) Configure env
 Create `.env` from `.env.example` and adjust values for your environment.
 
 At minimum for local development:
@@ -56,9 +77,9 @@ At minimum for local development:
 - `CORS_ORIGIN=http://localhost:8080`
 - `JWT_SECRET`, `JWT_REFRESH_SECRET`, `SESSION_SECRET`
 
-### 3) Run the app
+### 4) Run the app
 ```bash
-npm run dev
+DATABASE_URL=postgresql://slimbooks:slimbooks@localhost:5432/slimbooks?sslmode=disable npm run dev
 ```
 
 - Frontend: `http://localhost:8080`

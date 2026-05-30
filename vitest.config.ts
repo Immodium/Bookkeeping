@@ -13,6 +13,9 @@ export default defineConfig({
       // Must be >= 32 characters to satisfy the new secret-length validation.
       JWT_SECRET: 'test-jwt-secret-for-vitest-runs-only-32chars',
       SESSION_SECRET: 'test-session-secret-for-vitest-runs-only-32c',
+      DATABASE_URL:
+        process.env.DATABASE_URL ||
+        'postgresql://slimbooks:slimbooks@localhost:5432/slimbooks?sslmode=disable',
     },
     include: ['src/test/**/*.test.{ts,tsx}'],
     exclude: ['node_modules', 'dist', '.git', 'server'],

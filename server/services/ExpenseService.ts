@@ -465,13 +465,13 @@ export class ExpenseService {
     // Get monthly trend (last 12 months)
     const monthlyTrend = await databaseService.getMany<{month: string; count: number; amount: number}>(`
       SELECT 
-        strftime('%Y-%m', date) as month,
+        TO_CHAR(date::date, 'YYYY-MM') as month,
         COUNT(*) as count,
         SUM(amount) as amount
       FROM expenses 
       ${baseCondition}
-      AND date >= date('now', '-12 months')
-      GROUP BY strftime('%Y-%m', date)
+      AND date::date >= (CURRENT_DATE - INTERVAL '12 months')
+      GROUP BY TO_CHAR(date::date, 'YYYY-MM')
       ORDER BY month DESC
       LIMIT 12
     `, params);

@@ -17,19 +17,16 @@ describe('CounterService tenant scoping', () => {
     vi.clearAllMocks();
   });
 
-  it('updates tenant-scoped counter name for next ID', async () => {
+  it('atomically increments tenant-scoped counter for next ID', async () => {
     const getOneMock = databaseService.getOne as unknown as ReturnType<typeof vi.fn>;
-    getOneMock.mockReturnValue({ value: 4 });
-
-    const executeMock = databaseService.executeQuery as unknown as ReturnType<typeof vi.fn>;
-    executeMock.mockReturnValue({ changes: 1, lastInsertRowid: 1 });
+    getOneMock.mockReturnValue({ value: 5 });
 
     const nextId = await counterService.getNextCounterId('invoices', 2);
 
     expect(nextId).toBe(5);
-    expect(executeMock).toHaveBeenCalledWith(
-      expect.stringContaining('UPDATE counters'),
-      [5, 2, 'invoices__tenant_2']
+    expect(getOneMock).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE counters SET value = value + 1'),
+      [2, 'invoices__tenant_2']
     );
   });
 

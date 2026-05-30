@@ -366,6 +366,36 @@ export const verifyToken = (token: string): JWTPayload => {
 };
 
 /**
+ * Verify JWT signature while allowing expired tokens (refresh flow only).
+ */
+export const verifyTokenAllowExpired = (token: string): JWTPayload => {
+  const options = { algorithms: ['HS256' as const], ignoreExpiration: true };
+  try {
+    return jwt.verify(token, authConfig.jwtSecret, options) as unknown as JWTPayload;
+  } catch (err) {
+    if (authConfig.jwtSecretPrevious) {
+      return jwt.verify(token, authConfig.jwtSecretPrevious, options) as unknown as JWTPayload;
+    }
+    throw err;
+  }
+};
+
+/**
+ * Returns true when the token's embedded version is older than the user's current version.
+ */
+export const isTokenVersionRevoked = async (userId: number, tokenVersion?: number): Promise<boolean> => {
+  if (tokenVersion === undefined) {
+    return false;
+  }
+  const tokenVersionRow = await databaseService.getOne<{ token_version: number }>(
+    'SELECT token_version FROM users WHERE id = ?',
+    [userId]
+  );
+  const currentVersion = tokenVersionRow?.token_version ?? 0;
+  return tokenVersion < currentVersion;
+};
+
+/**
  * Check if user account is locked
  * @param user - User object
  * @returns True if account is locked

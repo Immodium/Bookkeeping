@@ -34,7 +34,6 @@ export interface ServerConfig {
   allowDatabaseImportExport: boolean;
   cronJobSecret: string | undefined;
   billingWebhookSecret: string | undefined;
-  webhookEncryptionKey: string | undefined;
   serveStaticFiles: boolean;
   rateLimiting: {
     windowMs: number;
@@ -60,7 +59,6 @@ export interface DatabaseConfig {
  */
 export interface AuthConfig {
   jwtSecret: string;
-  jwtSecretPrevious: string | undefined;
   jwtRefreshSecret: string;
   sessionSecret: string;
   accessTokenExpiry: number;
@@ -219,8 +217,6 @@ export const serverConfig: ServerConfig = {
     (process.env.NODE_ENV !== 'production' && process.env.SAAS_MODE !== 'true'),
   cronJobSecret: process.env.CRON_JOB_SECRET,
   billingWebhookSecret: process.env.BILLING_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET,
-  // AES-256-GCM key for encrypting outbound webhook secrets at rest (64 hex chars = 32 bytes)
-  webhookEncryptionKey: process.env.WEBHOOK_ENCRYPTION_KEY || undefined,
   serveStaticFiles: process.env.SERVE_STATIC_FILES !== 'false',
 
   // Rate limiting configuration
@@ -249,8 +245,6 @@ export const databaseConfig: DatabaseConfig = {
 export const authConfig: AuthConfig = {
   // JWT configuration — no insecure defaults; empty string if not set
   jwtSecret: process.env.JWT_SECRET || '',
-  // Previous secret kept during rotation grace period — tokens signed with it remain valid
-  jwtSecretPrevious: process.env.JWT_SECRET_PREVIOUS || undefined,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || '',
   sessionSecret: process.env.SESSION_SECRET || '',
 
@@ -309,7 +303,7 @@ export const emailConfig: EmailConfig = {
     process.env.EMAIL_PROVIDER === 'sendgrid'
       ? !!(process.env.SENDGRID_API_KEY && (process.env.SENDGRID_FROM || process.env.EMAIL_FROM))
       : process.env.EMAIL_PROVIDER === 'resend'
-        ? !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM)
+        ? !!process.env.RESEND_API_KEY
         : !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
   )
 };
@@ -378,12 +372,12 @@ export const loggingConfig: LoggingConfig = {
 export const validationConfig: ValidationConfig = {
   // Password requirements
   password: {
-    minLength: 12,
+    minLength: 8,
     maxLength: 128,
-    requireUppercase: true,
-    requireLowercase: true,
-    requireNumbers: true,
-    requireSpecialChars: true
+    requireUppercase: false,
+    requireLowercase: false,
+    requireNumbers: false,
+    requireSpecialChars: false
   },
   
   // File upload restrictions

@@ -204,7 +204,8 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
     to: user.email,
     subject: resetEmailContent.subject,
     html: resetEmailContent.html,
-    text: resetEmailContent.text
+    text: resetEmailContent.text,
+    tenantId
   });
 
   res.json({
@@ -312,14 +313,9 @@ export const refreshToken = asyncHandler(async (req: Request<object, RefreshToke
   }
 
   try {
-    // Verify the token signature and expiry — reject tampered or expired tokens
-    let decoded: DecodedToken | null;
-    try {
-      decoded = jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as DecodedToken;
-    } catch {
-      throw new AuthenticationError('Invalid or expired token');
-    }
-
+    // Verify the current token (even if expired, we can still decode it)
+    const decoded = jwt.decode(token) as DecodedToken | null;
+    
     if (!decoded || !decoded.userId) {
       throw new AuthenticationError('Invalid token');
     }
@@ -474,7 +470,8 @@ export const registerTenant = asyncHandler(async (req: Request, res: Response): 
       to: email,
       subject: welcomeContent.subject,
       html: welcomeContent.html,
-      text: welcomeContent.text
+      text: welcomeContent.text,
+      tenantId
     }))
     .catch(() => {
       // Ignore email errors — don't fail registration

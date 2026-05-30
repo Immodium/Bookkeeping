@@ -408,7 +408,8 @@ router.post('/email', async (req: Request, res: Response): Promise<void> => {
       to,
       subject: emailContent.subject,
       html: emailContent.html,
-      text: emailContent.text
+      text: emailContent.text,
+      tenantId
     });
 
     res.json({ success: result.success, message: result.message });

@@ -548,7 +548,7 @@ export class SubscriptionService {
     // Get all tenants with past_due subscriptions
     const pastDueTenants = await databaseService.getMany<{ tenant_id: number; email: string; name: string }>(
       `
-        SELECT ts.tenant_id, MIN(u.email) AS email, MIN(u.name) AS name
+        SELECT ts.tenant_id, u.email, u.name
         FROM tenant_subscriptions ts
         LEFT JOIN users u ON u.tenant_id = ts.tenant_id AND u.role = 'admin'
         WHERE ts.status = 'past_due'
@@ -617,7 +617,8 @@ export class SubscriptionService {
         to: email,
         subject: finalContent.subject,
         html: finalContent.html,
-        text: finalContent.text
+        text: finalContent.text,
+        tenantId
       });
       await databaseService.executeQuery(
         `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'final_notice', NOW())`,
@@ -637,7 +638,8 @@ export class SubscriptionService {
         to: email,
         subject: reminder2Content.subject,
         html: reminder2Content.html,
-        text: reminder2Content.text
+        text: reminder2Content.text,
+        tenantId
       });
       await databaseService.executeQuery(
         `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'reminder_2', NOW())`,
@@ -656,7 +658,8 @@ export class SubscriptionService {
         to: email,
         subject: reminder1Content.subject,
         html: reminder1Content.html,
-        text: reminder1Content.text
+        text: reminder1Content.text,
+        tenantId
       });
       await databaseService.executeQuery(
         `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'reminder_1', NOW())`,

@@ -79,21 +79,25 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
         const allClients = clientsData.data;
         setClients(allClients);
 
-        // Load tax rates from settings
-        const savedTaxRates = localStorage.getItem('tax_rates');
-        if (savedTaxRates) {
-          const rates = JSON.parse(savedTaxRates);
-          setTaxRates(rates as TaxRate[]);
-          setSelectedTaxRate(null);
+        // Load tax and shipping rates from persisted settings store.
+        const { sqliteService } = await import('@/services/sqlite.svc');
+        if (!sqliteService.isReady()) {
+          await sqliteService.initialize();
         }
 
-        // Load shipping rates from settings
-        const savedShippingRates = localStorage.getItem('shipping_rates');
-        if (savedShippingRates) {
-          const rates = JSON.parse(savedShippingRates);
-          setShippingRates(rates as ShippingRate[]);
-          setSelectedShippingRate(null);
+        const savedTaxRates = await sqliteService.getSetting('tax_rates');
+        if (Array.isArray(savedTaxRates)) {
+          setTaxRates(savedTaxRates as TaxRate[]);
         }
+
+        const savedShippingRates = await sqliteService.getSetting('shipping_rates');
+        if (Array.isArray(savedShippingRates)) {
+          setShippingRates(savedShippingRates as ShippingRate[]);
+        }
+
+        // Keep create form unselected until user explicitly chooses.
+        setSelectedTaxRate(null);
+        setSelectedShippingRate(null);
 
         // Load email configuration
         const emailConfigStatus = await getEmailConfigurationStatus();

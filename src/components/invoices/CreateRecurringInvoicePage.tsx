@@ -72,21 +72,24 @@ export const CreateRecurringInvoicePage: React.FC<CreateRecurringInvoicePageProp
           }
         }
 
-        // Load tax rates from settings
-        const savedTaxRates = localStorage.getItem('tax_rates');
-        if (savedTaxRates) {
-          const rates = JSON.parse(savedTaxRates);
-          setTaxRates(rates);
-          setSelectedTaxRate(null);
+        // Load tax and shipping rates from persisted settings store.
+        const { sqliteService } = await import('@/services/sqlite.svc');
+        if (!sqliteService.isReady()) {
+          await sqliteService.initialize();
         }
 
-        // Load shipping rates from settings
-        const savedShippingRates = localStorage.getItem('shipping_rates');
-        if (savedShippingRates) {
-          const rates = JSON.parse(savedShippingRates);
-          setShippingRates(rates);
-          setSelectedShippingRate(null);
+        const savedTaxRates = await sqliteService.getSetting('tax_rates');
+        if (Array.isArray(savedTaxRates)) {
+          setTaxRates(savedTaxRates);
         }
+
+        const savedShippingRates = await sqliteService.getSetting('shipping_rates');
+        if (Array.isArray(savedShippingRates)) {
+          setShippingRates(savedShippingRates);
+        }
+
+        setSelectedTaxRate(null);
+        setSelectedShippingRate(null);
 
       } catch (error) {
         console.error('Error loading data:', error);

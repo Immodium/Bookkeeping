@@ -8,7 +8,7 @@ export class StripeService {
   constructor() {
     if (stripeConfig.isConfigured && stripeConfig.secretKey) {
       this.stripe = new Stripe(stripeConfig.secretKey, {
-        apiVersion: '2026-04-22.dahlia'
+        apiVersion: '2026-05-27.dahlia'
       });
     }
   }

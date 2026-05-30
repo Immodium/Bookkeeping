@@ -28,6 +28,35 @@ export class CounterService {
   }
 
   /**
+   * Atomically increment a counter row (safe under concurrent requests).
+   */
+  private async atomicIncrementCounter(tenantId: number, counterName: string): Promise<number> {
+    const updated = await databaseService.getOne<{ value: number }>(
+      `UPDATE counters SET value = value + 1, updated_at = NOW()
+       WHERE tenant_id = ? AND name = ?
+       RETURNING value`,
+      [tenantId, counterName]
+    );
+    if (updated?.value !== undefined) {
+      return updated.value;
+    }
+
+    const inserted = await databaseService.getOne<{ value: number }>(
+      `INSERT INTO counters (tenant_id, name, value, created_at, updated_at)
+       VALUES (?, ?, 1, NOW(), NOW())
+       ON CONFLICT (tenant_id, name) DO UPDATE
+         SET value = counters.value + 1, updated_at = NOW()
+       RETURNING value`,
+      [tenantId, counterName]
+    );
+
+    if (inserted?.value === undefined) {
+      throw new Error('Failed to increment counter');
+    }
+    return inserted.value;
+  }
+
+  /**
    * Get next ID for a counter and increment it
    */
   async getNextCounterId(counterName: string, tenantId?: number): Promise<number> {
@@ -41,28 +70,7 @@ export class CounterService {
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
     const scopedCounterName = this.getScopedCounterName(counterName, scopedTenantId);
-
-    // Get current counter value
-    const counterResult = await databaseService.getOne<{value: number}>(
-      'SELECT value FROM counters WHERE tenant_id = ? AND name = ?', 
-      [scopedTenantId, scopedCounterName]
-    );
-    
-    const nextId = (counterResult?.value || 0) + 1;
-    
-    if (counterResult) {
-      await databaseService.executeQuery(
-        'UPDATE counters SET value = ?, updated_at = datetime(\'now\') WHERE tenant_id = ? AND name = ?', 
-        [nextId, scopedTenantId, scopedCounterName]
-      );
-    } else {
-      await databaseService.executeQuery(
-        'INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (?, ?, ?, datetime(\'now\'), datetime(\'now\'))',
-        [scopedTenantId, scopedCounterName, nextId]
-      );
-    }
-    
-    return nextId;
+    return this.atomicIncrementCounter(scopedTenantId, scopedCounterName);
   }
 
   /**

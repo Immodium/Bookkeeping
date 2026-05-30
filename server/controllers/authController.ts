@@ -3,7 +3,6 @@
 
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { authConfig } from '../config/index.js';
 import { authService } from '../services/AuthService.js';
 import { tenantService } from '../services/TenantService.js';
@@ -16,7 +15,9 @@ import {
   ValidationError,
   AuthenticationError,
   asyncHandler,
-  generateToken
+  generateToken,
+  verifyTokenAllowExpired,
+  isTokenVersionRevoked
 } from '../middleware/index.js';
 import {
   LoginRequest,
@@ -29,14 +30,6 @@ import {
 import { User, UserPublic } from '../types/index.js';
 import { auditService } from '../services/AuditService.js';
 import { emailTemplateService } from '../services/EmailTemplateService.js';
-
-interface DecodedToken {
-  userId: number;
-  tenantId?: number;
-  email: string;
-  exp?: number;
-  iat?: number;
-}
 
 /**
  * User login
@@ -305,46 +298,62 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response): Pro
  * Refresh JWT token
  */
 export const refreshToken = asyncHandler(async (req: Request<object, RefreshTokenResponse, RefreshTokenRequest>, res: Response): Promise<void> => {
-  const { token } = req.body;
+  const bodyToken = req.body?.token;
+  const headerToken = req.headers.authorization?.replace(/^Bearer\s+/i, '');
+  const token = bodyToken || headerToken;
 
   if (!token) {
     throw new ValidationError('Token is required');
   }
 
+  let decoded;
   try {
-    // Verify the current token (even if expired, we can still decode it)
-    const decoded = jwt.decode(token) as DecodedToken | null;
-    
-    if (!decoded || !decoded.userId) {
-      throw new AuthenticationError('Invalid token');
-    }
-
-    // Get fresh user data
-    const user = await authService.getUserById(decoded.userId);
-    
-    if (!user) {
-      throw new NotFoundError('User');
-    }
-
-    // Check if account is locked
-    if (authService.isAccountLocked(user as User)) {
-      throw new AuthenticationError('Account is locked');
-    }
-
-    // Generate new token
-    const newToken = generateToken(user as User);
-
-    res.json({
-      success: true,
-      data: {
-        user,
-        token: newToken
-      },
-      message: 'Token refreshed successfully'
-    });
-  } catch (error) {
-    throw new AuthenticationError('Token refresh failed');
+    decoded = verifyTokenAllowExpired(token);
+  } catch {
+    throw new AuthenticationError('Invalid token');
   }
+
+  if (!decoded.userId) {
+    throw new AuthenticationError('Invalid token');
+  }
+
+  const maxRefreshAgeSec = Math.floor(authConfig.refreshTokenExpiry / 1000);
+  const tokenAgeSec = decoded.iat ? Math.floor(Date.now() / 1000) - decoded.iat : 0;
+  if (tokenAgeSec > maxRefreshAgeSec) {
+    throw new AuthenticationError('Refresh token expired');
+  }
+
+  if (await isTokenVersionRevoked(decoded.userId, decoded.tokenVersion)) {
+    throw new AuthenticationError('Token has been invalidated');
+  }
+
+  const user = await authService.getUserById(decoded.userId);
+
+  if (!user) {
+    throw new NotFoundError('User');
+  }
+
+  const tenantIsActive = await tenantService.isTenantActive(user.tenant_id || 1);
+  if (!tenantIsActive) {
+    throw new AuthenticationError('Tenant is suspended or unavailable');
+  }
+
+  if (authService.isAccountLocked(user as User)) {
+    throw new AuthenticationError('Account is locked');
+  }
+
+  const newToken = generateToken(user as User);
+  const fullUser = user as User;
+  const { password_hash, two_factor_secret, backup_codes, ...userResponse } = fullUser;
+
+  res.json({
+    success: true,
+    data: {
+      user: userResponse as UserPublic,
+      token: newToken
+    },
+    message: 'Token refreshed successfully'
+  });
 });
 
 /**

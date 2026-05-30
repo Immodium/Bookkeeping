@@ -4,7 +4,6 @@
 import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
 import helmet, { HelmetOptions } from 'helmet';
 import { Request, Response, NextFunction } from 'express';
-import { body, param, query, validationResult, ValidationChain } from 'express-validator';
 import { serverConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
@@ -24,11 +23,6 @@ interface CorsOptions {
   methods: string[];
   allowedHeaders: string[];
   maxAge: number;
-}
-
-interface SQLSanitizeResult {
-  query: string;
-  params: unknown[];
 }
 
 // Rate limiting configurations
@@ -114,138 +108,6 @@ export const createSecurityHeaders = (corsOrigin = 'http://localhost:8080') => {
   };
 
   return helmet(helmetOptions);
-};
-
-// Input validation middleware
-export const validateRequest = (req: Request, res: Response, next: NextFunction): void => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    res.status(400).json({
-      success: false,
-      error: 'Validation failed',
-      details: errors.array()
-    });
-    return;
-  }
-  next();
-};
-
-// Common validation rules
-export const validationRules = {
-  // User validation
-  email: body('email')
-    .isEmail()
-    .normalizeEmail()
-    .withMessage('Must be a valid email address'),
-  
-  password: body('password')
-    .isLength({ min: 8, max: 128 })
-    .withMessage('Password must be between 8 and 128 characters'),
-  
-  name: body('name')
-    .trim()
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Name must be between 1 and 100 characters'),
-  
-  // Database query validation for read-only operations
-  sql: body('sql')
-    .custom((value: string): boolean => {
-      // Block dangerous SQL operations for read-only endpoints
-      const dangerousPatterns = [
-        /DROP\s+TABLE/i,
-        /DELETE\s+FROM/i,
-        /TRUNCATE/i,
-        /ALTER\s+TABLE/i,
-        /CREATE\s+TABLE/i,
-        /UPDATE.*SET/i,
-        /INSERT\s+INTO/i
-      ];
-
-      for (const pattern of dangerousPatterns) {
-        if (pattern.test(value)) {
-          throw new Error('SQL operation not allowed');
-        }
-      }
-      return true;
-    }),
-
-  // Database query validation for write operations (more permissive)
-  sqlWrite: body('sql')
-    .custom((value: string): boolean => {
-      // Only block extremely dangerous operations for write endpoints
-      const dangerousPatterns = [
-        /DROP\s+TABLE/i,
-        /DROP\s+DATABASE/i,
-        /TRUNCATE/i,
-        /CREATE\s+TABLE/i
-      ];
-
-      for (const pattern of dangerousPatterns) {
-        if (pattern.test(value)) {
-          throw new Error('SQL operation not allowed');
-        }
-      }
-      return true;
-    }),
-  
-  // ID validation
-  id: param('id')
-    .isInt({ min: 1 })
-    .withMessage('ID must be a positive integer'),
-  
-  // Invoice validation
-  invoiceNumber: body('invoice_number')
-    .trim()
-    .isLength({ min: 1, max: 50 })
-    .withMessage('Invoice number must be between 1 and 50 characters'),
-  
-  amount: body('amount')
-    .isFloat({ min: 0 })
-    .withMessage('Amount must be a positive number'),
-  
-  // Client validation
-  clientName: body('name')
-    .trim()
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Client name must be between 1 and 100 characters'),
-  
-  clientEmail: body('email')
-    .isEmail()
-    .normalizeEmail()
-    .withMessage('Must be a valid email address'),
-  
-  // Settings validation
-  settingsKey: body('key')
-    .trim()
-    .isLength({ min: 1, max: 100 })
-    .matches(/^[a-zA-Z0-9_.-]+$/)
-    .withMessage('Settings key must contain only alphanumeric characters, dots, hyphens, and underscores'),
-  
-  // File upload validation
-  fileSize: (maxSize = 10 * 1024 * 1024) => (req: Request, res: Response, next: NextFunction): void => {
-    if (req.file && req.file.size > maxSize) {
-      res.status(400).json({
-        success: false,
-        error: `File size exceeds maximum allowed size of ${Math.round(maxSize / 1024 / 1024)}MB`
-      });
-      return;
-    }
-    next();
-  }
-};
-
-// SQL injection protection for dynamic queries
-export const sanitizeSQL = (query: string, params: unknown[] = []): SQLSanitizeResult => {
-  // Basic SQL injection protection
-  // In production, use parameterized queries exclusively
-  const sanitizedParams = params.map(param => {
-    if (typeof param === 'string') {
-      return param.replace(/['"\\]/g, '');
-    }
-    return param;
-  });
-  
-  return { query, params: sanitizedParams };
 };
 
 // CORS configuration

@@ -4,30 +4,7 @@
 import crypto from 'crypto';
 import { databaseService } from '../core/DatabaseService.js';
 import { encryptWebhookSecret, decryptWebhookSecret } from '../utils/webhookCrypto.js';
-
-// SSRF protection: block private/metadata IP ranges and non-HTTP protocols
-const BLOCKED_HOSTNAMES = new Set([
-  'localhost', '0.0.0.0',
-  '169.254.169.254',  // AWS/Azure/GCP metadata
-  'metadata.google.internal',
-]);
-const PRIVATE_IP_RE = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|::1$|fd[0-9a-f]{2}:)/i;
-
-function validateWebhookUrl(rawUrl: string): void {
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    throw new Error('Invalid webhook URL');
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error('Webhook URL must use http or https');
-  }
-  const host = parsed.hostname.toLowerCase();
-  if (BLOCKED_HOSTNAMES.has(host) || PRIVATE_IP_RE.test(host)) {
-    throw new Error('Webhook URL points to a private or reserved address');
-  }
-}
+import { validateExternalUrl as validateWebhookUrl } from '../utils/urlValidation.js';
 
 export interface WebhookEndpointRecord {
   id: number;

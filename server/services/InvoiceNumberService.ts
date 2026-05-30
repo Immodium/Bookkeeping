@@ -81,29 +81,29 @@ export class InvoiceNumberService {
    */
   private async getNextCounter(tenantId: number): Promise<number> {
     const counterKey = this.getCounterKey(tenantId);
-    // Get current counter value
-    const counter = await databaseService.getOne<{ value: number }>(
-      'SELECT value FROM counters WHERE tenant_id = ? AND name = ?',
+    const updated = await databaseService.getOne<{ value: number }>(
+      `UPDATE counters SET value = value + 1, updated_at = NOW()
+       WHERE tenant_id = ? AND name = ?
+       RETURNING value`,
+      [tenantId, counterKey]
+    );
+    if (updated?.value !== undefined) {
+      return updated.value;
+    }
+
+    const inserted = await databaseService.getOne<{ value: number }>(
+      `INSERT INTO counters (tenant_id, name, value, created_at, updated_at)
+       VALUES (?, ?, 1, NOW(), NOW())
+       ON CONFLICT (tenant_id, name) DO UPDATE
+         SET value = counters.value + 1, updated_at = NOW()
+       RETURNING value`,
       [tenantId, counterKey]
     );
 
-    let nextNumber = 1;
-    if (counter) {
-      nextNumber = counter.value + 1;
-      // Update counter
-      await databaseService.executeQuery(
-        'UPDATE counters SET value = ?, updated_at = DATETIME(\'now\') WHERE tenant_id = ? AND name = ?',
-        [nextNumber, tenantId, counterKey]
-      );
-    } else {
-      // Create counter if it doesn't exist
-      await databaseService.executeQuery(
-        'INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (?, ?, ?, DATETIME(\'now\'), DATETIME(\'now\'))',
-        [tenantId, counterKey, nextNumber]
-      );
+    if (inserted?.value === undefined) {
+      throw new Error('Failed to increment invoice counter');
     }
-
-    return nextNumber;
+    return inserted.value;
   }
 
   /**

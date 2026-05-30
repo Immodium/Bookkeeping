@@ -5,6 +5,18 @@ import { databaseService } from '../core/DatabaseService.js';
 import { subscriptionService } from './SubscriptionService.js';
 import { Client, ServiceOptions } from '../types/index.js';
 import { usageService } from './UsageService.js';
+import { appendFileSync } from 'node:fs';
+
+const writeDebugLog = (hypothesisId: string, location: string, message: string, data: Record<string, unknown>) => {
+  try {
+    appendFileSync(
+      '/opt/cursor/logs/debug.log',
+      `${JSON.stringify({ hypothesisId, location, message, data, timestamp: Date.now() })}\n`
+    );
+  } catch (error) {
+    // no-op: logging must never impact runtime flow
+  }
+};
 
 /**
  * Client Service
@@ -41,6 +53,13 @@ export class ClientService {
   async getAllClients(options: ServiceOptions = {}, tenantId?: number): Promise<Client[]> {
     const { limit = 100, offset = 0 } = options;
     const scopedTenantId = this.normalizeTenantId(tenantId);
+    // #region agent log
+    writeDebugLog('D', 'ClientService.ts:getAllClients:44', 'getAllClients entry', {
+      tenantId: scopedTenantId,
+      limit,
+      offset
+    });
+    // #endregion
 
     const clients = await databaseService.getMany<Client>(`
       SELECT * FROM clients
@@ -48,8 +67,34 @@ export class ClientService {
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
     `, [scopedTenantId, limit, offset]);
+    // #region agent log
+    writeDebugLog('A', 'ClientService.ts:getAllClients:58', 'raw clients text/date shape', {
+      totalClients: clients.length,
+      invalidNameCount: clients.filter((client) => typeof client.name !== 'string').length,
+      invalidEmailCount: clients.filter((client) => client.email !== null && client.email !== undefined && typeof client.email !== 'string').length,
+      invalidCompanyCount: clients.filter((client) => client.company !== null && client.company !== undefined && typeof client.company !== 'string').length,
+      nullOrUndefinedCompanyCount: clients.filter((client) => client.company === null || client.company === undefined).length,
+      missingCreatedAtCount: clients.filter((client) => !client.created_at).length
+    });
+    // #endregion
 
-    return clients.map(client => this.normalizeClientRecord(client));
+    const normalizedClients = clients.map(client => this.normalizeClientRecord(client));
+    // #region agent log
+    writeDebugLog('B', 'ClientService.ts:getAllClients:70', 'normalized clients sample', {
+      totalClients: normalizedClients.length,
+      sampleNewestClient: normalizedClients[0]
+        ? {
+            id: normalizedClients[0].id,
+            name: normalizedClients[0].name,
+            email: normalizedClients[0].email,
+            company: normalizedClients[0].company,
+            created_at: normalizedClients[0].created_at
+          }
+        : null
+    });
+    // #endregion
+
+    return normalizedClients;
   }
 
   /**
@@ -91,6 +136,17 @@ export class ClientService {
     if (!clientData) {
       throw new Error('Client data is required');
     }
+    // #region agent log
+    writeDebugLog('C', 'ClientService.ts:createClient:109', 'createClient entry payload shape', {
+      tenantId: scopedTenantId,
+      hasName: typeof clientData.name === 'string' && clientData.name.trim().length > 0,
+      hasFirstName: typeof clientData.first_name === 'string' && clientData.first_name.trim().length > 0,
+      hasLastName: typeof clientData.last_name === 'string' && clientData.last_name.trim().length > 0,
+      emailType: clientData.email === null ? 'null' : typeof clientData.email,
+      companyType: clientData.company === null ? 'null' : typeof clientData.company,
+      companyValue: clientData.company ?? null
+    });
+    // #endregion
 
     const firstName = (clientData.first_name || '').trim();
     const lastName = (clientData.last_name || '').trim();
@@ -165,6 +221,15 @@ export class ClientService {
 
       return id;
     });
+    // #region agent log
+    writeDebugLog('A', 'ClientService.ts:createClient:190', 'createClient inserted record summary', {
+      tenantId: scopedTenantId,
+      createdClientId: nextId,
+      resolvedName,
+      resolvedCompany: clientData.company || null,
+      resolvedEmail: clientData.email || null
+    });
+    // #endregion
 
     // Fire-and-forget: usage metering
     usageService.increment(scopedTenantId, 'clients_created').catch(() => {});

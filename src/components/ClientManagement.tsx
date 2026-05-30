@@ -55,9 +55,9 @@ export const ClientManagement: React.FC = () => {
   };
 
   const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-    client.email.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-    client.company.toLowerCase().includes(filters.searchTerm.toLowerCase())
+    (typeof client.name === 'string' ? client.name : '').toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+    (typeof client.email === 'string' ? client.email : '').toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+    (typeof client.company === 'string' ? client.company : '').toLowerCase().includes(filters.searchTerm.toLowerCase())
   );
 
   // Use pagination hook

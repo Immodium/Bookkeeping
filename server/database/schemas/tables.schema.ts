@@ -641,11 +641,28 @@ export const createTables = async (db: IDatabase): Promise<void> => {
   }
 
   // Ensure a default tenant exists for backwards-compatible single-tenant mode.
-  await db.executeQuery(`
-    INSERT INTO tenants (id, public_id, name, slug, status)
-    VALUES (1, '00000000-0000-7000-8000-000000000001', 'Default Tenant', 'default', 'active')
-    ON CONFLICT (id) DO NOTHING
-  `);
+  // Legacy databases may not have tenants.public_id yet until migrations run.
+  try {
+    await db.executeQuery(`
+      INSERT INTO tenants (id, public_id, name, slug, status)
+      VALUES (1, '00000000-0000-7000-8000-000000000001', 'Default Tenant', 'default', 'active')
+      ON CONFLICT (id) DO NOTHING
+    `);
+  } catch (error) {
+    const message = (error as Error).message.toLowerCase();
+    const missingPublicIdColumn =
+      message.includes('public_id') &&
+      message.includes('does not exist');
+    if (!missingPublicIdColumn) {
+      throw error;
+    }
+
+    await db.executeQuery(`
+      INSERT INTO tenants (id, name, slug, status)
+      VALUES (1, 'Default Tenant', 'default', 'active')
+      ON CONFLICT (id) DO NOTHING
+    `);
+  }
 
   const trialFeatures = JSON.stringify({
     'reports.enabled': true,

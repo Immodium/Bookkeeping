@@ -43,7 +43,7 @@ router.get('/admin-exists', async (req: Request, res: Response) => {
       return;
     }
     const { userService } = await import('../services/UserService.js');
-    const adminUser = await userService.getUserByEmail('admin@slimbooks.app');
+    const adminUser = await userService.getUserByEmail('admin@slimbooks.app', 1);
     const adminExists = adminUser && adminUser.role === 'admin';
     res.json({
       success: true,
@@ -84,7 +84,7 @@ router.get('/email/:email', async (req: Request, res: Response, next: NextFuncti
   if (!serverConfig.saasMode && email === 'admin@slimbooks.app') {
     try {
       const { userService } = await import('../services/UserService.js');
-      const user = await userService.getUserByEmail(email);
+      const user = await userService.getUserByEmail(email, 1);
 
       if (!user) {
         return res.status(404).json({

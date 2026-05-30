@@ -42,10 +42,10 @@ export const ShippingSettings = forwardRef<SettingsTabRef>((props, ref) => {
             localStorage.removeItem('shipping_rates');
           } else {
             defaultRates = [
-              { id: '1', name: 'No Shipping', amount: 0, isDefault: true },
-              { id: '2', name: 'Standard Shipping', amount: 10, isDefault: false },
-              { id: '3', name: 'Express Shipping', amount: 25, isDefault: false },
-              { id: '4', name: 'Overnight Shipping', amount: 50, isDefault: false }
+              { id: '1', name: 'No Shipping', amount: 0 },
+              { id: '2', name: 'Standard Shipping', amount: 10 },
+              { id: '3', name: 'Express Shipping', amount: 25 },
+              { id: '4', name: 'Overnight Shipping', amount: 50 }
             ];
           }
 
@@ -75,8 +75,7 @@ export const ShippingSettings = forwardRef<SettingsTabRef>((props, ref) => {
     const newRate: ShippingRate = {
       id: Date.now().toString(),
       name: 'New Shipping Rate',
-      amount: 0,
-      isDefault: false
+      amount: 0
     };
     const updated = [...shippingRates, newRate];
     saveShippingRates(updated);
@@ -103,14 +102,6 @@ export const ShippingSettings = forwardRef<SettingsTabRef>((props, ref) => {
 
   const deleteShippingRate = (id: string) => {
     const updated = shippingRates.filter(rate => rate.id !== id);
-    saveShippingRates(updated);
-  };
-
-  const setDefault = (id: string) => {
-    const updated = shippingRates.map(rate => ({
-      ...rate,
-      isDefault: rate.id === id
-    }));
     saveShippingRates(updated);
   };
 
@@ -164,23 +155,10 @@ export const ShippingSettings = forwardRef<SettingsTabRef>((props, ref) => {
                 <div className="flex items-center space-x-3">
                   <div>
                     <span className="font-medium text-card-foreground">{rate.name}</span>
-                    {rate.isDefault && (
-                      <span className="ml-2 px-2 py-1 bg-primary/10 text-primary text-xs rounded">
-                        Default
-                      </span>
-                    )}
                   </div>
                   <span className="text-muted-foreground">${rate.amount.toFixed(2)}</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {!rate.isDefault && (
-                    <button
-                      onClick={() => setDefault(rate.id)}
-                      className="px-2 py-1 text-primary hover:bg-accent hover:text-accent-foreground rounded text-sm"
-                    >
-                      Set Default
-                    </button>
-                  )}
                   <button
                     onClick={() => startEdit(rate)}
                     className="p-1 text-muted-foreground hover:text-foreground"

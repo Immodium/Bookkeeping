@@ -12,13 +12,14 @@ import {
   updatePDFFormat,
   getPDFFormat
 } from '../controllers/pdfController.js';
-import { requireAuth, validateRequest } from '../middleware/index.js';
+import { requireAuth, validateRequest, applyTenantSchema } from '../middleware/index.js';
 
 const router: Router = Router();
 
 // Invoice PDF download routes
 router.get('/invoice/:id/download',
   requireAuth,
+  applyTenantSchema,
   [
     param('id').isInt({ min: 1 }).withMessage('Invoice ID must be a positive integer')
   ],
@@ -39,6 +40,7 @@ router.get('/invoice/:id',
 // Custom page/report PDF generation
 router.post('/page',
   requireAuth,
+  applyTenantSchema,
   [
     body('url').isURL().withMessage('Valid URL is required'),
     body('filename').optional().isString().withMessage('Filename must be a string'),
@@ -51,22 +53,26 @@ router.post('/page',
 // PDF service management routes
 router.get('/status',
   requireAuth,
+  applyTenantSchema,
   getPDFServiceStatus
 );
 
 router.post('/initialize',
   requireAuth,
+  applyTenantSchema,
   initializePDFService
 );
 
 // PDF format settings routes
 router.get('/format',
   requireAuth,
+  applyTenantSchema,
   getPDFFormat
 );
 
 router.put('/format',
   requireAuth,
+  applyTenantSchema,
   [
     body('format').isIn(['A4', 'Letter', 'Legal', 'A3', 'A5']).withMessage('Invalid PDF format')
   ],

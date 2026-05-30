@@ -39,6 +39,7 @@ export const up = async (db: IDatabase): Promise<void> => {
   await db.executeQuery(`
     CREATE TABLE IF NOT EXISTS tenants (
       id SERIAL PRIMARY KEY,
+      public_id TEXT UNIQUE NOT NULL,
       name TEXT NOT NULL,
       slug TEXT UNIQUE NOT NULL,
       status TEXT DEFAULT 'active',
@@ -48,8 +49,8 @@ export const up = async (db: IDatabase): Promise<void> => {
   `);
 
   await db.executeQuery(`
-    INSERT INTO tenants (id, name, slug, status)
-    VALUES (1, 'Default Tenant', 'default', 'active')
+    INSERT INTO tenants (id, public_id, name, slug, status)
+    VALUES (1, '00000000-0000-7000-8000-000000000001', 'Default Tenant', 'default', 'active')
     ON CONFLICT (id) DO NOTHING
   `);
 

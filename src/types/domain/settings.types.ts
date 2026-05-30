@@ -7,7 +7,7 @@ export interface TaxRate {
   id: string;
   name: string;
   rate: number;
-  isDefault: boolean;
+  isDefault?: boolean;
 }
 
 export interface TaxSettings {
@@ -22,7 +22,7 @@ export interface ShippingRate {
   id: string;
   name: string;
   amount: number;
-  isDefault: boolean;
+  isDefault?: boolean;
 }
 
 export interface ShippingSettings {
@@ -207,8 +207,7 @@ export const isTaxRate = (obj: unknown): obj is TaxRate => {
          obj !== null && 
          typeof (obj as TaxRate).id === 'string' &&
          typeof (obj as TaxRate).name === 'string' &&
-         typeof (obj as TaxRate).rate === 'number' &&
-         typeof (obj as TaxRate).isDefault === 'boolean';
+         typeof (obj as TaxRate).rate === 'number';
 };
 
 export const isShippingRate = (obj: unknown): obj is ShippingRate => {
@@ -216,8 +215,7 @@ export const isShippingRate = (obj: unknown): obj is ShippingRate => {
          obj !== null && 
          typeof (obj as ShippingRate).id === 'string' &&
          typeof (obj as ShippingRate).name === 'string' &&
-         typeof (obj as ShippingRate).amount === 'number' &&
-         typeof (obj as ShippingRate).isDefault === 'boolean';
+         typeof (obj as ShippingRate).amount === 'number';
 };
 
 export const isEmailSettings = (obj: unknown): obj is EmailSettings => {

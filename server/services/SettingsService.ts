@@ -74,10 +74,20 @@ export class SettingsService {
     }
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
-    const result = await databaseService.getOne<{value: string}>(
+    let result = await databaseService.getOne<{value: string}>(
       'SELECT value FROM settings WHERE tenant_id = ? AND key = ?',
       [scopedTenantId, key]
     );
+
+    // Backward-compatible lookup: many frontend callers request bare keys
+    // like "tax_rates", while persisted records are namespaced as
+    // "<category>.<key>" (e.g. "tax.tax_rates").
+    if (!result?.value && !key.includes('.')) {
+      result = await databaseService.getOne<{ value: string }>(
+        'SELECT value FROM settings WHERE tenant_id = ? AND key LIKE ? ORDER BY updated_at DESC LIMIT 1',
+        [scopedTenantId, `%.${key}`]
+      );
+    }
     
     if (result?.value) {
       try {

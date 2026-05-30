@@ -491,10 +491,10 @@ export class PaymentService {
     
     if (year) {
       if (month) {
-        dateFilter += " AND strftime('%Y-%m', date) = ?";
+        dateFilter += " AND TO_CHAR((date)::date, 'YYYY-MM') = ?";
         params.push(`${year}-${month.padStart(2, '0')}`);
       } else {
-        dateFilter += " AND strftime('%Y', date) = ?";
+        dateFilter += " AND TO_CHAR((date)::date, 'YYYY') = ?";
         params.push(year);
       }
     }
@@ -547,12 +547,12 @@ export class PaymentService {
       total_amount: number;
     }>(`
       SELECT 
-        strftime('%Y-%m', date) as month,
+        TO_CHAR((date)::date, 'YYYY-MM') as month,
         COUNT(*) as count,
         SUM(amount) as total_amount
       FROM payments
-      WHERE tenant_id = ? AND date >= date('now', '-12 months')
-      GROUP BY strftime('%Y-%m', date)
+      WHERE tenant_id = ? AND (date)::date >= CURRENT_DATE - INTERVAL '12 months'
+      GROUP BY TO_CHAR((date)::date, 'YYYY-MM')
       ORDER BY month ASC
     `, [scopedTenantId]);
 

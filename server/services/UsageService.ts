@@ -25,8 +25,8 @@ class UsageService {
         `INSERT INTO usage_records (tenant_id, metric, value, period, period_type, updated_at)
          VALUES (?, ?, ?, ?, 'monthly', NOW())
          ON CONFLICT(tenant_id, metric, period)
-         DO UPDATE SET value = value + ?, updated_at = NOW()`,
-        [tenantId, metric, amount, period, amount]
+         DO UPDATE SET value = usage_records.value + EXCLUDED.value, updated_at = NOW()`,
+        [tenantId, metric, amount, period]
       );
     } catch {
       // Never throw from increment — silent on failure

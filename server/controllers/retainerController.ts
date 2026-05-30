@@ -248,7 +248,8 @@ export const sendRetainerEmail = asyncHandler(async (req: Request, res: Response
     to: toEmail,
     subject: emailContent.subject,
     html: emailContent.html,
-    text: emailContent.text
+    text: emailContent.text,
+    tenantId
   });
 
   res.json({ success: result.success, message: result.message });

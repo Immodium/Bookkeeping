@@ -239,7 +239,8 @@ export const createUser = asyncHandler(async (req: Request<object, object, Creat
         to: createdUser.email,
         subject: inviteContent.subject,
         html: inviteContent.html,
-        text: inviteContent.text
+        text: inviteContent.text,
+        tenantId
       });
     }
 
@@ -566,16 +567,18 @@ export const inviteUser = asyncHandler(async (req: Request, res: Response): Prom
       to: createdUser.email,
       subject: inviteContent.subject,
       html: inviteContent.html,
-      text: inviteContent.text
+      text: inviteContent.text,
+      tenantId
     });
   }
 
   res.status(201).json({
     success: true,
     data: {
-      id: userId
+      id: userId,
+      tempPassword
     },
-    message: 'User invited successfully. Temporary password sent via email.'
+    message: 'User invited successfully'
   });
 });
 
@@ -615,11 +618,13 @@ export const resetUserPasswordByAdmin = asyncHandler(async (req: Request, res: R
         <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
           <h2>Password reset</h2>
           <p>Hello ${user.name},</p>
-          <p>An administrator has reset your password. Please log in using your new credentials and update your password immediately.</p>
-          <p>If you did not expect this change, contact your administrator right away.</p>
+          <p>An administrator reset your password.</p>
+          <p><strong>New password:</strong> ${newPassword}</p>
+          <p>Please log in and update it immediately.</p>
         </div>
       `,
-      text: `Hello ${user.name},\n\nAn administrator has reset your Slimbooks password. Please log in with your new credentials and update your password immediately.\n\nIf you did not expect this change, contact your administrator right away.`
+      text: `Hello ${user.name},\n\nAn administrator reset your Slimbooks password.\nNew password: ${newPassword}\n\nPlease log in and update it immediately.`,
+      tenantId
     });
   }
 

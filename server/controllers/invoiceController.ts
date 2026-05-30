@@ -544,7 +544,8 @@ export const sendInvoiceEmail = asyncHandler(async (req: Request, res: Response)
     to: toEmail,
     subject: emailContent.subject,
     html: emailContent.html,
-    text: emailContent.text
+    text: emailContent.text,
+    tenantId
   });
 
   if (result.success) {

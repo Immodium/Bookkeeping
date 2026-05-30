@@ -145,11 +145,8 @@ export const EditInvoicePage = () => {
             if (invoiceRecord?.tax_rate_id) {
               const savedTaxRate = (savedTaxRates as TaxRate[]).find((r: TaxRate) => r.id === invoiceRecord.tax_rate_id);
               setSelectedTaxRate(savedTaxRate || null);
-            } else if (invoiceRecord?.tax_amount && invoiceRecord.tax_amount > 0) {
-              // If there's tax amount but no rate ID, try to find a matching rate or use default
-              setSelectedTaxRate((savedTaxRates as TaxRate[]).find((r: TaxRate) => r.isDefault) || null);
             } else {
-              // No tax rate ID and no tax amount, so no tax is selected
+              // Do not force a default tax rate; keep unselected unless persisted.
               setSelectedTaxRate(null);
             }
           }
@@ -162,11 +159,8 @@ export const EditInvoicePage = () => {
             if (invoiceRecord?.shipping_rate_id) {
               const savedShippingRate = (savedShippingRates as ShippingRate[]).find((r: ShippingRate) => r.id === invoiceRecord.shipping_rate_id);
               setSelectedShippingRate(savedShippingRate || null);
-            } else if (invoiceRecord?.shipping_amount && invoiceRecord.shipping_amount > 0) {
-              // If there's shipping amount but no rate ID, try to find a matching rate or use default
-              setSelectedShippingRate((savedShippingRates as ShippingRate[]).find((r: ShippingRate) => r.isDefault) || null);
             } else {
-              // No shipping rate ID and no shipping amount, so no shipping is selected
+              // Do not force a default shipping rate; keep unselected unless persisted.
               setSelectedShippingRate(null);
             }
           }

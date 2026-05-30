@@ -29,6 +29,7 @@ export interface BaseEntity {
 }
 
 export interface Tenant extends BaseEntity {
+  public_id: string;
   name: string;
   slug: string;
   status: 'active' | 'suspended' | 'deleted';

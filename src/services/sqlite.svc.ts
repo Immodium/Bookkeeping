@@ -323,16 +323,18 @@ class SQLiteService {
     const section = sectionMappings[key as keyof typeof sectionMappings];
     if (section) {
       const result = await this.apiCall<{ settings?: { notification_settings?: unknown }; value?: unknown }>(`/settings/${section}`);
+      const payload = (result.data ?? result) as { settings?: { notification_settings?: unknown }; value?: unknown };
       // For notification settings, extract the nested value
-      if (key === 'notification_settings' && result.data?.settings) {
-        value = result.data?.settings.notification_settings;
+      if (key === 'notification_settings' && payload.settings) {
+        value = payload.settings.notification_settings;
       } else {
-        value = result.data?.value;
+        value = payload.value;
       }
     } else {
       // Fall back to original route for other keys
       const result = await this.apiCall<{ value?: unknown }>(`/settings/${key}`);
-      value = result.data?.value;
+      const payload = (result.data ?? result) as { value?: unknown };
+      value = payload.value;
     }
     
     // Cache the result for future use
@@ -370,17 +372,20 @@ class SQLiteService {
       // Map categories to new section-based routes
       if (category === 'appearance') {
         const result = await this.apiCall<{ settings?: Record<string, unknown> }>('/settings/appearance');
-        return result.data?.settings || {};
+        const payload = (result.data ?? result) as { settings?: Record<string, unknown> };
+        return payload.settings || {};
       }
       if (category === 'general') {
         const result = await this.apiCall<{ settings?: Record<string, unknown> }>('/settings/general');
-        return result.data?.settings || {};
+        const payload = (result.data ?? result) as { settings?: Record<string, unknown> };
+        return payload.settings || {};
       }
       
       // Fall back to original query parameter route for other categories
       const params = category ? { category } : {};
       const result = await this.apiCall<{ settings?: Record<string, unknown> }>('/settings', 'GET', params);
-      return result.data?.settings || {};
+      const payload = (result.data ?? result) as { settings?: Record<string, unknown> };
+      return payload.settings || {};
     } catch (error) {
       console.error('sqliteService: Failed to load settings:', error);
       throw error;
@@ -689,7 +694,8 @@ class SQLiteService {
       await this.initialize();
     }
     const result = await this.apiCall<{ settings?: unknown }>('/project-settings');
-    return parseProjectSettingsWithDefaults(result.data?.settings || {});
+    const payload = (result.data ?? result) as { settings?: unknown };
+    return parseProjectSettingsWithDefaults(payload.settings || {});
   }
 
   async updateProjectSettings(settings: ProjectSettings): Promise<void> {

@@ -219,7 +219,36 @@ export class DatabaseService {
    * Get the next ID for a table (legacy method for compatibility)
    */
   public async getNextId(table: string): Promise<number> {
-    return this.getNextSequence(table);
+    validateTableName(table);
+
+    return this.withTransaction(async () => {
+      const counter = await this.getOne<{ value: number }>(
+        'SELECT value FROM counters WHERE tenant_id = 1 AND name = ?',
+        [table]
+      );
+      const maxRow = await this.getOne<{ max_id: number }>(
+        `SELECT COALESCE(MAX(id), 0) as max_id FROM ${table}`
+      );
+
+      // Counters can drift behind the real PK values after imports/seeds.
+      // Always derive the next ID from whichever source is highest.
+      const baseline = Math.max(counter?.value ?? 0, Number(maxRow?.max_id ?? 0));
+      const nextValue = baseline + 1;
+
+      if (!counter) {
+        await this.executeQuery(
+          'INSERT INTO counters (tenant_id, name, value, created_at, updated_at) VALUES (1, ?, ?, NOW(), NOW())',
+          [table, nextValue]
+        );
+      } else {
+        await this.executeQuery(
+          'UPDATE counters SET value = ?, updated_at = NOW() WHERE tenant_id = 1 AND name = ?',
+          [nextValue, table]
+        );
+      }
+
+      return nextValue;
+    });
   }
 
   /**

@@ -31,7 +31,9 @@ export const applyTenantSchema = (req: Request, res: Response, next: NextFunctio
     const safeRelease = () => {
       if (!released) {
         released = true;
-        release();
+        void release().catch(() => {
+          // release fallback already handled inside acquireClientForTenant
+        });
       }
     };
 

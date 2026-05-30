@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 
-const FROM = 'no-reply@slimbooks.io';
+const FROM_DOMAIN = 'slimbooks.io';
 
 export interface EmailSendResult {
   success: boolean;
@@ -13,6 +13,7 @@ export interface EmailMessageInput {
   html?: string;
   text?: string;
   fromName?: string; // Optional display name, e.g. "Acme Corp via Slimbooks"
+  tenantId?: number;
 }
 
 export class EmailProviderService {
@@ -37,7 +38,10 @@ export class EmailProviderService {
 
     try {
       const resend = new Resend(apiKey);
-      const from = input.fromName ? `${input.fromName} <${FROM}>` : FROM;
+      const rawTenantId = Number(input.tenantId);
+      const tenantId = Number.isInteger(rawTenantId) && rawTenantId > 0 ? rawTenantId : 1;
+      const fromAddress = `no-reply-${tenantId}@${FROM_DOMAIN}`;
+      const from = input.fromName ? `${input.fromName} <${fromAddress}>` : fromAddress;
 
       const { error } = await resend.emails.send({
         from,

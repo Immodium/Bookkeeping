@@ -22,6 +22,9 @@ export class InvoiceService {
     }
     return tenantId;
   }
+  private tenantSchema(tenantId: number): string {
+    return `tenant_${tenantId}`;
+  }
 
   /**
    * Get all invoices with filtering and pagination
@@ -101,12 +104,13 @@ export class InvoiceService {
     }
 
     const scopedTenantId = this.normalizeTenantId(tenantId);
+    const schema = this.tenantSchema(scopedTenantId);
     return await databaseService.getOne<InvoiceWithClient>(`
       SELECT i.*, c.name as client_name, c.email as client_email, c.company as client_company,
              c.address as client_address, c.city as client_city, c.state as client_state,
              c.zip as client_zip, c.country as client_country, c.phone as client_phone
-      FROM invoices i
-      LEFT JOIN clients c ON i.client_id = c.id
+      FROM "${schema}".invoices i
+      LEFT JOIN "${schema}".clients c ON i.client_id = c.id
       WHERE i.id = ? AND i.tenant_id = ?
     `, [id, scopedTenantId]);
   }
@@ -179,9 +183,10 @@ export class InvoiceService {
     }
 
     // Verify invoice exists
+    const schema = this.tenantSchema(scopedTenantId);
     const invoice = await databaseService.getOne<{id: number; invoice_number: string}>(`
       SELECT i.id, i.invoice_number
-      FROM invoices i
+      FROM "${schema}".invoices i
       WHERE i.id = ? AND i.tenant_id = ?
     `, [id, scopedTenantId]);
 

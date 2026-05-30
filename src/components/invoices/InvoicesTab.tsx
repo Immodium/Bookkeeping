@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, DollarSign, Calendar, User, Search, LayoutGrid, Table, FileText } from 'lucide-react';
+import { Plus, Edit, Trash2, DollarSign, Calendar, User, Search, LayoutGrid, Table, FileText, Mail, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authenticatedFetch, apiPost, apiPut, apiDelete } from '@/utils/api';
 import { InvoiceForm } from './InvoiceForm';
@@ -28,6 +28,7 @@ export const InvoicesTab = () => {
   const [dateFilter, setDateFilter] = useState<TimePeriod>('this-month');
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'panel' | 'table'>('panel');
+  const [sendingInvoiceId, setSendingInvoiceId] = useState<number | null>(null);
 
   useEffect(() => {
     loadInvoices();
@@ -168,6 +169,39 @@ export const InvoicesTab = () => {
     }
   };
 
+  const handleSendInvoice = async (invoice: Invoice) => {
+    if (!invoice.client_email) {
+      toast.error('No email address on file for this client');
+      return;
+    }
+
+    if (sendingInvoiceId === invoice.id) {
+      return;
+    }
+
+    setSendingInvoiceId(invoice.id);
+    try {
+      const response = await authenticatedFetch(`/api/invoices/${invoice.id}/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: invoice.client_email })
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || result.error || 'Failed to send invoice email');
+      }
+
+      toast.success(`Invoice sent to ${invoice.client_email}`);
+      await loadInvoices();
+    } catch (error) {
+      console.error('Error sending invoice email:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to send invoice email');
+    } finally {
+      setSendingInvoiceId(null);
+    }
+  };
+
   const renderPanelView = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {pagination.paginatedData.map((invoice) => (
@@ -190,6 +224,21 @@ export const InvoicesTab = () => {
                 className="p-1 text-muted-foreground hover:text-blue-600"
               >
                 <Edit className="h-4 w-4" />
+              </button>
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleSendInvoice(invoice);
+                }}
+                disabled={!invoice.client_email || sendingInvoiceId === invoice.id}
+                className="p-1 text-muted-foreground hover:text-green-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                title={invoice.client_email ? 'Send invoice email' : 'Client has no email'}
+              >
+                {sendingInvoiceId === invoice.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
               </button>
               <button
                 onClick={(event) => {
@@ -281,6 +330,21 @@ export const InvoicesTab = () => {
                       className="p-1 text-muted-foreground hover:text-blue-600"
                     >
                       <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleSendInvoice(invoice);
+                      }}
+                      disabled={!invoice.client_email || sendingInvoiceId === invoice.id}
+                      className="p-1 text-muted-foreground hover:text-green-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={invoice.client_email ? 'Send invoice email' : 'Client has no email'}
+                    >
+                      {sendingInvoiceId === invoice.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Mail className="h-4 w-4" />
+                      )}
                     </button>
                     <button
                       onClick={(event) => {

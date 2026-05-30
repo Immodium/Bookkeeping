@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
+import { v7 as uuidv7 } from 'uuid';
 import type { Express } from 'express';
 import { db } from '../../../server/database/index.js';
-import { generateToken } from '../../../server/middleware/auth.js';
 import { provisionTenantSchema } from '../../../server/database/schemas/tenantSchema.js';
+import { generateToken } from '../../../server/middleware/auth.js';
 
 interface TenantContext {
   tenantId: number;
@@ -19,41 +20,28 @@ const createTenantWithAdmin = async (label: string): Promise<TenantContext> => {
   const timestamp = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
   const tenantInsert = await db.executeQuery(
     `
-      INSERT INTO public.tenants (name, slug, status, created_at, updated_at)
-      VALUES (?, ?, 'active', datetime('now'), datetime('now'))
+      INSERT INTO tenants (public_id, name, slug, status, created_at, updated_at)
+      VALUES (?, ?, ?, 'active', datetime('now'), datetime('now'))
     `,
-    [`Tenant ${label}`, `tenant-${label}-${timestamp}`]
+    [uuidv7(), `Tenant ${label}`, `tenant-${label}-${timestamp}`]
   );
   const tenantId = tenantInsert.lastInsertRowid;
   createdTenantIds.push(tenantId);
-
-  // Provision the tenant schema so per-tenant tables exist before API calls.
   await provisionTenantSchema(db, tenantId);
 
   const email = `${label}.${timestamp}@example.test`;
   const passwordHash = await bcrypt.hash(`Pass-${label}-123!`, 4);
   const userInsert = await db.executeQuery(
     `
-      INSERT INTO public.users (
+      INSERT INTO users (
         tenant_id, name, email, username, password_hash, role, roles, email_verified, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, 'admin', '["admin"]', 1, datetime('now'), datetime('now'))
     `,
     [tenantId, `Admin ${label}`, email, email, passwordHash]
   );
-  const userId = userInsert.lastInsertRowid;
-
-  // Mirror user into tenant schema so controllers running inside applyTenantSchema
-  // context can find it.
-  await db.executeQuery(
-    `INSERT INTO "tenant_${tenantId}".users
-     OVERRIDING SYSTEM VALUE
-     SELECT * FROM public.users WHERE id = ?
-     ON CONFLICT DO NOTHING`,
-    [userId]
-  );
 
   const token = generateToken({
-    id: userId,
+    id: userInsert.lastInsertRowid,
     tenant_id: tenantId,
     email,
     role: 'admin',

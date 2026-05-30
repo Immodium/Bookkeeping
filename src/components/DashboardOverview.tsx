@@ -96,7 +96,7 @@ export const DashboardOverview = () => {
 
   const stats = useMemo(() => {
     const totalRevenue = filteredInvoices.reduce((sum, invoice) => {
-      const amount = parseFloat(invoice.amount) || 0;
+      const amount = Number(invoice.amount) || 0;
       return amount > 0 ? sum + amount : sum;
     }, 0);
 
@@ -107,7 +107,7 @@ export const DashboardOverview = () => {
     const draftInvoices = filteredInvoices.filter(invoice => invoice.status === 'draft').length;
 
     const creditsRefunds = Math.abs(filteredInvoices.reduce((sum, invoice) => {
-      const amount = parseFloat(invoice.amount) || 0;
+      const amount = Number(invoice.amount) || 0;
       return amount < 0 ? sum + amount : sum;
     }, 0));
 

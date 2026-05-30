@@ -145,7 +145,8 @@ export const ClientImportExport: React.FC<ImportExportProps> = ({ onClose, onImp
           mappedRow.name = `${firstName} ${lastName}`.trim();
         } else if (mappedRow.name && !mappedRow.first_name && !mappedRow.last_name) {
           // If we have full name but no first/last, try to split it
-          const nameParts = mappedRow.name.trim().split(' ');
+          const normalizedName = String(mappedRow.name).trim();
+          const nameParts = normalizedName.split(' ');
           if (nameParts.length >= 2) {
             mappedRow.first_name = nameParts[0];
             mappedRow.last_name = nameParts.slice(1).join(' ');

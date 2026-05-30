@@ -13,7 +13,7 @@ import {
   ValidationError,
   ProjectSettings
 } from '@/types';
-import type { ApiResponse } from '@/types/shared/common.types';
+import type { ApiResponse } from '@/types/shared/api.types';
 import { parseProjectSettingsWithDefaults, validateProjectSettings } from '@/utils/settingsValidation';
 import { getToken } from '@/utils/api/auth.util';
 class SQLiteService {

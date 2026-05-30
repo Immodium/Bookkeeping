@@ -7,7 +7,7 @@ import { User, AuthResponse } from '@/types';
 import { AuthService } from '@/services/auth.svc';
 import { TokenManagerService } from '@/services/tokenManager.svc';
 import { toast } from 'sonner';
-import { hasAnyRole, hasRole, getUserRoles, AppPermission, hasPermission as hasRolePermission } from '@/auth/roles';
+import { hasAnyRole, hasRole, getUserRoles, AppPermission, AppRole, hasPermission as hasRolePermission } from '@/auth/roles';
 
 interface AuthContextType {
   user: User | null;
@@ -17,8 +17,8 @@ interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   isAdmin: boolean;
-  hasRole: (role: string) => boolean;
-  hasAnyRole: (roles: string[]) => boolean;
+  hasRole: (role: AppRole) => boolean;
+  hasAnyRole: (roles: AppRole[]) => boolean;
   hasPermission: (permission: AppPermission) => boolean;
   refreshUser: () => Promise<void>;
 }
@@ -262,8 +262,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     isAuthenticated: !!user,
     isAdmin: hasRole(user, 'admin'),
-    hasRole: (role: string) => hasRole(user, role),
-    hasAnyRole: (roles: string[]) => hasAnyRole(user, roles),
+    hasRole: (role: AppRole) => hasRole(user, role),
+    hasAnyRole: (roles: AppRole[]) => hasAnyRole(user, roles),
     hasPermission: (permission: AppPermission) => hasRolePermission(user, permission),
     refreshUser
   };
@@ -287,7 +287,7 @@ export const useAuth = (): AuthContextType => {
 interface ProtectedRouteProps {
   children: ReactNode;
   requireAdmin?: boolean;
-  requiredRoles?: string[];
+  requiredRoles?: AppRole[];
   fallback?: ReactNode;
 }
 

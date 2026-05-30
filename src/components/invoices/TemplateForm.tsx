@@ -14,7 +14,15 @@ interface TemplateFormProps {
 
 export const TemplateForm: React.FC<TemplateFormProps> = ({ isOpen, onClose, onSave, template }) => {
   const [clients, setClients] = useState<Client[]>([]);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    client_id: string;
+    frequency: InvoiceTemplateFormData['frequency'];
+    amount: string;
+    description: string;
+    payment_terms: string;
+    next_invoice_date: string;
+  }>({
     name: '',
     client_id: '',
     frequency: 'monthly',
@@ -122,7 +130,7 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({ isOpen, onClose, onS
               <label className={`block text-sm font-medium ${themeClasses.bodyText} mb-1`}>Frequency *</label>
               <select
                 value={formData.frequency}
-                onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, frequency: e.target.value as InvoiceTemplateFormData['frequency'] })}
                 className={themeClasses.select}
               >
                 <option value="weekly">Weekly</option>

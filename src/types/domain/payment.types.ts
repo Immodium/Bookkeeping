@@ -5,6 +5,7 @@ export interface Payment {
   id: number;
   date: string;
   client_name: string;
+  client_id?: number;
   invoice_id?: number;
   amount: number;
   method: PaymentMethod;
@@ -18,6 +19,7 @@ export interface Payment {
 export interface PaymentFormData {
   date: string;
   client_name: string;
+  client_id?: number;
   invoice_id?: number;
   amount: number;
   method: PaymentMethod;

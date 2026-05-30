@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   getPaginationSettingsAsync, 
   getPaginationInfo, 
-  generatePageNumbers,
-  type PaginationSettings 
+  generatePageNumbers
 } from '@/utils/pagination.util';
+import type { PaginationSettings } from '@/types';
 
 interface UsePaginationProps<T> {
   data: T[];

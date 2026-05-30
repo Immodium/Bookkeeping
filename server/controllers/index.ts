@@ -151,8 +151,6 @@ export {
   deleteTenant
 } from './tenantController.js';
 
-// Note: Database, Template, and PDF controllers not yet implemented
-
 // Cron controller
 export {
   processRecurringInvoicesCron,

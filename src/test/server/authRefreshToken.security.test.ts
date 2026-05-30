@@ -54,13 +54,13 @@ const mockRes = () => {
 };
 
 const runRefreshHandler = async (
-  handler: ReturnType<typeof refreshToken>,
+  handler: typeof refreshToken,
   req: Parameters<typeof refreshToken>[0],
   res: ReturnType<typeof mockRes>
 ): Promise<{ error?: Error }> => {
   return new Promise((resolve) => {
-    const next = (err?: Error) => {
-      resolve({ error: err });
+    const next = (err?: unknown) => {
+      resolve({ error: err instanceof Error ? err : err ? new Error(String(err)) : undefined });
     };
     const originalJson = res.json.bind(res);
     res.json = (payload: unknown) => {
@@ -68,7 +68,7 @@ const runRefreshHandler = async (
       resolve({});
       return res;
     };
-    handler(req, res, next);
+    handler(req, res as unknown as Parameters<typeof refreshToken>[1], next);
   });
 };
 

@@ -1,7 +1,5 @@
 import type { DateRange, TimePeriod } from '@/types';
 
-type DateFilterTarget = Record<string, unknown>;
-
 export const getDefaultDateRange = (): DateRange => getDateRangeForPeriod('this-month');
 
 const startOfDay = (date: Date): Date => {
@@ -110,13 +108,13 @@ export const getDateRangeForPeriod = (period: TimePeriod): DateRange => {
   }
 };
 
-export const filterByDateRange = <T extends DateFilterTarget>(
+export const filterByDateRange = <T extends object>(
   items: T[],
   dateRange: DateRange,
   dateField: keyof T
 ): T[] =>
   items.filter(item => {
-    const itemDate = safeDate(item[dateField]);
+    const itemDate = safeDate((item as Record<string, unknown>)[String(dateField)]);
     if (!itemDate) {
       return false;
     }

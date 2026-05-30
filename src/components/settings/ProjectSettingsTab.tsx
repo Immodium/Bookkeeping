@@ -325,7 +325,7 @@ export const ProjectSettingsTab = forwardRef<ProjectSettingsRef>((props, ref) =>
 
 
       {/* Email Setup */}
-      <EmailSettings ref={emailSettingsRef} />
+      <EmailSettings />
 
       {/* Security Settings */}
       <div className="bg-card rounded-lg shadow-sm border border-border p-6">

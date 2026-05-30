@@ -43,11 +43,14 @@ describe('TenantService provisioning flows', () => {
       }
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       tenantId: 7,
       adminUserId: 42,
       slug: 'acme-workspace'
     });
+    expect(result.tenantPublicId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    );
     expect(executeQueryMock).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO tenants'),
       expect.arrayContaining(['Acme Workspace', 'acme-workspace'])

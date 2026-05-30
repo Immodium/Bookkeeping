@@ -11,6 +11,7 @@ const tenantsSchema: TableSchema = {
   name: 'tenants',
   columns: [
     { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
+    { name: 'public_id', type: 'TEXT', constraints: ['UNIQUE NOT NULL'] },
     { name: 'name', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'slug', type: 'TEXT', constraints: ['UNIQUE NOT NULL'] },
     { name: 'status', type: 'TEXT', constraints: ["DEFAULT 'active'"] },
@@ -641,8 +642,8 @@ export const createTables = async (db: IDatabase): Promise<void> => {
 
   // Ensure a default tenant exists for backwards-compatible single-tenant mode.
   await db.executeQuery(`
-    INSERT INTO tenants (id, name, slug, status)
-    VALUES (1, 'Default Tenant', 'default', 'active')
+    INSERT INTO tenants (id, public_id, name, slug, status)
+    VALUES (1, '00000000-0000-7000-8000-000000000001', 'Default Tenant', 'default', 'active')
     ON CONFLICT (id) DO NOTHING
   `);
 

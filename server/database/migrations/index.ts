@@ -25,6 +25,7 @@ import { up as migration020 } from './020_add_processed_webhook_events.js';
 import { up as migration021 } from './021_add_fk_indexes.js';
 import { up as migration022 } from './022_provision_tenant_schemas.js';
 import { up as migration023 } from './023_reset_sequences.js';
+import { up as migration024 } from './024_add_tenant_public_ids.js';
 
 /**
  * Whether migrations have completed successfully.
@@ -65,6 +66,7 @@ const migrations: Migration[] = [
   { id: '021', name: 'add_fk_indexes', up: migration021 },
   { id: '022', name: 'provision_tenant_schemas', up: migration022 },
   { id: '023', name: 'reset_sequences', up: migration023 },
+  { id: '024', name: 'add_tenant_public_ids', up: migration024 },
 ];
 
 /**

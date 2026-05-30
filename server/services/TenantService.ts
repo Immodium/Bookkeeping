@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { v7 as uuidv7 } from 'uuid';
 import { authConfig } from '../config/index.js';
 import { databaseService } from '../core/DatabaseService.js';
 import { provisionTenantSchema, dropTenantSchema } from '../database/schemas/tenantSchema.js';
@@ -54,6 +55,7 @@ export class TenantService {
       `
         SELECT
           t.id,
+          t.public_id,
           t.name,
           t.slug,
           t.status,
@@ -73,8 +75,15 @@ export class TenantService {
   async getTenantById(tenantId: number): Promise<Tenant | null> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
     return await databaseService.getOne<Tenant>(
-      'SELECT id, name, slug, status, created_at, updated_at FROM tenants WHERE id = ?',
+      'SELECT id, public_id, name, slug, status, created_at, updated_at FROM tenants WHERE id = ?',
       [scopedTenantId]
+    );
+  }
+
+  async getTenantByPublicId(publicId: string): Promise<Tenant | null> {
+    return await databaseService.getOne<Tenant>(
+      'SELECT id, public_id, name, slug, status, created_at, updated_at FROM tenants WHERE public_id = ?',
+      [publicId]
     );
   }
 
@@ -182,9 +191,12 @@ export class TenantService {
     return nextUserId;
   }
 
-  async createTenant(input: CreateTenantInput): Promise<{ tenantId: number; adminUserId: number; slug: string }> {
+  async createTenant(
+    input: CreateTenantInput
+  ): Promise<{ tenantId: number; tenantPublicId: string; adminUserId: number; slug: string }> {
     const { name, slug } = this.validateTenantInput(input);
     const admin = this.validateAdminBootstrapInput(input.admin);
+    const tenantPublicId = uuidv7();
 
     const existingTenant = await databaseService.getOne<{ id: number }>(
       'SELECT id FROM tenants WHERE LOWER(slug) = LOWER(?)',
@@ -209,10 +221,10 @@ export class TenantService {
     await databaseService.executeTransaction(async () => {
       const tenantInsert = await databaseService.executeQuery(
         `
-          INSERT INTO tenants (name, slug, status, created_at, updated_at)
-          VALUES (?, ?, 'active', ?, ?)
+          INSERT INTO tenants (public_id, name, slug, status, created_at, updated_at)
+          VALUES (?, ?, ?, 'active', ?, ?)
         `,
-        [name, slug, now, now]
+        [tenantPublicId, name, slug, now, now]
       );
       tenantId = tenantInsert.lastInsertRowid;
       adminUserId = await this.createTenantAdminUser(tenantId, admin);
@@ -225,7 +237,7 @@ export class TenantService {
     // Seed tenant onto a default subscription lifecycle if billing tables exist.
     await subscriptionService.bootstrapTenantSubscription(tenantId);
 
-    return { tenantId, adminUserId, slug };
+    return { tenantId, tenantPublicId, adminUserId, slug };
   }
 
   /**

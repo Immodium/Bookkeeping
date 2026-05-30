@@ -204,8 +204,7 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
     to: user.email,
     subject: resetEmailContent.subject,
     html: resetEmailContent.html,
-    text: resetEmailContent.text,
-    tenantId
+    text: resetEmailContent.text
   });
 
   res.json({
@@ -450,7 +449,7 @@ export const registerTenant = asyncHandler(async (req: Request, res: Response): 
     throw new ValidationError('Password must be at least 8 characters');
   }
 
-  const { tenantId, adminUserId } = await tenantService.createTenant({
+  const { tenantId, tenantPublicId, adminUserId } = await tenantService.createTenant({
     name: tenantName,
     admin: { name, email, password }
   });
@@ -470,8 +469,7 @@ export const registerTenant = asyncHandler(async (req: Request, res: Response): 
       to: email,
       subject: welcomeContent.subject,
       html: welcomeContent.html,
-      text: welcomeContent.text,
-      tenantId
+      text: welcomeContent.text
     }))
     .catch(() => {
       // Ignore email errors — don't fail registration
@@ -481,7 +479,8 @@ export const registerTenant = asyncHandler(async (req: Request, res: Response): 
     success: true,
     data: {
       user: newUser as UserPublic,
-      token
+      token,
+      tenant_public_id: tenantPublicId
     },
     message: 'Tenant registered successfully'
   });

@@ -10,7 +10,7 @@ class GdprService {
    */
   async exportTenantData(tenantId: number): Promise<object> {
     const tenant = await databaseService.getOne(
-      'SELECT id, name, slug, status, created_at, updated_at FROM tenants WHERE id = ?',
+      'SELECT id, public_id, name, slug, status, created_at, updated_at FROM tenants WHERE id = ?',
       [tenantId]
     );
 

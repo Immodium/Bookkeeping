@@ -496,6 +496,11 @@ export interface RetainerRequest {
   end_date?: string;
   status?: RetainerStatus;
   auto_renew?: boolean | number;
+  email_schedule_enabled?: boolean | number;
+  reminder_days_before?: number;
+  auto_overdue_reminders?: boolean | number;
+  overdue_reminder_interval_days?: number;
+  max_overdue_reminders?: number;
   notes?: string;
 }
 

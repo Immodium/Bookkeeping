@@ -18,6 +18,16 @@ export interface Retainer extends BaseEntity {
   end_date?: string;
   status: RetainerStatus;
   auto_renew: number;
+  email_schedule_enabled: number;
+  reminder_days_before: number;
+  auto_overdue_reminders: number;
+  overdue_reminder_interval_days: number;
+  max_overdue_reminders: number;
+  overdue_reminder_count: number;
+  last_pre_due_reminder_for_date?: string;
+  last_overdue_reminder_at?: string;
+  last_reminder_sent_at?: string;
+  last_reminder_type?: string;
   notes?: string;
 }
 
@@ -33,6 +43,11 @@ export interface RetainerFormData {
   end_date?: string;
   status: RetainerStatus;
   auto_renew: boolean;
+  email_schedule_enabled: boolean;
+  reminder_days_before: number;
+  auto_overdue_reminders: boolean;
+  overdue_reminder_interval_days: number;
+  max_overdue_reminders: number;
   notes?: string;
 }
 

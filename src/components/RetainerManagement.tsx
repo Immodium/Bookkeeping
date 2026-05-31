@@ -72,6 +72,11 @@ const RetainerForm: React.FC<RetainerFormProps> = ({ retainer, clients, onSave, 
     end_date: retainer?.end_date || '',
     status: retainer?.status || 'active',
     auto_renew: retainer ? retainer.auto_renew === 1 : true,
+    email_schedule_enabled: retainer ? retainer.email_schedule_enabled === 1 : false,
+    reminder_days_before: retainer?.reminder_days_before ?? 3,
+    auto_overdue_reminders: retainer ? retainer.auto_overdue_reminders === 1 : false,
+    overdue_reminder_interval_days: retainer?.overdue_reminder_interval_days ?? 7,
+    max_overdue_reminders: retainer?.max_overdue_reminders ?? 3,
     notes: retainer?.notes || ''
   });
 
@@ -83,6 +88,18 @@ const RetainerForm: React.FC<RetainerFormProps> = ({ retainer, clients, onSave, 
     }
     if (formData.amount <= 0) {
       toast.error('Amount must be greater than 0');
+      return;
+    }
+    if (formData.reminder_days_before < 0) {
+      toast.error('Reminder days before due date must be 0 or greater');
+      return;
+    }
+    if (formData.overdue_reminder_interval_days < 1) {
+      toast.error('Overdue reminder interval must be at least 1 day');
+      return;
+    }
+    if (formData.max_overdue_reminders < 1) {
+      toast.error('Max overdue reminders must be at least 1');
       return;
     }
 
@@ -246,6 +263,97 @@ const RetainerForm: React.FC<RetainerFormProps> = ({ retainer, clients, onSave, 
                 <label htmlFor="retainer-auto-renew" className="text-sm text-foreground">
                   Automatically renew this retainer
                 </label>
+              </div>
+
+              <div className="space-y-4 border border-border rounded-lg p-4 bg-muted/20">
+                <h3 className="text-sm font-semibold text-foreground">Email Reminder Schedule</h3>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="retainer-email-schedule-enabled"
+                    type="checkbox"
+                    checked={formData.email_schedule_enabled}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, email_schedule_enabled: event.target.checked }))
+                    }
+                    className="rounded border-border"
+                  />
+                  <label htmlFor="retainer-email-schedule-enabled" className="text-sm text-foreground">
+                    Enable automatic reminder emails for this retainer
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className={themeClasses.label}>Days Before Due Date</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={365}
+                      className={themeClasses.input}
+                      disabled={!formData.email_schedule_enabled}
+                      value={formData.reminder_days_before}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          reminder_days_before: Number.parseInt(event.target.value || '0', 10)
+                        }))
+                      }
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">Send a pre-due reminder this many days before due date.</p>
+                  </div>
+
+                  <div>
+                    <label className={themeClasses.label}>Overdue Reminder Interval (days)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      className={themeClasses.input}
+                      disabled={!formData.email_schedule_enabled || !formData.auto_overdue_reminders}
+                      value={formData.overdue_reminder_interval_days}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          overdue_reminder_interval_days: Number.parseInt(event.target.value || '1', 10)
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className={themeClasses.label}>Max Overdue Reminders</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      className={themeClasses.input}
+                      disabled={!formData.email_schedule_enabled || !formData.auto_overdue_reminders}
+                      value={formData.max_overdue_reminders}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          max_overdue_reminders: Number.parseInt(event.target.value || '1', 10)
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    id="retainer-auto-overdue-reminders"
+                    type="checkbox"
+                    checked={formData.auto_overdue_reminders}
+                    disabled={!formData.email_schedule_enabled}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, auto_overdue_reminders: event.target.checked }))
+                    }
+                    className="rounded border-border"
+                  />
+                  <label htmlFor="retainer-auto-overdue-reminders" className="text-sm text-foreground">
+                    Continue sending reminders after due date
+                  </label>
+                </div>
               </div>
 
               <div className="flex justify-end space-x-4">

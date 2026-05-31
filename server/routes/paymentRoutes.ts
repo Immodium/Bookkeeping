@@ -18,8 +18,42 @@ import {
   validationSets
 } from '../middleware/index.js';
 import { applyTenantSchema } from '../middleware/tenantSchema.js';
+import type { PaymentMethod, PaymentStatus } from '../types/index.js';
 
 const router: Router = Router();
+
+const normalizePaymentMethod = (rawMethod: unknown): PaymentMethod => {
+  const method = String(rawMethod || '').trim().toLowerCase().replace(/\s+/g, '_');
+  if (['cash', 'check', 'bank_transfer', 'credit_card', 'paypal', 'other'].includes(method)) {
+    return method as PaymentMethod;
+  }
+  if (method.includes('card') || method.includes('credit')) return 'credit_card';
+  if (method.includes('bank') || method.includes('transfer')) return 'bank_transfer';
+  if (method.includes('paypal')) return 'paypal';
+  if (method.includes('check') || method.includes('cheque')) return 'check';
+  if (method.includes('cash')) return 'cash';
+  return 'other';
+};
+
+const normalizePaymentStatus = (rawStatus: unknown): PaymentStatus => {
+  const status = String(rawStatus || '').trim().toLowerCase();
+  if (['received', 'pending', 'failed', 'refunded'].includes(status)) {
+    return status as PaymentStatus;
+  }
+  if (status.includes('received') || status.includes('paid') || status.includes('complete')) return 'received';
+  if (status.includes('pending') || status.includes('processing')) return 'pending';
+  if (status.includes('failed') || status.includes('error') || status.includes('declined')) return 'failed';
+  if (status.includes('refund')) return 'refunded';
+  return 'pending';
+};
+
+const normalizePaymentDate = (rawDate: unknown): string => {
+  const parsed = new Date(String(rawDate || ''));
+  if (Number.isNaN(parsed.getTime())) {
+    return String(rawDate || '');
+  }
+  return parsed.toISOString().split('T')[0] || String(rawDate || '');
+};
 
 // All payment routes require authentication
 router.use(requireAuth);
@@ -80,7 +114,23 @@ router.post('/bulk-import',
       for (let i = 0; i < payments.length; i++) {
         const paymentData = payments[i];
         try {
-          await paymentService.createPayment(paymentData, tenantId);
+          const parsedAmount = typeof paymentData?.amount === 'number'
+            ? paymentData.amount
+            : Number.parseFloat(String(paymentData?.amount || '').replace(/[$,]/g, ''));
+          const amount = Number.isFinite(parsedAmount) ? Math.abs(parsedAmount) : 0;
+          const normalizedPayment = {
+            date: normalizePaymentDate(paymentData?.date),
+            client_name: String(paymentData?.client_name || '').trim(),
+            client_id: typeof paymentData?.client_id === 'number' ? paymentData.client_id : undefined,
+            invoice_id: typeof paymentData?.invoice_id === 'number' ? paymentData.invoice_id : undefined,
+            amount,
+            method: normalizePaymentMethod(paymentData?.method),
+            reference: typeof paymentData?.reference === 'string' ? paymentData.reference : undefined,
+            description: typeof paymentData?.description === 'string' ? paymentData.description : undefined,
+            status: normalizePaymentStatus(paymentData?.status)
+          };
+
+          await paymentService.createPayment(normalizedPayment, tenantId);
           successCount++;
         } catch (error) {
           errorCount++;

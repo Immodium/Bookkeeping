@@ -58,6 +58,16 @@ export class RetainerService {
         r.end_date,
         r.status,
         r.auto_renew,
+        r.email_schedule_enabled,
+        r.reminder_days_before,
+        r.auto_overdue_reminders,
+        r.overdue_reminder_interval_days,
+        r.max_overdue_reminders,
+        r.overdue_reminder_count,
+        r.last_pre_due_reminder_for_date,
+        r.last_overdue_reminder_at,
+        r.last_reminder_sent_at,
+        r.last_reminder_type,
         r.notes,
         r.created_at,
         r.updated_at,
@@ -97,6 +107,35 @@ export class RetainerService {
     if (!VALID_RETAINER_STATUSES.includes(value as RetainerStatus)) {
       throw new Error('Invalid retainer status');
     }
+  }
+
+  private toFlag(value: boolean | number | undefined, defaultValue: number): number {
+    if (value === undefined) {
+      return defaultValue;
+    }
+
+    if (typeof value === 'boolean') {
+      return value ? 1 : 0;
+    }
+
+    return value === 0 ? 0 : 1;
+  }
+
+  private toIntegerSetting(
+    value: number | undefined,
+    defaultValue: number,
+    fieldName: string,
+    minimum = 0
+  ): number {
+    if (value === undefined || value === null) {
+      return defaultValue;
+    }
+
+    if (!Number.isInteger(value) || value < minimum) {
+      throw new Error(`${fieldName} must be an integer greater than or equal to ${minimum}`);
+    }
+
+    return value;
   }
 
   async getAllRetainers(
@@ -198,6 +237,11 @@ export class RetainerService {
     end_date?: string;
     status?: RetainerStatus;
     auto_renew?: boolean | number;
+    email_schedule_enabled?: boolean | number;
+    reminder_days_before?: number;
+    auto_overdue_reminders?: boolean | number;
+    overdue_reminder_interval_days?: number;
+    max_overdue_reminders?: number;
     notes?: string;
   }, tenantId?: number): Promise<number> {
     if (
@@ -231,12 +275,27 @@ export class RetainerService {
     const status = retainerData.status || 'active';
     this.assertStatus(status);
 
-    const autoRenew =
-      typeof retainerData.auto_renew === 'boolean'
-        ? (retainerData.auto_renew ? 1 : 0)
-        : retainerData.auto_renew === 0
-          ? 0
-          : 1;
+    const autoRenew = this.toFlag(retainerData.auto_renew, 1);
+    const emailScheduleEnabled = this.toFlag(retainerData.email_schedule_enabled, 0);
+    const reminderDaysBefore = this.toIntegerSetting(
+      retainerData.reminder_days_before,
+      3,
+      'reminder_days_before',
+      0
+    );
+    const autoOverdueReminders = this.toFlag(retainerData.auto_overdue_reminders, 0);
+    const overdueReminderIntervalDays = this.toIntegerSetting(
+      retainerData.overdue_reminder_interval_days,
+      7,
+      'overdue_reminder_interval_days',
+      1
+    );
+    const maxOverdueReminders = this.toIntegerSetting(
+      retainerData.max_overdue_reminders,
+      3,
+      'max_overdue_reminders',
+      1
+    );
 
     const nextId = await databaseService.getNextId('retainers');
     const now = new Date().toISOString();
@@ -245,8 +304,11 @@ export class RetainerService {
       `
         INSERT INTO retainers (
           id, tenant_id, client_id, name, description, amount, currency, billing_cycle, start_date,
-          next_invoice_date, end_date, status, auto_renew, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          next_invoice_date, end_date, status, auto_renew, email_schedule_enabled, reminder_days_before,
+          auto_overdue_reminders, overdue_reminder_interval_days, max_overdue_reminders, overdue_reminder_count,
+          last_pre_due_reminder_for_date, last_overdue_reminder_at, last_reminder_sent_at, last_reminder_type,
+          notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         nextId,
@@ -262,6 +324,16 @@ export class RetainerService {
         retainerData.end_date || null,
         status,
         autoRenew,
+        emailScheduleEnabled,
+        reminderDaysBefore,
+        autoOverdueReminders,
+        overdueReminderIntervalDays,
+        maxOverdueReminders,
+        0,
+        null,
+        null,
+        null,
+        null,
         retainerData.notes || null,
         now,
         now
@@ -285,6 +357,11 @@ export class RetainerService {
       end_date: string;
       status: RetainerStatus;
       auto_renew: boolean | number;
+      email_schedule_enabled: boolean | number;
+      reminder_days_before: number;
+      auto_overdue_reminders: boolean | number;
+      overdue_reminder_interval_days: number;
+      max_overdue_reminders: number;
       notes: string;
     }>,
     tenantId?: number
@@ -333,6 +410,23 @@ export class RetainerService {
       throw new Error('Invalid date format');
     }
 
+    if (retainerData.reminder_days_before !== undefined) {
+      this.toIntegerSetting(retainerData.reminder_days_before, 3, 'reminder_days_before', 0);
+    }
+
+    if (retainerData.overdue_reminder_interval_days !== undefined) {
+      this.toIntegerSetting(
+        retainerData.overdue_reminder_interval_days,
+        7,
+        'overdue_reminder_interval_days',
+        1
+      );
+    }
+
+    if (retainerData.max_overdue_reminders !== undefined) {
+      this.toIntegerSetting(retainerData.max_overdue_reminders, 3, 'max_overdue_reminders', 1);
+    }
+
     const updateData: Record<string, unknown> = {};
 
     if (retainerData.client_id !== undefined) updateData.client_id = retainerData.client_id;
@@ -348,12 +442,54 @@ export class RetainerService {
     if (retainerData.notes !== undefined) updateData.notes = retainerData.notes;
 
     if (retainerData.auto_renew !== undefined) {
-      updateData.auto_renew =
-        typeof retainerData.auto_renew === 'boolean'
-          ? (retainerData.auto_renew ? 1 : 0)
-          : retainerData.auto_renew === 0
-            ? 0
-            : 1;
+      updateData.auto_renew = this.toFlag(retainerData.auto_renew, 1);
+    }
+
+    if (retainerData.email_schedule_enabled !== undefined) {
+      updateData.email_schedule_enabled = this.toFlag(retainerData.email_schedule_enabled, 0);
+    }
+
+    if (retainerData.reminder_days_before !== undefined) {
+      updateData.reminder_days_before = this.toIntegerSetting(
+        retainerData.reminder_days_before,
+        3,
+        'reminder_days_before',
+        0
+      );
+    }
+
+    if (retainerData.auto_overdue_reminders !== undefined) {
+      updateData.auto_overdue_reminders = this.toFlag(retainerData.auto_overdue_reminders, 0);
+    }
+
+    if (retainerData.overdue_reminder_interval_days !== undefined) {
+      updateData.overdue_reminder_interval_days = this.toIntegerSetting(
+        retainerData.overdue_reminder_interval_days,
+        7,
+        'overdue_reminder_interval_days',
+        1
+      );
+    }
+
+    if (retainerData.max_overdue_reminders !== undefined) {
+      updateData.max_overdue_reminders = this.toIntegerSetting(
+        retainerData.max_overdue_reminders,
+        3,
+        'max_overdue_reminders',
+        1
+      );
+    }
+
+    if (
+      retainerData.next_invoice_date !== undefined &&
+      retainerData.next_invoice_date !== existingRetainer.next_invoice_date
+    ) {
+      // New invoice cycle should reset reminder progress state.
+      updateData.overdue_reminder_count = 0;
+      updateData.last_pre_due_reminder_for_date = null;
+      updateData.last_overdue_reminder_at = null;
+      updateData.last_reminder_sent_at = null;
+      updateData.last_reminder_type = null;
     }
 
     if (Object.keys(updateData).length === 0) {

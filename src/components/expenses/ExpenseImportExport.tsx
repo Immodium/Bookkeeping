@@ -172,7 +172,23 @@ export const ExpenseImportExport: React.FC<ImportExportProps> = ({ onClose, onIm
         }
         if (!mappedRow.merchant) mappedRow.merchant = 'Unknown Merchant';
         
-        return mappedRow;
+        const merchant = String(mappedRow.merchant || '').trim();
+        const description = String(mappedRow.description || merchant || 'Imported expense').trim();
+        const parsedAmount = typeof mappedRow.amount === 'number'
+          ? mappedRow.amount
+          : Math.abs(parseFloat(String(mappedRow.amount || '0').replace(/[$,]/g, '')) || 0);
+
+        return {
+          date: String(mappedRow.date || ''),
+          vendor: merchant || undefined,
+          amount: parsedAmount,
+          description,
+          category: String(mappedRow.category || 'Other'),
+          status: String(mappedRow.status || 'pending'),
+          notes: mappedRow.reference ? `Reference: ${String(mappedRow.reference)}` : undefined,
+          is_billable: false,
+          client_id: undefined
+        };
       });
 
       // Filter out invalid expenses before sending to bulk import

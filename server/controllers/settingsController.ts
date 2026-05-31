@@ -138,6 +138,7 @@ export const updateProjectSettings = asyncHandler(async (req: Request<object, ob
       },
       email: {
         enabled: false,
+        provider: 'smtp' as const,
         smtp_host: '',
         smtp_port: 587,
         smtp_user: '',
@@ -161,12 +162,20 @@ export const updateProjectSettings = asyncHandler(async (req: Request<object, ob
 
     // Update email configured status based on required fields
     if (projectSettings.email.enabled) {
-      const requiredFields = ['smtp_host', 'smtp_user', 'smtp_pass', 'email_from'];
-      const hasAllRequiredFields = requiredFields.every(field => {
-        const value = projectSettings.email[field as keyof typeof projectSettings.email];
-        return value && typeof value === 'string' && value.trim() !== '';
-      });
-      projectSettings.email.configured = hasAllRequiredFields && projectSettings.email.smtp_port > 0;
+      const provider = (projectSettings.email.provider || 'smtp').toLowerCase();
+      if (provider === 'resend') {
+        projectSettings.email.configured = !!process.env.RESEND_API_KEY;
+      } else if (provider === 'sendgrid') {
+        const hasFromAddress = typeof projectSettings.email.email_from === 'string' && projectSettings.email.email_from.trim() !== '';
+        projectSettings.email.configured = !!(process.env.SENDGRID_API_KEY && hasFromAddress);
+      } else {
+        const requiredFields = ['smtp_host', 'smtp_user', 'smtp_pass', 'email_from'];
+        const hasAllRequiredFields = requiredFields.every(field => {
+          const value = projectSettings.email[field as keyof typeof projectSettings.email];
+          return value && typeof value === 'string' && value.trim() !== '';
+        });
+        projectSettings.email.configured = hasAllRequiredFields && projectSettings.email.smtp_port > 0;
+      }
     } else {
       projectSettings.email.configured = false;
     }

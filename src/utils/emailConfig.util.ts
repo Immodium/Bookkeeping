@@ -2,6 +2,7 @@
 
 import { sqliteService } from '@/services/sqlite.svc';
 import { EmailSettings, EmailConfigStatus } from '@/types';
+import { authenticatedFetch } from '@/utils/api/http.util';
 
 /**
  * Checks if email settings are properly configured and enabled
@@ -90,6 +91,59 @@ const isValidEmail = (email: string): boolean => {
   return emailRegex.test(email);
 };
 
+const checkProjectSettingsEmailConfig = async (): Promise<EmailConfigStatus | null> => {
+  try {
+    const response = await authenticatedFetch('/api/project-settings');
+    const payload = await response.json() as {
+      settings?: {
+        email?: {
+          enabled?: boolean;
+          provider?: 'smtp' | 'sendgrid' | 'resend';
+          configured?: boolean;
+          resend_configured?: boolean;
+          sendgrid_configured?: boolean;
+        };
+      };
+    };
+
+    const emailSettings = payload?.settings?.email;
+    if (!emailSettings) {
+      return null;
+    }
+
+    const provider = (emailSettings.provider || 'smtp').toLowerCase();
+    const isEnabled = emailSettings.enabled === true;
+    let isConfigured = false;
+    let missingFields: string[] = [];
+
+    if (provider === 'resend') {
+      isConfigured = emailSettings.resend_configured === true || emailSettings.configured === true;
+      if (!isConfigured) {
+        missingFields = ['Resend API key'];
+      }
+    } else if (provider === 'sendgrid') {
+      isConfigured = emailSettings.sendgrid_configured === true || emailSettings.configured === true;
+      if (!isConfigured) {
+        missingFields = ['SendGrid API key or from email'];
+      }
+    } else {
+      isConfigured = emailSettings.configured === true;
+      if (!isConfigured) {
+        missingFields = ['SMTP settings'];
+      }
+    }
+
+    return {
+      isConfigured,
+      isEnabled,
+      missingFields,
+      canSendEmails: isEnabled && isConfigured
+    };
+  } catch {
+    return null;
+  }
+};
+
 /**
  * Checks if environment variables for email are set (fallback check)
  */
@@ -124,6 +178,11 @@ export const checkEnvironmentEmailConfig = (): EmailConfigStatus => {
  * Comprehensive email configuration check (database first, then environment)
  */
 export const getEmailConfigurationStatus = async (): Promise<EmailConfigStatus> => {
+  const projectSettingsConfig = await checkProjectSettingsEmailConfig();
+  if (projectSettingsConfig) {
+    return projectSettingsConfig;
+  }
+
   // First check database settings
   const dbConfig = await checkEmailConfiguration();
   

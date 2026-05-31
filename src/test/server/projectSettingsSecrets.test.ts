@@ -48,4 +48,21 @@ describe('Project settings secret redaction', () => {
     expect(settings.google_oauth.configured).toBe(true);
     expect(settings.stripe.configured).toBe(true);
   });
+
+  it('reports resend as configured when provider is resend and API key exists', async () => {
+    process.env.EMAIL_PROVIDER = 'resend';
+    process.env.EMAIL_ENABLED = 'true';
+    process.env.RESEND_API_KEY = 're_test_key';
+    (databaseService.getMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { key: 'email.provider', value: 'resend' },
+      { key: 'email.enabled', value: 'true' }
+    ]);
+
+    const settings = await settingsService.getProjectSettings(1);
+
+    expect(settings.email.provider).toBe('resend');
+    expect(settings.email.enabled).toBe(true);
+    expect(settings.email.resend_configured).toBe(true);
+    expect(settings.email.configured).toBe(true);
+  });
 });

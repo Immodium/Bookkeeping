@@ -190,6 +190,17 @@ export class SettingsService {
       dbSettings.forEach(setting => {
         settingsMap[setting.key] = setting.value;
       });
+      const normalizeStringValue = (value?: string): string => {
+        if (typeof value !== 'string') {
+          return '';
+        }
+        try {
+          const parsed = JSON.parse(value);
+          return typeof parsed === 'string' ? parsed : value;
+        } catch {
+          return value;
+        }
+      };
 
       const hasGoogleSecret = !!(
         settingsMap['google_oauth.client_secret'] || process.env.GOOGLE_CLIENT_SECRET
@@ -198,12 +209,35 @@ export class SettingsService {
         settingsMap['stripe.secret_key'] || process.env.STRIPE_SECRET_KEY
       );
       const hasSmtpPass = !!(settingsMap['email.smtp_pass'] || process.env.SMTP_PASS);
+      const rawEmailProvider = (
+        normalizeStringValue(settingsMap['email.provider']) || process.env.EMAIL_PROVIDER || 'smtp'
+      ).toLowerCase();
+      const emailProvider: 'smtp' | 'sendgrid' | 'resend' = rawEmailProvider === 'sendgrid'
+        ? 'sendgrid'
+        : rawEmailProvider === 'resend'
+          ? 'resend'
+          : 'smtp';
+      const emailFrom = normalizeStringValue(settingsMap['email.email_from']) || process.env.EMAIL_FROM || '';
+      const isEmailEnabled = settingsMap['email.enabled'] === 'true' || process.env.EMAIL_ENABLED === 'true';
+      const isSmtpConfigured = !!(
+        (settingsMap['email.smtp_host'] || process.env.SMTP_HOST) &&
+        (settingsMap['email.smtp_user'] || process.env.SMTP_USER) &&
+        emailFrom &&
+        hasSmtpPass
+      );
+      const hasResendApiKey = !!process.env.RESEND_API_KEY;
+      const hasSendgridApiKey = !!process.env.SENDGRID_API_KEY;
+      const isProviderConfigured = emailProvider === 'resend'
+        ? hasResendApiKey
+        : emailProvider === 'sendgrid'
+          ? !!(hasSendgridApiKey && emailFrom)
+          : isSmtpConfigured;
 
       // Never return secrets to clients — only non-sensitive fields and configured flags
       const projectSettings: ProjectSettings = {
         google_oauth: {
           enabled: settingsMap['google_oauth.enabled'] === 'true' || false,
-          client_id: settingsMap['google_oauth.client_id'] || process.env.GOOGLE_CLIENT_ID || '',
+          client_id: normalizeStringValue(settingsMap['google_oauth.client_id']) || process.env.GOOGLE_CLIENT_ID || '',
           configured: !!(
             (settingsMap['google_oauth.client_id'] || process.env.GOOGLE_CLIENT_ID) &&
             hasGoogleSecret
@@ -211,24 +245,22 @@ export class SettingsService {
         },
         stripe: {
           enabled: settingsMap['stripe.enabled'] === 'true' || false,
-          publishable_key: settingsMap['stripe.publishable_key'] || process.env.STRIPE_PUBLISHABLE_KEY || '',
+          publishable_key: normalizeStringValue(settingsMap['stripe.publishable_key']) || process.env.STRIPE_PUBLISHABLE_KEY || '',
           configured: !!(
             (settingsMap['stripe.publishable_key'] || process.env.STRIPE_PUBLISHABLE_KEY) &&
             hasStripeSecret
           )
         },
         email: {
-          enabled: settingsMap['email.enabled'] === 'true' || false,
-          smtp_host: settingsMap['email.smtp_host'] || process.env.SMTP_HOST || '',
+          enabled: isEmailEnabled,
+          provider: emailProvider,
+          smtp_host: normalizeStringValue(settingsMap['email.smtp_host']) || process.env.SMTP_HOST || '',
           smtp_port: parseInt(settingsMap['email.smtp_port'] || process.env.SMTP_PORT || '587') || 587,
-          smtp_user: settingsMap['email.smtp_user'] || process.env.SMTP_USER || '',
-          email_from: settingsMap['email.email_from'] || process.env.EMAIL_FROM || '',
-          configured: !!(
-            (settingsMap['email.smtp_host'] || process.env.SMTP_HOST) &&
-            (settingsMap['email.smtp_user'] || process.env.SMTP_USER) &&
-            (settingsMap['email.email_from'] || process.env.EMAIL_FROM) &&
-            hasSmtpPass
-          )
+          smtp_user: normalizeStringValue(settingsMap['email.smtp_user']) || process.env.SMTP_USER || '',
+          email_from: emailFrom,
+          resend_configured: hasResendApiKey,
+          sendgrid_configured: hasSendgridApiKey,
+          configured: isProviderConfigured
         },
         security: {
           require_email_verification: settingsMap['security.require_email_verification'] === 'true' || process.env.REQUIRE_EMAIL_VERIFICATION === 'true',

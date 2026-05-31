@@ -41,6 +41,8 @@ describe('InvoiceService - Email Functionality', () => {
 
   describe('sendInvoiceEmail', () => {
     it('should send invoice email successfully', async () => {
+      mockFetchSuccess({ success: true, message: 'Email sent successfully' });
+
       const invoiceData: InvoiceEmailData = {
         id: 1,
         invoice_number: 'INV-001',
@@ -55,10 +57,16 @@ describe('InvoiceService - Email Functionality', () => {
       const result = await invoiceService.sendInvoiceEmail(invoiceData);
 
       expect(result.success).toBe(true);
-      expect(result.message).toBeTruthy();
+      expect(result.message).toContain('successfully');
     });
 
     it('should handle email sending failure', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ success: false, message: 'Invalid email address' })
+      } as Response);
+
       const invoiceData: InvoiceEmailData = {
         id: 1,
         invoice_number: 'INV-001',
@@ -68,13 +76,6 @@ describe('InvoiceService - Email Functionality', () => {
         due_date: '2026-03-01',
         status: 'sent'
       };
-
-      // Mock email service to fail
-      const emailService = (invoiceService as any).emailService;
-      emailService.sendEmail = vi.fn().mockResolvedValue({
-        success: false,
-        message: 'Invalid email address'
-      });
 
       const result = await invoiceService.sendInvoiceEmail(invoiceData);
 

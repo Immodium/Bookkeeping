@@ -205,6 +205,7 @@ export interface ProjectSettings {
   };
   email: {
     enabled: boolean;
+    provider?: 'smtp' | 'sendgrid' | 'resend';
     host?: string;
     port?: number;
     user?: string;
@@ -214,6 +215,8 @@ export interface ProjectSettings {
     smtp_port?: number;
     smtp_user?: string;
     smtp_pass?: string;
+    resend_configured?: boolean;
+    sendgrid_configured?: boolean;
     configured: boolean;
   };
   security: {

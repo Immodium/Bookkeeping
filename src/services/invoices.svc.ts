@@ -37,32 +37,20 @@ export class InvoiceService {
    */
   async sendInvoiceEmail(invoice: InvoiceEmailData): Promise<{ success: boolean; message: string }> {
     try {
-      // Generate secure token for public viewing
-      const token = generateInvoiceToken(invoice.id.toString());
-      const invoiceViewUrl = `${window.location.origin}/invoice/${invoice.id}?token=${token}`;
-
-      // Get company settings
-      const companySettings = await this.getCompanySettings();
-      
-      // Create email content
-      const subject = `Invoice ${invoice.invoice_number} from ${companySettings.companyName}`;
-      const htmlContent = this.generateInvoiceEmailHTML(invoice, invoiceViewUrl, companySettings);
-      const textContent = this.generateInvoiceEmailText(invoice, invoiceViewUrl, companySettings);
-
-      // Send email
-      const result = await this.emailService.sendEmail(
-        invoice.client_email,
-        subject,
-        htmlContent,
-        textContent
-      );
-
-      return result;
+      const response = await authenticatedFetch(`/api/invoices/${invoice.id}/email`, {
+        method: 'POST',
+        body: JSON.stringify({ to: invoice.client_email })
+      });
+      const result = await response.json();
+      return {
+        success: Boolean(result?.success),
+        message: result?.message || (result?.success ? 'Invoice emailed successfully' : 'Failed to send invoice email')
+      };
     } catch (error) {
       console.error('Error sending invoice email:', error);
       return {
         success: false,
-        message: 'Failed to send invoice email'
+        message: error instanceof Error ? error.message : 'Failed to send invoice email'
       };
     }
   }

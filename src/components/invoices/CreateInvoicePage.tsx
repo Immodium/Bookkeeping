@@ -6,7 +6,7 @@ import { CompanyHeader } from './CompanyHeader';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
 import { useNavigate } from 'react-router-dom';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
-import { validateInvoiceForSave, validateInvoiceForSend, getAvailableInvoiceActions } from '@/utils/data';
+import { validateInvoiceForSave, validateInvoiceForSend } from '@/utils/data';
 import { invoiceService } from '@/services/invoices.svc';
 import { pdfService } from '@/services/pdf.svc';
 import { getEmailConfigurationStatus } from '@/utils/emailConfig.util';
@@ -204,10 +204,6 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
   const isValidForSend = () => {
     const validation = validateInvoiceForSend(invoiceData, selectedClient, lineItems, !editingInvoice);
     return validation.canSend;
-  };
-
-  const getActionAvailability = () => {
-    return getAvailableInvoiceActions(invoiceData, selectedClient, lineItems, !editingInvoice);
   };
 
   const handleBackClick = () => {
@@ -455,42 +451,21 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
                 </button>
               )}
 
-              {(() => {
-                const actions = getActionAvailability();
-                const hasClientEmail = selectedClient?.email && selectedClient.email.trim() !== '';
-                const isInvoiceAlreadySent = editingInvoice?.status === 'sent';
-                const canSendEmails = emailConfig?.canSendEmails ?? false;
-
-                // Show send button only if:
-                // 1. Client has email
-                // 2. Email is configured
-                // 3. Invoice is not already sent
-                const shouldShowSendButton = hasClientEmail && canSendEmails && !isInvoiceAlreadySent;
-
-                if (shouldShowSendButton) {
-                  return (
-                    <button
-                      onClick={handleSendInvoice}
-                      disabled={!isValidForSend() || isSending}
-                      className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed transition-colors flex items-center"
-                    >
-                      <Send className="h-4 w-4 mr-2" />
-                      {isSending ? 'Sending...' : 'Send Invoice'}
-                    </button>
-                  );
-                } else {
-                  return (
-                    <button
-                      onClick={handlePrintInvoice}
-                      disabled={!editingInvoice?.id}
-                      className={`${getButtonClasses('primary')} disabled:bg-muted disabled:cursor-not-allowed`}
-                    >
-                      <Printer className="h-4 w-4 mr-2" />
-                      Print Invoice
-                    </button>
-                  );
+              <button
+                onClick={handleSendInvoice}
+                disabled={!isValidForSend() || !selectedClient?.email || !(emailConfig?.canSendEmails ?? false) || isSending}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed transition-colors flex items-center"
+                title={
+                  !(emailConfig?.canSendEmails ?? false)
+                    ? 'Configure email settings to send invoices'
+                    : !selectedClient?.email
+                      ? 'Client email is required'
+                      : undefined
                 }
-              })()}
+              >
+                <Send className="h-4 w-4 mr-2" />
+                {isSending ? 'Sending...' : 'Email Invoice'}
+              </button>
             </div>
           )}
           {viewOnly && (

@@ -12,16 +12,13 @@ export const getInvoiceStatusPermissions = (
   status: InvoiceStatus | undefined,
   dueDate?: string
 ): InvoiceStatusPermissions => {
-  const today = new Date();
-  const dueDateObj = dueDate ? new Date(dueDate) : null;
-  const isOverdue = dueDateObj && dueDateObj < today;
-
+  void dueDate;
   switch (status) {
     case 'paid':
       return {
-        canEdit: false,
-        canSave: false,
-        canSend: false,
+        canEdit: true,
+        canSave: true,
+        canSend: true,
         canDelete: false,
         showDeleteOnly: false
       };
@@ -30,7 +27,7 @@ export const getInvoiceStatusPermissions = (
       return {
         canEdit: true,
         canSave: true,
-        canSend: false,
+        canSend: true,
         canDelete: true,
         showDeleteOnly: false
       };

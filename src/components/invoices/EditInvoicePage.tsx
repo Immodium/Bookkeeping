@@ -6,7 +6,7 @@ import { authenticatedFetch } from '@/utils/api';
 import { ClientSelector } from './ClientSelector';
 import { CompanyHeader } from './CompanyHeader';
 import { useFormNavigation } from '@/hooks/useFormNavigation';
-import { validateInvoiceForSave, validateInvoiceForSend, autoFillInvoiceDefaults } from '@/utils/data';
+import { validateInvoiceForSave, validateInvoiceForSend } from '@/utils/data';
 import { getInvoiceStatusPermissions } from '@/utils/business/invoice.util';
 import { invoiceService } from '@/services/invoices.svc';
 import { pdfService } from '@/services/pdf.svc';
@@ -512,42 +512,30 @@ export const EditInvoicePage = () => {
                     {isSaving ? 'Saving...' : 'Save Invoice'}
                   </button>
 
-                  {(() => {
-                    const canSendEmails = emailConfig?.canSendEmails ?? false;
-                    const isInvoiceAlreadySent = invoice?.status === 'sent';
-
-                    // Show send button only if:
-                    // 1. Permissions allow sending
-                    // 2. Client has email
-                    // 3. Email is configured
-                    // 4. Invoice is not already sent (unless we want to allow resending)
-                    const shouldShowSendButton = permissions.canSend && hasClientEmail && canSendEmails && !isInvoiceAlreadySent;
-
-                    if (shouldShowSendButton) {
-                      return (
-                        <button
-                          onClick={handleSendInvoice}
-                          disabled={isSending}
-                          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed transition-colors flex items-center"
-                        >
-                          <Send className="h-4 w-4 mr-2" />
-                          {isSending ? 'Sending...' : 'Send Invoice'}
-                        </button>
-                      );
-                    } else if (hasClientEmail || !canSendEmails) {
-                      return (
-                        <button
-                          onClick={handlePrintInvoice}
-                          disabled={false}
-                          className={`${getButtonClasses('primary')} disabled:bg-muted disabled:cursor-not-allowed`}
-                        >
-                          <Printer className="h-4 w-4 mr-2" />
-                          Print Invoice
-                        </button>
-                      );
+                  <button
+                    onClick={handleSendInvoice}
+                    disabled={!isValidForSend() || !hasClientEmail || !(emailConfig?.canSendEmails ?? false) || isSending}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:bg-muted disabled:cursor-not-allowed transition-colors flex items-center"
+                    title={
+                      !(emailConfig?.canSendEmails ?? false)
+                        ? 'Configure email settings to send invoices'
+                        : !hasClientEmail
+                          ? 'Client email is required'
+                          : undefined
                     }
-                    return null;
-                  })()}
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    {isSending ? 'Sending...' : 'Email Invoice'}
+                  </button>
+
+                  <button
+                    onClick={handlePrintInvoice}
+                    disabled={false}
+                    className={`${getButtonClasses('primary')} disabled:bg-muted disabled:cursor-not-allowed`}
+                  >
+                    <Printer className="h-4 w-4 mr-2" />
+                    Print Invoice
+                  </button>
                 </>
               );
             })()}

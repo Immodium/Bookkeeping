@@ -60,7 +60,7 @@ The original bash script that works on Unix-like systems.
    - JWT_REFRESH_SECRET (64 characters) 
    - SESSION_SECRET (64 characters)
 
-2. **Create .env File**: Uses .env.example as a template and replaces placeholder secrets with generated ones
+2. **Create .env File**: Uses .env.example as a template, merges existing `.env` values, and replaces JWT/session secrets with newly generated ones
 
 3. **Backup Existing Files**: Automatically creates timestamped backups of existing .env files
 

@@ -31,7 +31,7 @@ import {
 import { filterByDateRange, getDefaultDateRange, getDateRangeForPeriod } from '@/utils/data';
 import { formatDateSync } from '@/components/ui/FormattedDate';
 import { FormattedCurrency } from '@/components/ui/FormattedCurrency';
-import { Expense } from '@/types';
+import { Expense, ExpenseFormData } from '@/types';
 import { TimePeriod, DateRange } from '@/types';
 
 const parseExtractedAmount = (rawValue: unknown): number | null => {
@@ -71,6 +71,36 @@ const parseExtractedAmount = (rawValue: unknown): number | null => {
   return Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : null;
 };
 
+const extractAmountFromOCRPayload = (payload: Record<string, unknown>): number | null => {
+  const directAmount = parseExtractedAmount(
+    payload.amount ?? payload.total ?? payload.total_amount ?? payload.grand_total
+  );
+  if (directAmount) {
+    return directAmount;
+  }
+
+  const textualSources = [payload.description, payload.text, payload.raw_text];
+  const amountPattern =
+    /[$€£]?\s*-?\d{1,3}(?:[,\s.]\d{3})*(?:[.,]\d{1,2})|[$€£]?\s*-?\d+(?:[.,]\d{1,2})/g;
+  const candidates: number[] = [];
+
+  for (const source of textualSources) {
+    if (typeof source !== 'string' || !source.trim()) {
+      continue;
+    }
+
+    const matches = source.match(amountPattern) ?? [];
+    for (const match of matches) {
+      const parsed = parseExtractedAmount(match);
+      if (parsed) {
+        candidates.push(parsed);
+      }
+    }
+  }
+
+  return candidates.length > 0 ? Math.max(...candidates) : null;
+};
+
 export const ExpenseManagement: React.FC = () => {
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const [uiState, setUiState] = useState({
@@ -95,6 +125,7 @@ export const ExpenseManagement: React.FC = () => {
     editing: null,
     viewing: null
   });
+  const [receiptDraft, setReceiptDraft] = useState<Partial<ExpenseFormData> | null>(null);
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
 
@@ -176,6 +207,7 @@ export const ExpenseManagement: React.FC = () => {
 
   const handleCreateExpense = () => {
     setActiveItem({ editing: null, viewing: null });
+    setReceiptDraft(null);
     updateUiState({ showCreateForm: true });
   };
 
@@ -186,6 +218,7 @@ export const ExpenseManagement: React.FC = () => {
 
     try {
       setIsUploadingReceipt(true);
+      setReceiptDraft(null);
       const formData = new FormData();
       formData.append('receipt', file);
 
@@ -204,17 +237,27 @@ export const ExpenseManagement: React.FC = () => {
         throw new Error('Receipt OCR did not return expense data');
       }
 
-      const parsedAmount = parseExtractedAmount(
-        extracted.amount ?? extracted.total ?? extracted.total_amount ?? extracted.grand_total
-      );
-      if (!parsedAmount) {
-        throw new Error('Could not extract a valid amount from the receipt');
-      }
+      const parsedAmount = extractAmountFromOCRPayload(extracted);
 
       const normalizedDate =
         typeof extracted.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(extracted.date)
           ? extracted.date
           : new Date().toISOString().split('T')[0];
+
+      if (!parsedAmount) {
+        setActiveItem({ editing: null, viewing: null });
+        setReceiptDraft({
+          date: normalizedDate,
+          vendor: extracted.vendor || 'Unknown Vendor',
+          category: extracted.category || 'Other',
+          description: extracted.description || 'Imported from receipt OCR',
+          receipt_url: result.data?.receipt_url || '',
+          status: 'pending'
+        });
+        updateUiState({ showCreateForm: true });
+        toast.warning('Receipt uploaded, but amount could not be extracted. Enter the amount to finish saving.');
+        return;
+      }
 
       const payload = {
         expenseData: {
@@ -232,6 +275,7 @@ export const ExpenseManagement: React.FC = () => {
         throw new Error(createResponse.error || 'Failed to create expense from receipt');
       }
 
+      setReceiptDraft(null);
       await loadExpenses();
       toast.success('Receipt uploaded and expense created');
     } catch (error) {
@@ -386,6 +430,7 @@ export const ExpenseManagement: React.FC = () => {
   };
 
   const handleCloseForm = () => {
+    setReceiptDraft(null);
     updateUiState({ showCreateForm: false });
     setActiveItem({ editing: null, viewing: null });
   };
@@ -477,6 +522,7 @@ export const ExpenseManagement: React.FC = () => {
     return (
       <ExpenseForm 
         expense={activeItem.editing}
+        initialData={receiptDraft || undefined}
         onSave={handleSaveExpense}
         onCancel={handleCloseForm}
       />

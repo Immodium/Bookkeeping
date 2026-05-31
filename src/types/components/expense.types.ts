@@ -12,6 +12,7 @@ export interface ExpenseViewModalProps {
 // ExpenseForm component props
 export interface ExpenseFormProps {
   expense?: Expense | null;
+  initialData?: Partial<ExpenseFormData>;
   onSave: (expenseData: ExpenseFormData) => void;
   onCancel: () => void;
 }

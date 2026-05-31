@@ -46,17 +46,23 @@ const parseExtractedAmount = (rawValue: unknown): number | null => {
   return Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : null;
 };
 
-export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCancel }) => {
-  const [formData, setFormData] = useState({
-    date: expense?.date || new Date().toISOString().split('T')[0],
-    vendor: expense?.vendor || '',
-    category: expense?.category || 'Office Supplies',
-    amount: expense?.amount?.toString() || '',
-    description: expense?.description || '',
-    receipt_url: expense?.receipt_url || '',
-    is_billable: expense?.is_billable ?? false,
-    status: expense?.status || 'pending' as const
+export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, initialData, onSave, onCancel }) => {
+  const getInitialFormData = () => ({
+    date: expense?.date || initialData?.date || new Date().toISOString().split('T')[0],
+    vendor: expense?.vendor || initialData?.vendor || '',
+    category: expense?.category || initialData?.category || 'Office Supplies',
+    amount: expense?.amount !== undefined
+      ? expense.amount.toString()
+      : initialData?.amount !== undefined
+        ? initialData.amount.toString()
+        : '',
+    description: expense?.description || initialData?.description || '',
+    receipt_url: expense?.receipt_url || initialData?.receipt_url || '',
+    is_billable: expense?.is_billable ?? initialData?.is_billable ?? false,
+    status: expense?.status || initialData?.status || 'pending' as const
   });
+
+  const [formData, setFormData] = useState(getInitialFormData);
 
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [originalFormData, setOriginalFormData] = useState<any>(null);
@@ -84,18 +90,8 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
   };
 
   useEffect(() => {
-    const initialData = {
-      date: expense?.date || new Date().toISOString().split('T')[0],
-      vendor: expense?.vendor || '',
-      category: expense?.category || 'Office Supplies',
-      amount: expense?.amount?.toString() || '',
-      description: expense?.description || '',
-      receipt_url: expense?.receipt_url || '',
-      is_billable: expense?.is_billable ?? false,
-      status: expense?.status || 'pending' as const
-    };
-    setOriginalFormData(initialData);
-  }, [expense]);
+    setOriginalFormData(getInitialFormData());
+  }, [expense, initialData]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

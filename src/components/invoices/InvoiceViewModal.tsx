@@ -299,7 +299,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ invoice, isO
                     ? 'Configure email settings to send invoices'
                     : undefined
               }
-              className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              className="flex items-center px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               <Mail className="h-4 w-4 mr-2" />
               {isSendingEmail ? 'Sending...' : 'Email Invoice'}

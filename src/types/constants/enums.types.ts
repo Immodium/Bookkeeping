@@ -4,7 +4,9 @@
 export const PaymentStatus = {
   RECEIVED: 'received',
   PENDING: 'pending',
+  COMPLETED: 'completed',
   FAILED: 'failed',
+  CANCELLED: 'cancelled',
   REFUNDED: 'refunded'
 } as const;
 
@@ -16,6 +18,7 @@ export const PaymentMethod = {
   BANK_TRANSFER: 'bank_transfer',
   CREDIT_CARD: 'credit_card',
   PAYPAL: 'paypal',
+  STRIPE: 'stripe',
   OTHER: 'other'
 } as const;
 
@@ -78,6 +81,7 @@ export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number];
 // Invoice related enums
 export const InvoiceStatus = {
   DRAFT: 'draft',
+  PENDING: 'pending',
   SENT: 'sent',
   PAID: 'paid',
   OVERDUE: 'overdue',

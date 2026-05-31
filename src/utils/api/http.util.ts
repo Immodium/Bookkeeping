@@ -19,10 +19,14 @@ class ApiError extends Error {
 }
 
 const getBaseUrl = (): string => {
+  const viteApiUrl = import.meta.env?.VITE_API_URL;
+  if (viteApiUrl) {
+    return viteApiUrl;
+  }
   if (typeof window !== 'undefined') {
     return window.location.origin;
   }
-  return process.env.REACT_APP_API_URL || 'http://localhost:3002';
+  return 'http://localhost:3002';
 };
 
 export const authenticatedFetch = async (
@@ -34,13 +38,13 @@ export const authenticatedFetch = async (
   const fullUrl = url.startsWith('http') ? url : `${baseUrl}${url}`;
 
   const isFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
-  const headers: HeadersInit = {
-    ...(isFormDataBody ? {} : { 'Content-Type': 'application/json' }),
-    ...options.headers,
-  };
+  const headers = new Headers(options.headers);
+  if (!isFormDataBody && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
 
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
   const config: RequestInit = {

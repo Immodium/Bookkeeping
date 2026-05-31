@@ -7,6 +7,7 @@ export type RetainerBillingCycle = 'weekly' | 'monthly' | 'quarterly' | 'yearly'
 export interface Retainer extends BaseEntity {
   client_id: number;
   client_name?: string;
+  client_email?: string;
   name: string;
   description?: string;
   amount: number;

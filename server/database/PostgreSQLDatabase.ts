@@ -188,15 +188,11 @@ export class PostgreSQLDatabase implements IDatabase {
         : undefined
     });
 
-    // Reset search_path when connections return to the pool (tenant middleware safety)
-    this.pool.on('connect', (client: PoolClient) => {
-      const originalRelease = client.release.bind(client);
-      client.release = (err?: boolean | Error) => {
-        void client.query('RESET search_path').finally(() => {
-          originalRelease(err);
-        });
-      };
-    });
+    // NOTE:
+    // Do not patch `client.release` inside pool events. The `pg` connect event
+    // provides a raw client without a pool-bound `release` method, and trying to
+    // bind it crashes startup. Tenant-scoped search_path cleanup is handled by
+    // acquireClientForTenant() and transaction() before explicit release.
   }
 
   async connect(_config: DatabaseConfig): Promise<void> {

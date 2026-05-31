@@ -32,9 +32,10 @@ export interface AsyncState<T> {
 // Generic API response patterns
 // Note: ApiResponse is also defined in common.types.ts with more comprehensive structure
 // This simpler version is kept for backward compatibility with basic API calls
-export interface ApiResponse<T = unknown> {
+export interface ApiResponse<T = unknown, TResult = unknown> {
   success: boolean;
   data?: T;
+  result?: TResult;
   message?: string;
   error?: string;
 }

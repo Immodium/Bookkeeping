@@ -17,6 +17,8 @@ import { useProjectSettings } from '@/hooks/useProjectSettings';
 import type { SettingsTabRef } from '@/types';
 import { usePermissions } from '@/contexts/AuthContext';
 
+export type { SettingsTabRef } from '@/types';
+
 export const Settings = () => {
   const [activeTab, setActiveTab] = useState('company');
   const [isLoading, setIsLoading] = useState(false);

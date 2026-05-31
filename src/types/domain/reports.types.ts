@@ -18,7 +18,6 @@ export interface BaseReportProps {
   onSchedule: (
     reportType: ReportType,
     dateRange: ReportDateRange,
-    schedule: ReportScheduleInput,
     config?: Record<string, unknown>
   ) => Promise<void> | void;
 }

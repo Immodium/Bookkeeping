@@ -1,4 +1,5 @@
 // Import and export related types and interfaces
+export type { ClientImportData } from '../domain/client.types';
 
 // Generic CSV record interface
 export interface CSVRecord {

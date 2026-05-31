@@ -4,6 +4,11 @@
 import bcrypt from 'bcryptjs';
 import type { IDatabase, SeedData } from '../../types/database.types.js';
 
+const parseCount = (value: number | string | null | undefined): number => {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 /**
  * Generic seed data insertion function
  */
@@ -31,9 +36,9 @@ export const seedData = async (db: IDatabase, seed: SeedData): Promise<void> => 
  * Initialize application counters
  */
 export const initializeCounters = async (db: IDatabase): Promise<void> => {
-  const counterCheck = await db.getOne<{ count: number }>('SELECT COUNT(*) as count FROM counters');
+  const counterCheck = await db.getOne<{ count: number | string }>('SELECT COUNT(*) as count FROM counters');
 
-  if (!counterCheck || counterCheck.count === 0) {
+  if (parseCount(counterCheck?.count) === 0) {
     const counters: SeedData = {
       table: 'counters',
       data: [
@@ -54,9 +59,9 @@ export const initializeCounters = async (db: IDatabase): Promise<void> => {
  * Initialize admin user if none exists
  */
 export const initializeAdminUser = async (db: IDatabase): Promise<void> => {
-  const userCheck = await db.getOne<{ count: number }>('SELECT COUNT(*) as count FROM users');
+  const userCheck = await db.getOne<{ count: number | string }>('SELECT COUNT(*) as count FROM users');
 
-  if (!userCheck || userCheck.count === 0) {
+  if (parseCount(userCheck?.count) === 0) {
     if (!process.env.ADMIN_PASSWORD) {
       throw new Error('ADMIN_PASSWORD environment variable must be set before seeding the database');
     }
@@ -86,9 +91,9 @@ export const initializeAdminUser = async (db: IDatabase): Promise<void> => {
  * Initialize default application settings
  */
 export const initializeSettings = async (db: IDatabase): Promise<void> => {
-  const settingsCheck = await db.getOne<{ count: number }>('SELECT COUNT(*) as count FROM settings');
+  const settingsCheck = await db.getOne<{ count: number | string }>('SELECT COUNT(*) as count FROM settings');
 
-  if (!settingsCheck || settingsCheck.count === 0) {
+  if (parseCount(settingsCheck?.count) === 0) {
     const defaultSettings: SeedData = {
       table: 'settings',
       data: [
@@ -112,8 +117,8 @@ export const initializeSettings = async (db: IDatabase): Promise<void> => {
 export const initializeSampleClients = async (db: IDatabase): Promise<void> => {
   if (process.env.NODE_ENV === 'production') return;
 
-  const clientCheck = await db.getOne<{ count: number }>('SELECT COUNT(*) as count FROM clients');
-  if (clientCheck && clientCheck.count > 0) return;
+  const clientCheck = await db.getOne<{ count: number | string }>('SELECT COUNT(*) as count FROM clients');
+  if (parseCount(clientCheck?.count) > 0) return;
 
   const sampleClients: SeedData = {
     table: 'clients',
@@ -133,8 +138,8 @@ export const initializeSampleClients = async (db: IDatabase): Promise<void> => {
 export const initializeSampleInvoices = async (db: IDatabase): Promise<void> => {
   if (process.env.NODE_ENV === 'production') return;
 
-  const invoiceCheck = await db.getOne<{ count: number }>('SELECT COUNT(*) as count FROM invoices');
-  if (invoiceCheck && invoiceCheck.count > 0) return;
+  const invoiceCheck = await db.getOne<{ count: number | string }>('SELECT COUNT(*) as count FROM invoices');
+  if (parseCount(invoiceCheck?.count) > 0) return;
 
   const sampleInvoices: SeedData = {
     table: 'invoices',
@@ -153,8 +158,8 @@ export const initializeSampleInvoices = async (db: IDatabase): Promise<void> => 
 export const initializeSamplePayments = async (db: IDatabase): Promise<void> => {
   if (process.env.NODE_ENV === 'production') return;
 
-  const paymentCheck = await db.getOne<{ count: number }>('SELECT COUNT(*) as count FROM payments');
-  if (paymentCheck && paymentCheck.count > 0) return;
+  const paymentCheck = await db.getOne<{ count: number | string }>('SELECT COUNT(*) as count FROM payments');
+  if (parseCount(paymentCheck?.count) > 0) return;
 
   const samplePayments: SeedData = {
     table: 'payments',
@@ -181,9 +186,10 @@ const syncCountersWithData = async (db: IDatabase): Promise<void> => {
 
   for (const [counterName, tableName] of Object.entries(counterTables)) {
     try {
-      const maxRow = await db.getOne<{ max_id: number }>(`SELECT COALESCE(MAX(id), 0) as max_id FROM ${tableName}`);
-      if (maxRow && maxRow.max_id > 0) {
-        await db.executeQuery('UPDATE counters SET value = ? WHERE name = ?', [maxRow.max_id, counterName]);
+      const maxRow = await db.getOne<{ max_id: number | string }>(`SELECT COALESCE(MAX(id), 0) as max_id FROM ${tableName}`);
+      const maxId = parseCount(maxRow?.max_id);
+      if (maxId > 0) {
+        await db.executeQuery('UPDATE counters SET value = ? WHERE name = ?', [maxId, counterName]);
       }
     } catch {
       // Table may not exist yet

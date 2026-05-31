@@ -23,8 +23,7 @@ interface EnvironmentConfig {
   PASSWORD_RESET_EXPIRY: number;
   
   // Database Configuration
-  DB_PATH: string;
-  DB_BACKUP_PATH: string;
+  DATABASE_URL: string;
   
   // CORS Configuration
   CORS_ORIGIN: string;
@@ -81,8 +80,7 @@ const DEFAULT_CONFIG: EnvironmentConfig = {
   EMAIL_TOKEN_EXPIRY: 24 * 60 * 60 * 1000, // 24 hours
   PASSWORD_RESET_EXPIRY: 60 * 60 * 1000, // 1 hour
   
-  DB_PATH: './server/data/slimbooks.db',
-  DB_BACKUP_PATH: './server/data/backups',
+  DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/slimbooks',
   
   CORS_ORIGIN: 'http://localhost:8080',
   CORS_CREDENTIALS: true,
@@ -151,8 +149,7 @@ export const loadEnvironmentConfig = (): EnvironmentConfig => {
     EMAIL_TOKEN_EXPIRY: parseNumber(env.EMAIL_TOKEN_EXPIRY, DEFAULT_CONFIG.EMAIL_TOKEN_EXPIRY),
     PASSWORD_RESET_EXPIRY: parseNumber(env.PASSWORD_RESET_EXPIRY, DEFAULT_CONFIG.PASSWORD_RESET_EXPIRY),
     
-    DB_PATH: parseString(env.DB_PATH, DEFAULT_CONFIG.DB_PATH),
-    DB_BACKUP_PATH: parseString(env.DB_BACKUP_PATH, DEFAULT_CONFIG.DB_BACKUP_PATH),
+    DATABASE_URL: parseString(env.DATABASE_URL, DEFAULT_CONFIG.DATABASE_URL),
     
     CORS_ORIGIN: parseString(env.CORS_ORIGIN, DEFAULT_CONFIG.CORS_ORIGIN),
     CORS_CREDENTIALS: parseBoolean(env.CORS_CREDENTIALS, DEFAULT_CONFIG.CORS_CREDENTIALS),

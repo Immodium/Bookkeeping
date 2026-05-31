@@ -152,6 +152,7 @@ describe('Cross-tenant authorization attack-path regressions', () => {
 
     const webhookResponse = await request(app!)
       .post('/api/billing/webhook')
+      .set('x-billing-webhook-secret', 'test-billing-webhook-secret')
       .send({
         provider: 'stripe',
         eventType: 'customer.subscription.updated',

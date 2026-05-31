@@ -52,6 +52,7 @@ export interface Invoice {
 }
 
 export interface InvoiceFormData {
+  invoice_number?: string;
   client_id: number;
   design_template_id?: number;
   recurring_template_id?: number;
@@ -61,8 +62,13 @@ export interface InvoiceFormData {
   status: InvoiceStatus;
   due_date: string;
   issue_date: string;
+  client_name?: string;
+  client_email?: string;
+  client_phone?: string;
+  client_address?: string;
   description?: string;
-  items: InvoiceItem[];
+  items?: InvoiceItem[];
+  line_items?: string;
   notes?: string;
   payment_terms?: string;
   type: InvoiceType;
@@ -97,10 +103,10 @@ export interface InvoiceTemplateFormData {
   frequency: 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'custom';
   payment_terms: string;
   next_invoice_date: string;
-  is_active: boolean;
-  items: InvoiceItem[];
-  tax_amount: number;
-  shipping_amount: number;
+  is_active?: boolean;
+  items?: InvoiceItem[];
+  tax_amount?: number;
+  shipping_amount?: number;
   notes?: string;
 }
 

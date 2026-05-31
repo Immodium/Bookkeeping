@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 
 const FROM_DOMAIN = 'slimbooks.io';
+const DEFAULT_FROM = `no-reply@${FROM_DOMAIN}`;
 
 export interface EmailSendResult {
   success: boolean;
@@ -40,7 +41,11 @@ export class EmailProviderService {
       const resend = new Resend(apiKey);
       const rawTenantId = Number(input.tenantId);
       const tenantId = Number.isInteger(rawTenantId) && rawTenantId > 0 ? rawTenantId : 1;
-      const fromAddress = `no-reply-${tenantId}@${FROM_DOMAIN}`;
+      const configuredFrom = (process.env.EMAIL_FROM || DEFAULT_FROM).trim();
+      const fallbackFrom = configuredFrom.includes('@') ? configuredFrom : DEFAULT_FROM;
+      const tenantScopedFrom = process.env.RESEND_TENANT_SCOPED_FROM === 'true';
+      const domain = fallbackFrom.split('@')[1] || FROM_DOMAIN;
+      const fromAddress = tenantScopedFrom ? `no-reply-${tenantId}@${domain}` : fallbackFrom;
       const from = input.fromName ? `${input.fromName} <${fromAddress}>` : fromAddress;
 
       const { error } = await resend.emails.send({

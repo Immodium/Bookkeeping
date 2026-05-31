@@ -339,10 +339,11 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ expense, onSave, onCan
 
             <div>
               <label className={themeClasses.label}>
-                Description
+                Description *
               </label>
               <textarea
                 rows={3}
+                required
                 className={themeClasses.textarea}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}

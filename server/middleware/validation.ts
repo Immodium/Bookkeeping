@@ -546,6 +546,11 @@ export const validationSets = {
       .isIn(['active', 'paused', 'ended'])
       .withMessage('Status must be active, paused, or ended'),
     body('retainerData.auto_renew').optional().isBoolean().withMessage('Auto renew must be boolean'),
+    body('retainerData.email_schedule_enabled').optional().isBoolean().withMessage('Email schedule enabled must be boolean'),
+    body('retainerData.reminder_days_before').optional().isInt({ min: 0, max: 365 }).withMessage('Reminder days before must be between 0 and 365'),
+    body('retainerData.auto_overdue_reminders').optional().isBoolean().withMessage('Auto overdue reminders must be boolean'),
+    body('retainerData.overdue_reminder_interval_days').optional().isInt({ min: 1, max: 365 }).withMessage('Overdue reminder interval must be between 1 and 365 days'),
+    body('retainerData.max_overdue_reminders').optional().isInt({ min: 1, max: 100 }).withMessage('Max overdue reminders must be between 1 and 100'),
     body('retainerData.description').optional().trim().isLength({ max: 1000 }).escape(),
     body('retainerData.notes').optional().trim().isLength({ max: 2000 }).escape()
   ] as ValidationChain[],
@@ -562,6 +567,11 @@ export const validationSets = {
     body('retainerData.end_date').optional().isISO8601(),
     body('retainerData.status').optional().isIn(['active', 'paused', 'ended']),
     body('retainerData.auto_renew').optional().isBoolean(),
+    body('retainerData.email_schedule_enabled').optional().isBoolean(),
+    body('retainerData.reminder_days_before').optional().isInt({ min: 0, max: 365 }),
+    body('retainerData.auto_overdue_reminders').optional().isBoolean(),
+    body('retainerData.overdue_reminder_interval_days').optional().isInt({ min: 1, max: 365 }),
+    body('retainerData.max_overdue_reminders').optional().isInt({ min: 1, max: 100 }),
     body('retainerData.description').optional().trim().isLength({ max: 1000 }).escape(),
     body('retainerData.notes').optional().trim().isLength({ max: 2000 }).escape()
   ] as ValidationChain[],

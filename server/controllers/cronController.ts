@@ -3,6 +3,7 @@
 
 import { Request, Response } from 'express';
 import { recurringInvoiceProcessorService } from '../services/RecurringInvoiceProcessorService.js';
+import { retainerReminderProcessorService } from '../services/RetainerReminderProcessorService.js';
 import { asyncHandler } from '../middleware/index.js';
 
 /**
@@ -48,6 +49,49 @@ export const processRecurringInvoicesCron = asyncHandler(async (req: Request, re
     const errorMessage = (error as Error).message;
     console.error('Error processing recurring invoices:', errorMessage);
     
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * Process retainer reminders - Cron endpoint
+ * POST /api/cron/retainer-reminders
+ */
+export const processRetainerRemindersCron = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  console.log('Cron job triggered: Processing retainer reminders');
+
+  try {
+    const result = await retainerReminderProcessorService.processAllDueReminders();
+    const success = result.failed === 0 || result.processed > 0;
+
+    if (success) {
+      res.json({
+        success: true,
+        data: {
+          processed: result.processed,
+          skipped: result.skipped,
+          failed: result.failed,
+          errors: result.errors,
+          timestamp: new Date().toISOString()
+        },
+        message: `Processed ${result.processed} retainer reminder(s)${result.failed > 0 ? ` with ${result.failed} failures` : ''}`
+      });
+      return;
+    }
+
+    res.status(500).json({
+      success: false,
+      error: `Failed to process retainer reminders: ${result.errors.join('; ')}`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    const errorMessage = (error as Error).message;
+    console.error('Error processing retainer reminders:', errorMessage);
+
     res.status(500).json({
       success: false,
       error: errorMessage,

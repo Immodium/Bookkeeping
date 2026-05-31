@@ -8,8 +8,9 @@ import { pdfService } from '@/services/pdf.svc';
 import { useCompanySettings } from '@/hooks/useSettings.hook';
 import { formatClientAddress } from '@/utils/formatting';
 import { authenticatedFetch } from '@/utils/api';
+import { getEmailConfigurationStatus } from '@/utils/emailConfig.util';
 import { toast } from 'sonner';
-import type { Invoice } from '@/types';
+import type { Invoice, EmailConfigStatus } from '@/types';
 
 interface InvoiceViewModalProps {
   invoice: Invoice | null;
@@ -22,9 +23,31 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ invoice, isO
   const { settings: companySettings, isLoading: companySettingsLoading } = useCompanySettings();
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailConfig, setEmailConfig] = useState<EmailConfigStatus | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    getEmailConfigurationStatus()
+      .then(setEmailConfig)
+      .catch(() => {
+        setEmailConfig({
+          isConfigured: false,
+          isEnabled: false,
+          missingFields: ['Configuration check failed'],
+          canSendEmails: false
+        });
+      });
+  }, [isOpen]);
 
   const handleSendEmail = async () => {
     if (!invoice) return;
+    if (!(emailConfig?.canSendEmails ?? false)) {
+      toast.error('Email settings are not configured');
+      return;
+    }
     if (!invoice.client_email) {
       toast.error('No email address on file for this client');
       return;
@@ -100,6 +123,7 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ invoice, isO
   const taxAmount = invoice.tax_amount || 0;
   const shippingAmount = invoice.shipping_amount || 0;
   const subtotal = invoice.amount - taxAmount - shippingAmount;
+  const hasClientEmail = typeof invoice.client_email === 'string' && invoice.client_email.trim().length > 0;
 
   // Get template from localStorage or default to modern-blue
   const template = localStorage.getItem('invoiceTemplate') || 'modern-blue';
@@ -265,16 +289,21 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ invoice, isO
                 Mark as Paid
               </button>
             )}
-            {invoice.client_email && (
-              <button
-                onClick={handleSendEmail}
-                disabled={isSendingEmail}
-                className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-              >
-                <Mail className="h-4 w-4 mr-2" />
-                {isSendingEmail ? 'Sending...' : 'Email Invoice'}
-              </button>
-            )}
+            <button
+              onClick={handleSendEmail}
+              disabled={isSendingEmail || !hasClientEmail || !(emailConfig?.canSendEmails ?? false)}
+              title={
+                !hasClientEmail
+                  ? 'Client email is required to send invoices'
+                  : !(emailConfig?.canSendEmails ?? false)
+                    ? 'Configure email settings to send invoices'
+                    : undefined
+              }
+              className="flex items-center px-3 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              <Mail className="h-4 w-4 mr-2" />
+              {isSendingEmail ? 'Sending...' : 'Email Invoice'}
+            </button>
             <button
               onClick={handleDownloadPDF}
               disabled={isGeneratingPDF}

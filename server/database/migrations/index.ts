@@ -26,6 +26,7 @@ import { up as migration021 } from './021_add_fk_indexes.js';
 import { up as migration022 } from './022_provision_tenant_schemas.js';
 import { up as migration023 } from './023_reset_sequences.js';
 import { up as migration024 } from './024_add_tenant_public_ids.js';
+import { up as migration025 } from './025_add_retainer_reminder_settings.js';
 
 /**
  * Whether migrations have completed successfully.
@@ -67,6 +68,7 @@ const migrations: Migration[] = [
   { id: '022', name: 'provision_tenant_schemas', up: migration022 },
   { id: '023', name: 'reset_sequences', up: migration023 },
   { id: '024', name: 'add_tenant_public_ids', up: migration024 },
+  { id: '025', name: 'add_retainer_reminder_settings', up: migration025 },
 ];
 
 /**

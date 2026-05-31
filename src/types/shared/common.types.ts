@@ -134,11 +134,14 @@ export interface ProjectSettings {
   };
   email?: {
     enabled: boolean;
+    provider?: 'smtp' | 'sendgrid' | 'resend';
     smtp_host: string;
     smtp_port: number;
     smtp_user: string;
     smtp_pass?: string;
     email_from: string;
+    resend_configured?: boolean;
+    sendgrid_configured?: boolean;
     configured: boolean;
   };
   security: {

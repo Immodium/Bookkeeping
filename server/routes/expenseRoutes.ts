@@ -113,11 +113,19 @@ router.post('/bulk-import',
   async (req: any, res: any) => {
     try {
       const { expenses } = req.body;
+      const tenantId = req.tenantId || req.user?.tenant_id;
       
       if (!expenses || !Array.isArray(expenses)) {
         return res.status(400).json({
           success: false,
           error: 'Expenses array is required'
+        });
+      }
+
+      if (!tenantId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Tenant context is required'
         });
       }
 
@@ -131,8 +139,30 @@ router.post('/bulk-import',
       for (let i = 0; i < expenses.length; i++) {
         const expenseData = expenses[i];
         try {
+          const merchant = typeof expenseData?.merchant === 'string' ? expenseData.merchant.trim() : '';
+          const vendor = typeof expenseData?.vendor === 'string' ? expenseData.vendor.trim() : '';
+          const description = typeof expenseData?.description === 'string'
+            ? expenseData.description.trim()
+            : '';
+          const amount = typeof expenseData?.amount === 'number'
+            ? expenseData.amount
+            : Math.abs(parseFloat(String(expenseData?.amount || '0').replace(/[$,]/g, '')) || 0);
+
+          const normalizedExpense = {
+            date: String(expenseData?.date || ''),
+            vendor: vendor || merchant || undefined,
+            amount,
+            description: description || vendor || merchant || 'Imported expense',
+            category: expenseData?.category ? String(expenseData.category) : 'Other',
+            status: expenseData?.status ? String(expenseData.status) : 'pending',
+            notes: typeof expenseData?.notes === 'string' ? expenseData.notes : undefined,
+            is_billable: Boolean(expenseData?.is_billable),
+            client_id: typeof expenseData?.client_id === 'number' ? expenseData.client_id : undefined,
+            receipt_url: typeof expenseData?.receipt_url === 'string' ? expenseData.receipt_url : undefined
+          };
+
           // Use the expense service directly instead of the controller
-          await expenseService.createExpense(expenseData);
+          await expenseService.createExpense(normalizedExpense, tenantId);
           successCount++;
         } catch (error) {
           errorCount++;

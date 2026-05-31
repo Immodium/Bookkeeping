@@ -307,7 +307,7 @@ export const emailConfig: EmailConfig = {
     process.env.EMAIL_PROVIDER === 'sendgrid'
       ? !!(process.env.SENDGRID_API_KEY && (process.env.SENDGRID_FROM || process.env.EMAIL_FROM))
       : process.env.EMAIL_PROVIDER === 'resend'
-        ? !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM)
+        ? !!process.env.RESEND_API_KEY
         : !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
   )
 };

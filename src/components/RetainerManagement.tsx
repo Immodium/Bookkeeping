@@ -3,10 +3,14 @@ import {
   Plus,
   Search,
   Repeat,
+  Mail,
+  Edit,
+  Trash2,
+  Table,
+  LayoutGrid,
   DollarSign,
   Calendar,
   PauseCircle,
-  XCircle,
   PlayCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,8 +20,9 @@ import { PaginationControls } from './ui/PaginationControls';
 import { RetainersList } from './retainers/RetainersList';
 import { usePagination } from '@/hooks/usePagination';
 import { filterByDateRange, getDateRangeForPeriod } from '@/utils/data';
+import { formatDateSync } from '@/components/ui/FormattedDate';
 import { FormattedCurrency } from '@/components/ui/FormattedCurrency';
-import { themeClasses, getButtonClasses, getIconColorClasses } from '@/utils/themeUtils.util';
+import { themeClasses, getButtonClasses, getIconColorClasses, getStatusColor } from '@/utils/themeUtils.util';
 import { Client, DateRange, Retainer, RetainerBillingCycle, RetainerFormData, RetainerStatus, TimePeriod } from '@/types';
 
 type RetainerStats = {
@@ -55,11 +60,13 @@ interface RetainerFormProps {
   retainer: Retainer | null;
   clients: Client[];
   onSave: (retainerData: RetainerFormData) => Promise<void>;
+  onEmailRetainer: (retainerData: RetainerFormData) => Promise<void>;
   onCancel: () => void;
 }
 
-const RetainerForm: React.FC<RetainerFormProps> = ({ retainer, clients, onSave, onCancel }) => {
+const RetainerForm: React.FC<RetainerFormProps> = ({ retainer, clients, onSave, onEmailRetainer, onCancel }) => {
   const [isSaving, setIsSaving] = useState(false);
+  const [isEmailing, setIsEmailing] = useState(false);
   const [formData, setFormData] = useState<RetainerFormData>({
     client_id: retainer?.client_id || 0,
     name: retainer?.name || '',
@@ -72,6 +79,11 @@ const RetainerForm: React.FC<RetainerFormProps> = ({ retainer, clients, onSave, 
     end_date: retainer?.end_date || '',
     status: retainer?.status || 'active',
     auto_renew: retainer ? retainer.auto_renew === 1 : true,
+    email_schedule_enabled: retainer ? retainer.email_schedule_enabled === 1 : false,
+    reminder_days_before: retainer?.reminder_days_before ?? 3,
+    auto_overdue_reminders: retainer ? retainer.auto_overdue_reminders === 1 : false,
+    overdue_reminder_interval_days: retainer?.overdue_reminder_interval_days ?? 7,
+    max_overdue_reminders: retainer?.max_overdue_reminders ?? 3,
     notes: retainer?.notes || ''
   });
 
@@ -85,6 +97,18 @@ const RetainerForm: React.FC<RetainerFormProps> = ({ retainer, clients, onSave, 
       toast.error('Amount must be greater than 0');
       return;
     }
+    if (formData.reminder_days_before < 0) {
+      toast.error('Reminder days before due date must be 0 or greater');
+      return;
+    }
+    if (formData.overdue_reminder_interval_days < 1) {
+      toast.error('Overdue reminder interval must be at least 1 day');
+      return;
+    }
+    if (formData.max_overdue_reminders < 1) {
+      toast.error('Max overdue reminders must be at least 1');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -94,6 +118,39 @@ const RetainerForm: React.FC<RetainerFormProps> = ({ retainer, clients, onSave, 
       toast.error(message);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleEmailRetainer = async () => {
+    if (!formData.client_id) {
+      toast.error('Please select a client');
+      return;
+    }
+    if (formData.amount <= 0) {
+      toast.error('Amount must be greater than 0');
+      return;
+    }
+    if (formData.reminder_days_before < 0) {
+      toast.error('Reminder days before due date must be 0 or greater');
+      return;
+    }
+    if (formData.overdue_reminder_interval_days < 1) {
+      toast.error('Overdue reminder interval must be at least 1 day');
+      return;
+    }
+    if (formData.max_overdue_reminders < 1) {
+      toast.error('Max overdue reminders must be at least 1');
+      return;
+    }
+
+    setIsEmailing(true);
+    try {
+      await onEmailRetainer(formData);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to email retainer';
+      toast.error(message);
+    } finally {
+      setIsEmailing(false);
     }
   };
 
@@ -248,9 +305,111 @@ const RetainerForm: React.FC<RetainerFormProps> = ({ retainer, clients, onSave, 
                 </label>
               </div>
 
+              <div className="space-y-4 border border-border rounded-lg p-4 bg-muted/20">
+                <h3 className="text-sm font-semibold text-foreground">Email Reminder Schedule</h3>
+                <div className="flex items-center gap-3">
+                  <input
+                    id="retainer-email-schedule-enabled"
+                    type="checkbox"
+                    checked={formData.email_schedule_enabled}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, email_schedule_enabled: event.target.checked }))
+                    }
+                    className="rounded border-border"
+                  />
+                  <label htmlFor="retainer-email-schedule-enabled" className="text-sm text-foreground">
+                    Enable automatic reminder emails for this retainer
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className={themeClasses.label}>Days Before Due Date</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={365}
+                      className={themeClasses.input}
+                      disabled={!formData.email_schedule_enabled}
+                      value={formData.reminder_days_before}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          reminder_days_before: Number.parseInt(event.target.value || '0', 10)
+                        }))
+                      }
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">Send a pre-due reminder this many days before due date.</p>
+                  </div>
+
+                  <div>
+                    <label className={themeClasses.label}>Overdue Reminder Interval (days)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={365}
+                      className={themeClasses.input}
+                      disabled={!formData.email_schedule_enabled || !formData.auto_overdue_reminders}
+                      value={formData.overdue_reminder_interval_days}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          overdue_reminder_interval_days: Number.parseInt(event.target.value || '1', 10)
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <label className={themeClasses.label}>Max Overdue Reminders</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      className={themeClasses.input}
+                      disabled={!formData.email_schedule_enabled || !formData.auto_overdue_reminders}
+                      value={formData.max_overdue_reminders}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          max_overdue_reminders: Number.parseInt(event.target.value || '1', 10)
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    id="retainer-auto-overdue-reminders"
+                    type="checkbox"
+                    checked={formData.auto_overdue_reminders}
+                    disabled={!formData.email_schedule_enabled}
+                    onChange={(event) =>
+                      setFormData((prev) => ({ ...prev, auto_overdue_reminders: event.target.checked }))
+                    }
+                    className="rounded border-border"
+                  />
+                  <label htmlFor="retainer-auto-overdue-reminders" className="text-sm text-foreground">
+                    Continue sending reminders after due date
+                  </label>
+                </div>
+              </div>
+
               <div className="flex justify-end space-x-4">
                 <button type="button" onClick={onCancel} className={getButtonClasses('secondary')}>
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEmailRetainer}
+                  disabled={isSaving || isEmailing}
+                  className={getButtonClasses('secondary')}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Mail className="h-4 w-4" />
+                    {isEmailing ? 'Saving & Sending...' : retainer ? 'Update & Email Retainer' : 'Save & Email Retainer'}
+                  </span>
                 </button>
                 <button type="submit" disabled={isSaving} className={getButtonClasses('primary')}>
                   {isSaving ? 'Saving...' : retainer ? 'Update Retainer' : 'Save Retainer'}
@@ -269,8 +428,10 @@ export const RetainerManagement: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [stats, setStats] = useState<RetainerStats>(DEFAULT_STATS);
   const [loading, setLoading] = useState(false);
+  const [sendingEmailId, setSendingEmailId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingRetainer, setEditingRetainer] = useState<Retainer | null>(null);
+  const [viewMode, setViewMode] = useState<'panel' | 'table'>('table');
 
   const [filters, setFilters] = useState({
     searchTerm: '',
@@ -355,6 +516,78 @@ export const RetainerManagement: React.FC = () => {
     await Promise.all([loadRetainers(), loadStats()]);
   };
 
+  const handleEmailRetainer = async (retainerData: RetainerFormData) => {
+    const selectedClient = clients.find((client) => client.id === retainerData.client_id);
+    const recipientEmail = selectedClient?.email?.trim();
+
+    if (!recipientEmail) {
+      throw new Error('Selected client does not have an email address');
+    }
+
+    const path = editingRetainer ? `/api/retainers/${editingRetainer.id}` : '/api/retainers';
+    const method = editingRetainer ? 'PUT' : 'POST';
+    const payload = {
+      retainerData: {
+        ...retainerData,
+        end_date: retainerData.end_date || undefined
+      }
+    };
+
+    const saveResponse = await authenticatedFetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const saveData = await saveResponse.json();
+
+    if (!saveData.success || !saveData.data?.id) {
+      throw new Error(saveData.error || 'Failed to save retainer before sending email');
+    }
+
+    const emailResponse = await authenticatedFetch(`/api/retainers/${saveData.data.id}/email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: recipientEmail })
+    });
+    const emailResult = await emailResponse.json();
+
+    if (!emailResult.success) {
+      throw new Error(emailResult.message || 'Failed to send retainer email');
+    }
+
+    toast.success(`Retainer emailed to ${recipientEmail}`);
+    setShowForm(false);
+    setEditingRetainer(null);
+    await Promise.all([loadRetainers(), loadStats()]);
+  };
+
+  const handleSendRetainerEmail = async (retainer: Retainer) => {
+    const toEmail = retainer.client_email;
+    if (!toEmail) {
+      toast.error('No email address on file for this client');
+      return;
+    }
+
+    setSendingEmailId(retainer.id);
+    try {
+      const response = await authenticatedFetch(`/api/retainers/${retainer.id}/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: toEmail })
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success(`Retainer emailed to ${toEmail}`);
+      } else {
+        throw new Error(result.message || 'Failed to send retainer email');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send retainer email');
+    } finally {
+      setSendingEmailId(null);
+    }
+  };
+
   const handleDeleteRetainer = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this retainer?')) {
       return;
@@ -405,12 +638,108 @@ export const RetainerManagement: React.FC = () => {
     }
   });
 
+  const renderPanelView = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {pagination.paginatedData.map((retainer) => (
+        <div
+          key={retainer.id}
+          className="bg-card rounded-lg shadow-sm border border-border p-6 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => {
+            setEditingRetainer(retainer);
+            setShowForm(true);
+          }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              setEditingRetainer(retainer);
+              setShowForm(true);
+            }
+          }}
+        >
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h3 className="font-semibold text-foreground">{retainer.name}</h3>
+              <p className="text-sm text-muted-foreground">{retainer.client_name || `Client #${retainer.client_id}`}</p>
+            </div>
+            <div className="flex space-x-2">
+              {retainer.client_email && (
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleSendRetainerEmail(retainer);
+                  }}
+                  className="p-1 text-muted-foreground hover:text-blue-600"
+                  disabled={sendingEmailId === retainer.id}
+                  title="Email retainer"
+                >
+                  <Mail className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setEditingRetainer(retainer);
+                  setShowForm(true);
+                }}
+                className="p-1 text-muted-foreground hover:text-blue-600"
+                title="Edit retainer"
+              >
+                <Edit className="h-4 w-4" />
+              </button>
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleDeleteRetainer(retainer.id);
+                }}
+                className="p-1 text-muted-foreground hover:text-red-600"
+                title="Delete retainer"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Amount</span>
+              <span className="font-medium text-foreground">
+                <FormattedCurrency amount={retainer.amount} />
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Billing</span>
+              <span className="text-sm text-foreground">{BILLING_CYCLE_LABELS[retainer.billing_cycle]}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Next Invoice</span>
+              <span className="text-sm text-foreground">{formatDateSync(retainer.next_invoice_date)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Status</span>
+              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(retainer.status)}`}>
+                {retainer.status.charAt(0).toUpperCase() + retainer.status.slice(1)}
+              </span>
+            </div>
+            {retainer.description && (
+              <div className="pt-2 border-t border-border">
+                <p className="text-sm text-muted-foreground line-clamp-2">{retainer.description}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   if (showForm) {
     return (
       <RetainerForm
         retainer={editingRetainer}
         clients={clients}
         onSave={handleSaveRetainer}
+        onEmailRetainer={handleEmailRetainer}
         onCancel={() => {
           setShowForm(false);
           setEditingRetainer(null);
@@ -522,6 +851,30 @@ export const RetainerManagement: React.FC = () => {
                 className="max-w-xs"
               />
             </div>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setViewMode('panel')}
+                className={`p-2 rounded-lg border ${
+                  viewMode === 'panel'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
+                }`}
+                title="Panel View"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`p-2 rounded-lg border ${
+                  viewMode === 'table'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
+                }`}
+                title="Table View"
+              >
+                <Table className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -532,6 +885,8 @@ export const RetainerManagement: React.FC = () => {
               <p className="text-muted-foreground">Loading retainers...</p>
             </div>
           </div>
+        ) : viewMode === 'panel' ? (
+          renderPanelView()
         ) : (
           <RetainersList
             retainers={pagination.paginatedData}

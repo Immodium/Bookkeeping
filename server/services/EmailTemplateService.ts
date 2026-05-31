@@ -169,6 +169,57 @@ ${p('Thank you for your continued business!')}`,
     text: 'Hi {{client_name}}, your retainer {{retainer_name}} for {{amount}} ({{billing_cycle}}) starts {{start_date}}. View: {{portal_url}}'
   },
 
+  retainer_due_soon: {
+    subject: 'Upcoming retainer reminder — {{retainer_name}} is due in {{days_until_due}} day(s)',
+    html: `${h1('Retainer reminder')}
+${p('Hi {{client_name}},')}
+${p('This is a reminder that your retainer <strong>{{retainer_name}}</strong> is due in <strong>{{days_until_due}} day(s)</strong>.')}
+<table cellpadding="0" cellspacing="0" style="background-color:#f9f9f9;border-radius:8px;padding:20px 24px;margin:20px 0;width:100%;border-collapse:collapse;">
+  <tr>
+    <td style="font-size:14px;color:#666;padding:6px 0;">Retainer</td>
+    <td style="font-size:14px;font-weight:600;color:#333;text-align:right;">{{retainer_name}}</td>
+  </tr>
+  <tr>
+    <td style="font-size:14px;color:#666;padding:6px 0;">Amount</td>
+    <td style="font-size:14px;font-weight:600;color:#333;text-align:right;">{{amount}}</td>
+  </tr>
+  <tr>
+    <td style="font-size:14px;color:#666;padding:6px 0;">Billing Cycle</td>
+    <td style="font-size:14px;font-weight:600;color:#333;text-align:right;text-transform:capitalize;">{{billing_cycle}}</td>
+  </tr>
+  <tr>
+    <td style="font-size:14px;color:#666;padding:6px 0;">Due Date</td>
+    <td style="font-size:14px;font-weight:600;color:#333;text-align:right;">{{next_invoice_date}}</td>
+  </tr>
+</table>
+<div style="text-align:center;">${btn('{{portal_url}}', 'View Retainer')}</div>`,
+    text: 'Hi {{client_name}}, this is a reminder that retainer {{retainer_name}} for {{amount}} is due in {{days_until_due}} day(s) on {{next_invoice_date}}. View: {{portal_url}}'
+  },
+
+  retainer_overdue_reminder: {
+    subject: 'Overdue retainer reminder — {{retainer_name}} is {{days_overdue}} day(s) overdue',
+    html: `${h1('Overdue retainer reminder')}
+${p('Hi {{client_name}},')}
+${p('Your retainer <strong>{{retainer_name}}</strong> is currently <strong>{{days_overdue}} day(s)</strong> overdue.')}
+<table cellpadding="0" cellspacing="0" style="background-color:#fff7ed;border-radius:8px;padding:20px 24px;margin:20px 0;width:100%;border-collapse:collapse;border:1px solid #fdba74;">
+  <tr>
+    <td style="font-size:14px;color:#666;padding:6px 0;">Retainer</td>
+    <td style="font-size:14px;font-weight:600;color:#333;text-align:right;">{{retainer_name}}</td>
+  </tr>
+  <tr>
+    <td style="font-size:14px;color:#666;padding:6px 0;">Amount</td>
+    <td style="font-size:14px;font-weight:600;color:#333;text-align:right;">{{amount}}</td>
+  </tr>
+  <tr>
+    <td style="font-size:14px;color:#666;padding:6px 0;">Original Due Date</td>
+    <td style="font-size:14px;font-weight:600;color:#333;text-align:right;">{{next_invoice_date}}</td>
+  </tr>
+</table>
+${p('Please review the retainer details and take action when possible.')}
+<div style="text-align:center;">${btn('{{portal_url}}', 'Review Retainer')}</div>`,
+    text: 'Hi {{client_name}}, retainer {{retainer_name}} for {{amount}} is {{days_overdue}} day(s) overdue (due {{next_invoice_date}}). View: {{portal_url}}'
+  },
+
   report: {
     subject: '{{report_type}} — {{report_period}}',
     html: `${h1('{{report_type}}')}

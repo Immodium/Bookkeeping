@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { EditInvoicePage } from '@/components/invoices/EditInvoicePage';
+import { getEmailConfigurationStatus } from '@/utils/emailConfig.util';
 
 const { mockNavigate, mockAuthenticatedFetch, mockGetSetting } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -75,17 +76,21 @@ vi.mock('sonner', () => ({
 }));
 
 describe('EditInvoicePage', () => {
+  let invoiceStatus: 'draft' | 'sent' | 'paid' | 'overdue' = 'paid';
+
   beforeEach(() => {
     mockNavigate.mockReset();
     mockGetSetting.mockReset();
     mockAuthenticatedFetch.mockReset();
     mockGetSetting.mockResolvedValue(null);
+    invoiceStatus = 'paid';
+    vi.mocked(getEmailConfigurationStatus).mockResolvedValue({ canSendEmails: false } as any);
 
     const invoiceRecord = {
       id: 1,
       invoice_number: 'INV-001',
       due_date: '2026-04-30',
-      status: 'paid',
+      status: invoiceStatus,
       client_id: 10,
       line_items: JSON.stringify([
         { id: 1, description: 'Consulting', quantity: 1, unit_price: 100, total: 100 }
@@ -113,7 +118,7 @@ describe('EditInvoicePage', () => {
     mockAuthenticatedFetch.mockImplementation(async (url: string) => {
       if (url === '/api/invoices/1') {
         return {
-          json: async () => ({ data: invoiceRecord })
+          json: async () => ({ data: { ...invoiceRecord, status: invoiceStatus } })
         };
       }
 
@@ -132,6 +137,29 @@ describe('EditInvoicePage', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /save invoice/i })).toBeInTheDocument();
+    });
+  });
+
+  it('always renders Email Invoice in paid status (disabled when email config is unavailable)', async () => {
+    render(<EditInvoicePage />);
+
+    await waitFor(() => {
+      const emailButton = screen.getByRole('button', { name: /email invoice/i });
+      expect(emailButton).toBeInTheDocument();
+      expect(emailButton).toBeDisabled();
+    });
+  });
+
+  it('keeps Email Invoice available for sent invoices to support resend', async () => {
+    invoiceStatus = 'sent';
+    vi.mocked(getEmailConfigurationStatus).mockResolvedValue({ canSendEmails: true } as any);
+
+    render(<EditInvoicePage />);
+
+    await waitFor(() => {
+      const emailButton = screen.getByRole('button', { name: /email invoice/i });
+      expect(emailButton).toBeInTheDocument();
+      expect(emailButton).toBeEnabled();
     });
   });
 });

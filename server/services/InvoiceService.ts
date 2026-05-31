@@ -247,7 +247,7 @@ export class InvoiceService {
     last_email_attempt?: string;
   }, tenantId?: number): Promise<number> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
-    if (!invoiceData || !invoiceData.client_id || !invoiceData.amount) {
+    if (!invoiceData || !invoiceData.client_id || invoiceData.amount === undefined || invoiceData.amount === null) {
       throw new Error('Invalid invoice data - client_id and amount are required');
     }
 

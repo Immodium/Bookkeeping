@@ -19,6 +19,7 @@ import { DateRangeFilter } from './ui/DateRangeFilter';
 import { PaginationControls } from './ui/PaginationControls';
 import { RetainersList } from './retainers/RetainersList';
 import { usePagination } from '@/hooks/usePagination';
+import { usePersistentViewMode } from '@/hooks/usePersistentViewMode';
 import { filterByDateRange, getDateRangeForPeriod } from '@/utils/data';
 import { formatDateSync } from '@/components/ui/FormattedDate';
 import { FormattedCurrency } from '@/components/ui/FormattedCurrency';
@@ -431,7 +432,7 @@ export const RetainerManagement: React.FC = () => {
   const [sendingEmailId, setSendingEmailId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingRetainer, setEditingRetainer] = useState<Retainer | null>(null);
-  const [viewMode, setViewMode] = useState<'panel' | 'table'>('table');
+  const [viewMode, setViewMode] = usePersistentViewMode('retainers-view-mode', 'table');
 
   const [filters, setFilters] = useState({
     searchTerm: '',

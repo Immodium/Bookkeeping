@@ -20,6 +20,7 @@ import { PaymentImportExport } from './payments/PaymentImportExport';
 import { PaginationControls } from './ui/PaginationControls';
 import { DateRangeFilter } from './ui/DateRangeFilter';
 import { usePagination } from '@/hooks/usePagination';
+import { usePersistentViewMode } from '@/hooks/usePersistentViewMode';
 import { toast } from 'sonner';
 import { 
   themeClasses, 
@@ -39,9 +40,9 @@ export const PaymentManagement: React.FC = () => {
     showCreateForm: false,
     showImportExport: false,
     isViewModalOpen: false,
-    viewMode: 'table' as 'panel' | 'table',
     loading: false
   });
+  const [viewMode, setViewMode] = usePersistentViewMode('payments-view-mode', 'table');
 
   const [filters, setFilters] = useState({
     searchTerm: '',
@@ -479,9 +480,9 @@ export const PaymentManagement: React.FC = () => {
             {/* Right section - View Toggle (20%) */}
             <div className="flex space-x-2">
               <button
-                onClick={() => updateUiState({ viewMode: 'panel' })}
+                onClick={() => setViewMode('panel')}
                 className={`p-2 rounded-lg border ${
-                  uiState.viewMode === 'panel'
+                  viewMode === 'panel'
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
                 }`}
@@ -490,9 +491,9 @@ export const PaymentManagement: React.FC = () => {
                 <LayoutGrid className="h-4 w-4" />
               </button>
               <button
-                onClick={() => updateUiState({ viewMode: 'table' })}
+                onClick={() => setViewMode('table')}
                 className={`p-2 rounded-lg border ${
-                  uiState.viewMode === 'table'
+                  viewMode === 'table'
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
                 }`}
@@ -512,7 +513,7 @@ export const PaymentManagement: React.FC = () => {
               <p className="text-muted-foreground">Loading payments...</p>
             </div>
           </div>
-        ) : uiState.viewMode === 'panel' ? renderPanelView() : (
+        ) : viewMode === 'panel' ? renderPanelView() : (
           <PaymentsList
             payments={pagination.paginatedData}
             onEditPayment={handleEditPayment}

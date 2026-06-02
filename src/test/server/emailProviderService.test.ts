@@ -32,7 +32,7 @@ describe('EmailProviderService resend sender address', () => {
 
     expect(result.success).toBe(true);
     expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
-      from: 'no-reply-42@slimbooks.io',
+      from: 'mail-42@slimbooks.io',
       to: 'client@example.com',
       subject: 'Invoice #1001'
     }));

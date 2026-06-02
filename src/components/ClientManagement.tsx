@@ -6,6 +6,7 @@ import { ClientImportExport } from './clients/ClientImportExport';
 import { PaginationControls } from './ui/PaginationControls';
 import { authenticatedFetch } from '@/utils/api';
 import { usePagination } from '@/hooks/usePagination';
+import { usePersistentViewMode } from '@/hooks/usePersistentViewMode';
 import { toast } from 'sonner';
 import { formatDateSync } from '@/components/ui/FormattedDate';
 import { themeClasses, getButtonClasses, getIconColorClasses } from '@/utils/themeUtils.util';
@@ -14,9 +15,9 @@ import { Client, ClientFormData } from '@/types';
 export const ClientManagement: React.FC = () => {
   const [uiState, setUiState] = useState({
     showCreateForm: false,
-    showImportExport: false,
-    viewMode: 'panel' as 'panel' | 'table'
+    showImportExport: false
   });
+  const [viewMode, setViewMode] = usePersistentViewMode('clients-view-mode', 'panel');
 
   const [filters, setFilters] = useState({
     searchTerm: ''
@@ -347,9 +348,9 @@ export const ClientManagement: React.FC = () => {
             {/* Right section - View Toggle */}
             <div className="flex space-x-2">
               <button
-                onClick={() => updateUiState({ viewMode: 'panel' })}
+                onClick={() => setViewMode('panel')}
                 className={`p-2 rounded-lg border ${
-                  uiState.viewMode === 'panel'
+                  viewMode === 'panel'
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
                 }`}
@@ -358,9 +359,9 @@ export const ClientManagement: React.FC = () => {
                 <LayoutGrid className="h-4 w-4" />
               </button>
               <button
-                onClick={() => updateUiState({ viewMode: 'table' })}
+                onClick={() => setViewMode('table')}
                 className={`p-2 rounded-lg border ${
-                  uiState.viewMode === 'table'
+                  viewMode === 'table'
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
                 }`}
@@ -373,7 +374,7 @@ export const ClientManagement: React.FC = () => {
         </div>
 
         {/* Clients Display */}
-        {uiState.viewMode === 'panel' ? renderPanelView() : renderTableView()}
+        {viewMode === 'panel' ? renderPanelView() : renderTableView()}
 
         {/* Pagination Controls */}
         <PaginationControls

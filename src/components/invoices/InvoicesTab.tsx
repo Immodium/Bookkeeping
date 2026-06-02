@@ -7,6 +7,7 @@ import { InvoiceViewModal } from './InvoiceViewModal';
 import { PaginationControls } from '../ui/PaginationControls';
 import { DateRangeFilter } from '../ui/DateRangeFilter';
 import { usePagination } from '@/hooks/usePagination';
+import { usePersistentViewMode } from '@/hooks/usePersistentViewMode';
 import { getStatusColor } from '@/utils/themeUtils.util';
 import { filterByDateRange, getDateRangeForPeriod } from '@/utils/data';
 import { formatDateSync } from '@/components/ui/FormattedDate';
@@ -27,7 +28,7 @@ export const InvoicesTab = () => {
   const [clientFilter, setClientFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState<TimePeriod>('this-month');
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
-  const [viewMode, setViewMode] = useState<'panel' | 'table'>('panel');
+  const [viewMode, setViewMode] = usePersistentViewMode('invoices-view-mode', 'panel');
   const [sendingInvoiceId, setSendingInvoiceId] = useState<number | null>(null);
 
   useEffect(() => {

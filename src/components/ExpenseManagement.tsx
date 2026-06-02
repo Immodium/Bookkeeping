@@ -21,6 +21,7 @@ import { PaginationControls } from './ui/PaginationControls';
 import { DateRangeFilter } from './ui/DateRangeFilter';
 import { authenticatedFetch, apiPost, apiPut, apiDelete } from '@/utils/api';
 import { usePagination } from '@/hooks/usePagination';
+import { usePersistentViewMode } from '@/hooks/usePersistentViewMode';
 import { toast } from 'sonner';
 import { 
   themeClasses, 
@@ -106,9 +107,9 @@ export const ExpenseManagement: React.FC = () => {
   const [uiState, setUiState] = useState({
     showCreateForm: false,
     showImportExport: false,
-    isViewModalOpen: false,
-    viewMode: 'table' as 'panel' | 'table'
+    isViewModalOpen: false
   });
+  const [viewMode, setViewMode] = usePersistentViewMode('expenses-view-mode', 'table');
 
   const [filters, setFilters] = useState({
     searchTerm: '',
@@ -658,9 +659,9 @@ export const ExpenseManagement: React.FC = () => {
             {/* Right section - View Toggle (20%) */}
             <div className="flex space-x-2">
               <button
-                onClick={() => updateUiState({ viewMode: 'panel' })}
+                onClick={() => setViewMode('panel')}
                 className={`p-2 rounded-lg border ${
-                  uiState.viewMode === 'panel'
+                  viewMode === 'panel'
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
                 }`}
@@ -669,9 +670,9 @@ export const ExpenseManagement: React.FC = () => {
                 <LayoutGrid className="h-4 w-4" />
               </button>
               <button
-                onClick={() => updateUiState({ viewMode: 'table' })}
+                onClick={() => setViewMode('table')}
                 className={`p-2 rounded-lg border ${
-                  uiState.viewMode === 'table'
+                  viewMode === 'table'
                     ? 'bg-primary text-primary-foreground border-primary'
                     : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
                 }`}
@@ -685,7 +686,7 @@ export const ExpenseManagement: React.FC = () => {
 
         {/* Expenses Display */}
         <div>
-          {uiState.viewMode === 'panel' ? renderPanelView() : (
+          {viewMode === 'panel' ? renderPanelView() : (
             <ExpensesList
               expenses={pagination.paginatedData}
               onEditExpense={handleEditExpense}

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { authenticatedFetch } from '@/utils/api';
 import { TemplateForm } from './TemplateForm';
 import { formatDateSync } from '@/components/ui/FormattedDate';
+import { usePersistentViewMode } from '@/hooks/usePersistentViewMode';
 import { themeClasses, getButtonClasses, getIconColorClasses } from '@/utils/themeUtils.util';
 import { FormattedCurrency } from '@/components/ui/FormattedCurrency';
 
@@ -17,7 +18,7 @@ export const TemplatesTab = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [frequencyFilter, setFrequencyFilter] = useState('all');
   const [clientFilter, setClientFilter] = useState('all');
-  const [viewMode, setViewMode] = useState<'panel' | 'table'>('panel');
+  const [viewMode, setViewMode] = usePersistentViewMode('invoice-templates-view-mode', 'panel');
 
   useEffect(() => {
     loadTemplates();

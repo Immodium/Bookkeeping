@@ -6,14 +6,12 @@ import { TaxSettings } from './settings/TaxSettings';
 import { ShippingSettings } from './settings/ShippingSettings';
 import { CompanySettings } from './settings/CompanySettings';
 import { GeneralSettingsTab } from './settings/GeneralSettingsTab';
-import { StripeSettingsTab } from './settings/StripeSettingsTab';
 import { NotificationSettingsTab } from './settings/NotificationSettingsTab';
 import { AppearanceSettingsTab } from './settings/AppearanceSettingsTab';
 import { UserManagementTab } from './settings/UserManagementTab';
 import { DatabaseBackupSection } from './settings/DatabaseBackupSection';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { toast } from 'sonner';
-import { useProjectSettings } from '@/hooks/useProjectSettings';
 import type { SettingsTabRef } from '@/types';
 import { usePermissions } from '@/contexts/AuthContext';
 
@@ -29,12 +27,10 @@ export const Settings = () => {
   const generalSettingsRef = useRef<SettingsTabRef>(null);
   const taxSettingsRef = useRef<SettingsTabRef>(null);
   const shippingSettingsRef = useRef<SettingsTabRef>(null);
-  const stripeSettingsRef = useRef<SettingsTabRef>(null);
   const notificationSettingsRef = useRef<SettingsTabRef>(null);
   const appearanceSettingsRef = useRef<SettingsTabRef>(null);
   const userManagementRef = useRef<SettingsTabRef>(null);
 
-  const { settings: projectSettings } = useProjectSettings();
   const { canManageUsers } = usePermissions();
 
   useEffect(() => {
@@ -50,17 +46,12 @@ export const Settings = () => {
       'backup'
     ];
 
-    // Add stripe tab only if the integration is enabled
-    if (projectSettings?.stripe?.enabled) {
-      availableTabs.push('stripe');
-    }
-
     if (hash && availableTabs.includes(hash)) {
       setActiveTab(hash);
     } else {
       setActiveTab('company');
     }
-  }, [location.hash, projectSettings?.stripe?.enabled, canManageUsers]);
+  }, [location.hash, canManageUsers]);
 
   const handleSaveSettings = async () => {
     setIsLoading(true);
@@ -80,9 +71,6 @@ export const Settings = () => {
           break;
         case 'shipping':
           settingsRef = shippingSettingsRef.current;
-          break;
-        case 'stripe':
-          settingsRef = stripeSettingsRef.current;
           break;
         case 'notifications':
           settingsRef = notificationSettingsRef.current;
@@ -121,7 +109,7 @@ export const Settings = () => {
         <div className={themeClasses.sectionHeader}>
           <div>
             <h1 className={themeClasses.sectionTitle}>Settings</h1>
-            <p className={themeClasses.sectionSubtitle}>Manage your application preferences and integrations</p>
+            <p className={themeClasses.sectionSubtitle}>Manage your application preferences</p>
           </div>
           <button
             onClick={handleSaveSettings}
@@ -141,7 +129,6 @@ export const Settings = () => {
               { key: 'general', label: 'General' },
               { key: 'tax', label: 'Tax' },
               { key: 'shipping', label: 'Shipping' },
-              ...(projectSettings?.stripe?.enabled ? [{ key: 'stripe', label: 'Stripe' }] : []),
               { key: 'notifications', label: 'Notifications' },
               { key: 'appearance', label: 'Appearance' },
               ...(canManageUsers ? [{ key: 'users', label: 'User Management' }] : []),
@@ -173,7 +160,6 @@ export const Settings = () => {
           {activeTab === 'general' && <GeneralSettingsTab ref={generalSettingsRef} />}
           {activeTab === 'tax' && <TaxSettings ref={taxSettingsRef} />}
           {activeTab === 'shipping' && <ShippingSettings ref={shippingSettingsRef} />}
-          {activeTab === 'stripe' && projectSettings?.stripe?.enabled && <StripeSettingsTab ref={stripeSettingsRef} />}
           {activeTab === 'notifications' && <NotificationSettingsTab ref={notificationSettingsRef} />}
           {activeTab === 'appearance' && <AppearanceSettingsTab ref={appearanceSettingsRef} />}
           {activeTab === 'users' && canManageUsers && <UserManagementTab ref={userManagementRef} />}

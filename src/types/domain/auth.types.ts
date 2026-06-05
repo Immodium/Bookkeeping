@@ -12,7 +12,6 @@ export interface User extends BaseEntity {
   role: 'admin' | 'client_manager' | 'project_manager' | 'user_manager' | 'user' | 'viewer';
   roles?: Array<'admin' | 'client_manager' | 'project_manager' | 'user_manager' | 'user' | 'viewer'>;
   email_verified: number; // SQLite uses INTEGER for boolean (0 or 1)
-  google_id?: string;
   two_factor_enabled?: number;
   two_factor_secret?: string;
   backup_codes?: string;
@@ -52,16 +51,6 @@ export interface PasswordResetToken {
   expires_at: string;
   used: boolean;
   created_at: string;
-}
-
-export interface OAuthCredentials {
-  id: number;
-  provider: string;
-  client_id: string;
-  client_secret: string;
-  enabled: boolean;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface EmailTemplate {
@@ -121,7 +110,6 @@ export interface SecuritySettings {
   lockout_duration: number; // minutes
   password_requirements: PasswordRequirements;
   require_email_verification: boolean;
-  allow_google_oauth: boolean;
 }
 
 // Default settings
@@ -138,8 +126,7 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   max_failed_attempts: 5,
   lockout_duration: 30, // 30 minutes
   password_requirements: DEFAULT_PASSWORD_REQUIREMENTS,
-  require_email_verification: true,
-  allow_google_oauth: true
+  require_email_verification: true
 };
 
 // Email template names

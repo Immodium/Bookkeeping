@@ -12,8 +12,6 @@ export const getPaymentMethodDisplayName = (method: PaymentMethod): string => {
       return 'Bank Transfer';
     case 'paypal':
       return 'PayPal';
-    case 'stripe':
-      return 'Stripe';
     case 'other':
       return 'Other';
     default:
@@ -67,8 +65,6 @@ export const getPaymentMethodIcon = (method: PaymentMethod): string => {
       return 'Building2';
     case 'paypal':
       return 'Wallet';
-    case 'stripe':
-      return 'CreditCard';
     case 'other':
       return 'HelpCircle';
     default:

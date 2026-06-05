@@ -153,14 +153,13 @@ export class ClientService {
       await databaseService.executeQuery(`
         INSERT INTO clients (
           id, tenant_id, name, first_name, last_name, email, phone, company, address, city, state,
-          zip, country, tax_id, notes, is_active, stripe_customer_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          zip, country, tax_id, notes, is_active, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         clientRecord.id, clientRecord.tenant_id, clientRecord.name, clientRecord.first_name, clientRecord.last_name,
         clientRecord.email, clientRecord.phone, clientRecord.company, clientRecord.address,
         clientRecord.city, clientRecord.state, clientRecord.zip, clientRecord.country,
-        clientRecord.tax_id, clientRecord.notes, clientRecord.is_active,
-        null, clientRecord.created_at, clientRecord.updated_at
+        clientRecord.tax_id, clientRecord.notes, clientRecord.is_active, clientRecord.created_at, clientRecord.updated_at
       ]);
 
       return id;
@@ -228,7 +227,7 @@ export class ClientService {
     // Filter allowed fields
     const allowedFields = [
       'name', 'first_name', 'last_name', 'email', 'phone', 'company', 'address', 'city', 'state',
-      'zip', 'country', 'tax_id', 'notes', 'is_active', 'stripe_customer_id'
+      'zip', 'country', 'tax_id', 'notes', 'is_active'
     ];
     
     const updateData: Record<string, any> = {};

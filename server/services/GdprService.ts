@@ -78,7 +78,6 @@ class GdprService {
          email = ?,
          username = ?,
          password_hash = NULL,
-         google_id = NULL,
          two_factor_secret = NULL,
          backup_codes = NULL,
          updated_at = NOW()

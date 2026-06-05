@@ -19,7 +19,6 @@ export interface Client extends BaseEntity {
   country?: string;
   tax_id?: string;
   notes?: string;
-  stripe_customer_id?: string;
   is_active?: number; // SQLite boolean (0/1)
 }
 

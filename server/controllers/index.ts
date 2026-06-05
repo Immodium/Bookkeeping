@@ -6,7 +6,6 @@ export {
   getAllUsers,
   getUserById,
   getUserByEmail,
-  getUserByGoogleId,
   createUser,
   inviteUser,
   updateUser,

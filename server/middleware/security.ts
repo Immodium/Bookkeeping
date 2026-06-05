@@ -136,12 +136,11 @@ export const createCorsOptions = (
  * the caller uses cookies or Authorization headers.
  *
  * Exempted paths (receive legitimate cross-origin calls):
- *   - /api/billing/webhook  — Stripe / external billing providers
  *   - /api/auth/register-tenant — public self-service signup
  */
 export const csrfProtection = (req: Request, res: Response, next: NextFunction): void => {
   const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-  const EXEMPT_PATHS = ['/api/billing/webhook', '/api/auth/register-tenant'];
+  const EXEMPT_PATHS = ['/api/auth/register-tenant'];
 
   if (SAFE_METHODS.has(req.method)) {
     return next();

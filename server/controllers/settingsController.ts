@@ -124,18 +124,6 @@ export const updateProjectSettings = asyncHandler(async (req: Request<object, ob
   try {
     // Ensure all required properties have default values for exactOptionalPropertyTypes
     const projectSettings = {
-      google_oauth: {
-        enabled: false,
-        client_id: '',
-        configured: false,
-        ...settings.google_oauth
-      },
-      stripe: {
-        enabled: false,
-        publishable_key: '',
-        configured: false,
-        ...settings.stripe
-      },
       email: {
         enabled: false,
         provider: 'smtp' as const,
@@ -165,9 +153,6 @@ export const updateProjectSettings = asyncHandler(async (req: Request<object, ob
       const provider = (projectSettings.email.provider || 'smtp').toLowerCase();
       if (provider === 'resend') {
         projectSettings.email.configured = !!process.env.RESEND_API_KEY;
-      } else if (provider === 'sendgrid') {
-        const hasFromAddress = typeof projectSettings.email.email_from === 'string' && projectSettings.email.email_from.trim() !== '';
-        projectSettings.email.configured = !!(process.env.SENDGRID_API_KEY && hasFromAddress);
       } else {
         const requiredFields = ['smtp_host', 'smtp_user', 'smtp_pass', 'email_from'];
         const hasAllRequiredFields = requiredFields.every(field => {

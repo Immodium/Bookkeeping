@@ -230,8 +230,6 @@ export class InvoiceService {
     items?: string;
     notes?: string;
     payment_terms?: string;
-    stripe_invoice_id?: string;
-    stripe_payment_intent_id?: string;
     type?: string;
     client_name?: string;
     client_email?: string;
@@ -317,8 +315,6 @@ export class InvoiceService {
         items: invoiceData.items || null,
         notes: invoiceData.notes || '',
         payment_terms: invoiceData.payment_terms || '',
-        stripe_invoice_id: invoiceData.stripe_invoice_id || null,
-        stripe_payment_intent_id: invoiceData.stripe_payment_intent_id || null,
         type: invoiceData.type || 'one-time',
         client_name: invoiceData.client_name || null,
         client_email: invoiceData.client_email || null,
@@ -340,18 +336,17 @@ export class InvoiceService {
         INSERT INTO invoices (
           id, tenant_id, invoice_number, client_id, design_template_id, recurring_template_id, amount, tax_amount, total_amount,
           status, due_date, issue_date, description, items, notes, payment_terms,
-          stripe_invoice_id, stripe_payment_intent_id, type, client_name, client_email,
+          type, client_name, client_email,
           client_phone, client_address, line_items, tax_rate_id, shipping_amount,
           shipping_rate_id, email_status, email_sent_at, email_error, last_email_attempt,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         invoiceRecord.id, invoiceRecord.tenant_id, invoiceRecord.invoice_number, invoiceRecord.client_id,
         invoiceRecord.design_template_id, invoiceRecord.recurring_template_id, invoiceRecord.amount, invoiceRecord.tax_amount,
         invoiceRecord.total_amount, invoiceRecord.status, invoiceRecord.due_date,
         invoiceRecord.issue_date, invoiceRecord.description, invoiceRecord.items,
-        invoiceRecord.notes, invoiceRecord.payment_terms, invoiceRecord.stripe_invoice_id,
-        invoiceRecord.stripe_payment_intent_id, invoiceRecord.type, invoiceRecord.client_name,
+        invoiceRecord.notes, invoiceRecord.payment_terms, invoiceRecord.type, invoiceRecord.client_name,
         invoiceRecord.client_email, invoiceRecord.client_phone, invoiceRecord.client_address,
         invoiceRecord.line_items, invoiceRecord.tax_rate_id, invoiceRecord.shipping_amount,
         invoiceRecord.shipping_rate_id, invoiceRecord.email_status, invoiceRecord.email_sent_at,
@@ -393,8 +388,6 @@ export class InvoiceService {
     items: string;
     notes: string;
     payment_terms: string;
-    stripe_invoice_id: string;
-    stripe_payment_intent_id: string;
     type: string;
     client_name: string;
     client_email: string;
@@ -453,7 +446,7 @@ export class InvoiceService {
     const allowedFields = [
       'invoice_number', 'client_id', 'design_template_id', 'recurring_template_id', 'amount', 'tax_amount',
       'total_amount', 'status', 'due_date', 'issue_date', 'description',
-      'items', 'notes', 'payment_terms', 'stripe_invoice_id', 'stripe_payment_intent_id',
+      'items', 'notes', 'payment_terms',
       'type', 'client_name', 'client_email', 'client_phone', 'client_address',
       'line_items', 'tax_rate_id', 'shipping_amount', 'shipping_rate_id',
       'email_status', 'email_sent_at', 'email_error', 'last_email_attempt'

@@ -74,7 +74,6 @@ export interface CreateUserRequest {
     role?: UserRole;
     roles?: UserRole[];
     email_verified?: boolean;
-    google_id?: string;
     last_login?: string;
     failed_login_attempts?: number;
     account_locked_until?: string;
@@ -82,7 +81,7 @@ export interface CreateUserRequest {
 }
 
 export interface UpdateUserRequest {
-  userData: Partial<Pick<User, 'name' | 'email' | 'username' | 'role' | 'roles' | 'email_verified' | 'google_id' | 'password_hash'>>;
+  userData: Partial<Pick<User, 'name' | 'email' | 'username' | 'role' | 'roles' | 'email_verified' | 'password_hash'>>;
 }
 
 export interface UpdateUserResponse {
@@ -404,18 +403,9 @@ export interface IndividualSettingSaveRequest {
  */
 export interface ProjectSettingsRequest {
   settings: {
-    google_oauth?: {
-      enabled?: boolean;
-      client_id?: string;
-      configured?: boolean;
-    };
-    stripe?: {
-      enabled?: boolean;
-      publishable_key?: string;
-      configured?: boolean;
-    };
     email?: {
       enabled?: boolean;
+      provider?: 'smtp' | 'resend';
       smtp_host?: string;
       smtp_port?: number;
       smtp_user?: string;
@@ -449,8 +439,6 @@ export interface InvoiceRequest {
   items?: string;
   notes?: string;
   payment_terms?: string;
-  stripe_invoice_id?: string;
-  stripe_payment_intent_id?: string;
   type?: string;
   client_name?: string;
   client_email?: string;

@@ -14,7 +14,7 @@ It is designed for small teams that want full control of business data without r
 - Payments
 - Retainers
 - Reports (Profit & Loss, Expense, Invoice, Client)
-- Settings (company, tax, shipping, notifications, appearance, integrations, users, backup/restore)
+- Settings (company, tax, shipping, notifications, appearance, users, backup/restore)
 
 ### Expense receipt workflows
 - Upload with OCR (`Upload & OCR`) to auto-fill expense fields
@@ -131,14 +131,13 @@ The provided `docker-compose.yml` runs Slimbooks as `slimbooks-app` with persist
 - `/api/cron` (recurring invoice processing)
 - `/api/health`
 
-## Optional integrations
+## Optional email providers
 
 Configured via env + project settings:
-- SMTP or SendGrid email
-- Stripe
-- Google OAuth
+- SMTP
+- Resend
 
-The app is fully usable without these integrations enabled.
+The app is fully usable with either provider disabled.
 
 ## Security notes
 

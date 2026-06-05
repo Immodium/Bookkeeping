@@ -249,46 +249,15 @@ export const validateShippingRateArray = (data: unknown): ShippingRate[] => {
   return [];
 };
 
-// Project Settings TypeScript interfaces
-export interface GoogleOAuthSettings {
-  enabled: boolean;
-  client_id: string;
-  client_secret?: string;
-  configured: boolean;
-}
-
-/**
- * Stripe integration settings combining all fields from component and API usage
- */
-export interface StripeSettings {
-  // Core configuration
-  enabled?: boolean; // Also referred to as isEnabled in components
-  isEnabled?: boolean; // Alias for enabled
-  publishableKey: string;
-  secretKey?: string;
-  testMode?: boolean;
-  configured?: boolean;
-
-  // Webhook configuration
-  webhookSecret?: string;
-  webhookEndpoint?: string;
-
-  // Account information
-  accountId?: string;
-  accountName?: string;
-  connectedAt?: string;
-}
-
 export interface EmailServiceSettings {
   enabled: boolean;
-  provider?: 'smtp' | 'sendgrid' | 'resend';
+  provider?: 'smtp' | 'resend';
   smtp_host: string;
   smtp_port: number;
   smtp_user: string;
   smtp_pass?: string;
   email_from: string;
   resend_configured?: boolean;
-  sendgrid_configured?: boolean;
   configured: boolean;
 }
 

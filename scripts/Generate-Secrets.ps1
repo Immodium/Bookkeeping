@@ -164,13 +164,13 @@ try {
     Write-Warning "`nImportant Security Notes:"
     Write-Host "  - Keep your .env file secure and never commit it to version control" -ForegroundColor White
     Write-Host "  - Update CORS_ORIGIN to match your actual domain in production" -ForegroundColor White
-    Write-Host "  - Configure email and OAuth settings if you plan to use those features" -ForegroundColor White
+    Write-Host "  - Configure email provider settings if you plan to use email features" -ForegroundColor White
     Write-Host "  - Review all configuration values before deploying to production" -ForegroundColor White
 
     Write-Info "`nNext Steps:"
     Write-Host "  1. Review and customize the .env file as needed" -ForegroundColor White
     Write-Host "  2. Update CORS_ORIGIN if deploying to a different domain" -ForegroundColor White
-    Write-Host "  3. Configure optional services (email, OAuth, Stripe) if needed" -ForegroundColor White
+    Write-Host "  3. Configure optional services (email providers) if needed" -ForegroundColor White
     Write-Host "  4. Test your configuration with: npm run dev" -ForegroundColor White
 
     Write-ColorOutput "`nYour Slimbooks application is now configured with secure secrets!" "Green"

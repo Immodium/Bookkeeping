@@ -28,7 +28,7 @@ export class AuthService {
     ];
 
     if (includeSensitive) {
-      baseFields.push('u.password_hash', 'u.google_id', 'u.created_at', 'u.updated_at');
+      baseFields.push('u.password_hash', 'u.created_at', 'u.updated_at');
     }
 
     return baseFields.join(', ');

@@ -98,10 +98,9 @@ const checkProjectSettingsEmailConfig = async (): Promise<EmailConfigStatus | nu
       settings?: {
         email?: {
           enabled?: boolean;
-          provider?: 'smtp' | 'sendgrid' | 'resend';
+          provider?: 'smtp' | 'resend';
           configured?: boolean;
           resend_configured?: boolean;
-          sendgrid_configured?: boolean;
         };
       };
     };
@@ -120,11 +119,6 @@ const checkProjectSettingsEmailConfig = async (): Promise<EmailConfigStatus | nu
       isConfigured = emailSettings.resend_configured === true || emailSettings.configured === true;
       if (!isConfigured) {
         missingFields = ['Resend API key'];
-      }
-    } else if (provider === 'sendgrid') {
-      isConfigured = emailSettings.sendgrid_configured === true || emailSettings.configured === true;
-      if (!isConfigured) {
-        missingFields = ['SendGrid API key or from email'];
       }
     } else {
       isConfigured = emailSettings.configured === true;

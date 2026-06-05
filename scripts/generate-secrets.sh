@@ -2,7 +2,7 @@
 
 # Generate secure secrets for Slimbooks production deployment.
 # This script now uses .env.example as the source of truth and preserves
-# existing .env values (including third-party integration keys) when regenerating.
+# existing .env values (including external service keys) when regenerating.
 
 set -e
 
@@ -142,7 +142,7 @@ printf "  • The .env file has been set to read/write for owner only (600 permi
 
 printf "\n%b🔧 Next Steps:%b\n" "$BLUE" "$NC"
 printf "  1. Review and customize the .env file as needed\n"
-printf "  2. Configure optional services (email, OAuth, Stripe) if needed\n"
+printf "  2. Configure optional services (email providers) if needed\n"
 printf "  3. Run the deployment script: ./scripts/deploy.sh\n"
 
 printf "\n%b✅ Your Slimbooks application is now configured with secure secrets!%b\n" "$GREEN" "$NC"

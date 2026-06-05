@@ -198,18 +198,6 @@ class SQLiteService {
     return result.result || { lastInsertRowid: 0 };
   }
 
-  async getUserByGoogleId(googleId: string): Promise<User | null> {
-    try {
-      const result = await this.apiCall<User>(`/users/google/${encodeURIComponent(googleId)}`);
-      return result.data || null;
-    } catch (error) {
-      if (error.message.includes('User not found')) {
-        return null;
-      }
-      throw error;
-    }
-  }
-
   async updateUser(id: number, userData: Partial<User>): Promise<{ changes: number }> {
     const result = await this.apiCall<unknown, { changes: number }>(`/users/${id}`, 'PUT', { userData });
     return result.result || { changes: 0 };

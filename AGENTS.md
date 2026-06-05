@@ -32,4 +32,4 @@ Slimbooks is a self-hosted FreshBooks-clone invoicing app (React 18 + TypeScript
 - Frontend proxy: Vite proxies `/api` and `/uploads` to `http://localhost:3002` (configured in `vite.config.ts`).
 - Migration files in `server/database/migrations/` are `.ts` files imported with `.js` extensions (standard ESM TypeScript convention with tsx).
 - The `@/utils/data` barrel module (`src/utils/data/index.ts`) exports validation, CSV import/export, and date-range filtering utilities used across invoice/client/expense/payment components.
-- SMTP, Stripe, and Google OAuth are optional services; the app runs fully without them.
+- SMTP and Resend are optional services; the app runs fully without them.

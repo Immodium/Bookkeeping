@@ -6,7 +6,6 @@ import {
   getAllUsers,
   getUserById,
   getUserByEmail,
-  getUserByGoogleId,
   createUser,
   inviteUser,
   updateUser,
@@ -117,13 +116,6 @@ router.get('/email/:email', async (req: Request, res: Response, next: NextFuncti
     });
   }
 });
-
-// Get user by Google ID (admin only)
-router.get('/google/:googleId', 
-  requireAuth, 
-  requireUsersRead, 
-  getUserByGoogleId
-);
 
 // Create new user (admin only)
 router.post('/', 

@@ -120,28 +120,15 @@ export interface ProjectSettingRecord {
 
 // Complete project configuration structure
 export interface ProjectSettings {
-  google_oauth: {
-    enabled: boolean;
-    client_id: string;
-    client_secret?: string; // Optional for client-side use
-    configured: boolean;
-  };
-  stripe: {
-    enabled: boolean;
-    publishable_key: string;
-    secret_key?: string; // Optional for client-side use
-    configured: boolean;
-  };
   email?: {
     enabled: boolean;
-    provider?: 'smtp' | 'sendgrid' | 'resend';
+    provider?: 'smtp' | 'resend';
     smtp_host: string;
     smtp_port: number;
     smtp_user: string;
     smtp_pass?: string;
     email_from: string;
     resend_configured?: boolean;
-    sendgrid_configured?: boolean;
     configured: boolean;
   };
   security: {

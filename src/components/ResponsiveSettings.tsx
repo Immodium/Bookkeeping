@@ -5,13 +5,11 @@ import { TaxSettings } from './settings/TaxSettings';
 import { ShippingSettings } from './settings/ShippingSettings';
 import { CompanySettings } from './settings/CompanySettings';
 import { GeneralSettingsTab } from './settings/GeneralSettingsTab';
-import { StripeSettingsTab } from './settings/StripeSettingsTab';
 import { NotificationSettingsTab } from './settings/NotificationSettingsTab';
 import { AppearanceSettingsTab } from './settings/AppearanceSettingsTab';
 import { DatabaseBackupSection } from './settings/DatabaseBackupSection';
 import { themeClasses, getButtonClasses } from '@/utils/themeUtils.util';
 import { toast } from 'sonner';
-import { useProjectSettings } from '@/hooks/useProjectSettings';
 import { cn } from '@/utils/themeUtils.util';
 import type { SettingsTabRef } from '@/types/components/settings.types';
 import { UserManagementTab } from './settings/UserManagementTab';
@@ -29,7 +27,6 @@ export const ResponsiveSettings = () => {
   const [isMobileTabsOpen, setIsMobileTabsOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { settings: projectSettings } = useProjectSettings();
   const { canManageUsers } = usePermissions();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -38,7 +35,6 @@ export const ResponsiveSettings = () => {
   const generalSettingsRef = useRef<SettingsTabRef>(null);
   const taxSettingsRef = useRef<SettingsTabRef>(null);
   const shippingSettingsRef = useRef<SettingsTabRef>(null);
-  const stripeSettingsRef = useRef<SettingsTabRef>(null);
   const notificationSettingsRef = useRef<SettingsTabRef>(null);
   const appearanceSettingsRef = useRef<SettingsTabRef>(null);
   const userManagementRef = useRef<SettingsTabRef>(null);
@@ -54,11 +50,7 @@ export const ResponsiveSettings = () => {
     { id: 'backup', name: 'Backup & Restore' }
   ];
 
-  // Add conditional tabs
-  const availableTabs = [
-    ...baseTabs,
-    ...(projectSettings?.stripe?.enabled ? [{ id: 'stripe', name: 'Stripe Integration' }] : [])
-  ];
+  const availableTabs = [...baseTabs];
 
   useEffect(() => {
     const hash = location.hash.replace('#', '');
@@ -69,7 +61,7 @@ export const ResponsiveSettings = () => {
     } else {
       setActiveTab('company');
     }
-  }, [location.hash, projectSettings?.stripe?.enabled, availableTabs]);
+  }, [location.hash, availableTabs]);
 
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId);
@@ -95,9 +87,6 @@ export const ResponsiveSettings = () => {
           break;
         case 'shipping':
           settingsRef = shippingSettingsRef.current;
-          break;
-        case 'stripe':
-          settingsRef = stripeSettingsRef.current;
           break;
         case 'notifications':
           settingsRef = notificationSettingsRef.current;
@@ -138,7 +127,6 @@ export const ResponsiveSettings = () => {
       case 'general': return <GeneralSettingsTab ref={generalSettingsRef} />;
       case 'tax': return <TaxSettings ref={taxSettingsRef} />;
       case 'shipping': return <ShippingSettings ref={shippingSettingsRef} />;
-      case 'stripe': return projectSettings?.stripe?.enabled ? <StripeSettingsTab ref={stripeSettingsRef} /> : null;
       case 'notifications': return <NotificationSettingsTab ref={notificationSettingsRef} />;
       case 'appearance': return <AppearanceSettingsTab ref={appearanceSettingsRef} />;
       case 'user-management': return canManageUsers ? <UserManagementTab ref={userManagementRef} /> : null;
@@ -154,7 +142,7 @@ export const ResponsiveSettings = () => {
         <div className={cn(themeClasses.sectionHeader, "flex-col sm:flex-row gap-4 sm:gap-0")}>
           <div className="flex-1">
             <h1 className={themeClasses.sectionTitle}>Settings</h1>
-            <p className={themeClasses.sectionSubtitle}>Manage your application preferences and integrations</p>
+            <p className={themeClasses.sectionSubtitle}>Manage your application preferences</p>
           </div>
           <button
             onClick={handleSaveSettings}

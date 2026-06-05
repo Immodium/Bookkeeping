@@ -60,7 +60,6 @@ export const DatabaseBackupSection = () => {
         const settingsToCheck = [
           'company_settings',
           'email_settings',
-          'stripe_settings',
           'currency_format_settings',
           'tax_rates',
           'shipping_rates',

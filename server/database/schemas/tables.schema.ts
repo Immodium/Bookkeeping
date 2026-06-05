@@ -104,7 +104,6 @@ const usersSchema: TableSchema = {
     { name: 'password_hash', type: 'TEXT' },
     { name: 'role', type: 'TEXT', constraints: ["DEFAULT 'user'"] },
     { name: 'email_verified', type: 'INTEGER', constraints: ['DEFAULT 0'] },
-    { name: 'google_id', type: 'TEXT', constraints: ['UNIQUE'] },
     { name: 'roles', type: 'TEXT' },
     { name: 'two_factor_secret', type: 'TEXT' },
     { name: 'backup_codes', type: 'TEXT' },
@@ -143,7 +142,6 @@ const clientsSchema: TableSchema = {
     { name: 'country', type: 'TEXT' },
     { name: 'tax_id', type: 'TEXT' },
     { name: 'notes', type: 'TEXT' },
-    { name: 'stripe_customer_id', type: 'TEXT' },
     { name: 'is_active', type: 'INTEGER', constraints: ['DEFAULT 1'] },
     { name: 'deleted_at', type: 'TEXT' },
     { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
@@ -189,8 +187,6 @@ const invoicesSchema: TableSchema = {
     { name: 'tax_rate_id', type: 'TEXT' },
     { name: 'shipping_amount', type: 'REAL', constraints: ['DEFAULT 0'] },
     { name: 'shipping_rate_id', type: 'TEXT' },
-    { name: 'stripe_invoice_id', type: 'TEXT' },
-    { name: 'stripe_payment_intent_id', type: 'TEXT' },
     { name: 'email_status', type: 'TEXT', constraints: ['DEFAULT \'not_sent\''] },
     { name: 'email_sent_at', type: 'TEXT' },
     { name: 'email_error', type: 'TEXT' },
@@ -248,7 +244,6 @@ const paymentsSchema: TableSchema = {
     { name: 'method', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'status', type: 'TEXT', constraints: ['DEFAULT \'pending\''] },
     { name: 'transaction_id', type: 'TEXT' },
-    { name: 'stripe_payment_id', type: 'TEXT' },
     { name: 'notes', type: 'TEXT' },
     { name: 'date', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
@@ -579,7 +574,7 @@ const processedWebhookEventsSchema: TableSchema = {
   columns: [
     { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'event_id', type: 'TEXT', constraints: ['NOT NULL UNIQUE'] },
-    { name: 'provider', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'stripe'"] },
+    { name: 'provider', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'external'"] },
     { name: 'processed_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ]
 };

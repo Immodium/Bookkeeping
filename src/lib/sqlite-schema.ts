@@ -16,7 +16,6 @@ export const DATABASE_SCHEMA = {
       state TEXT,
       zipCode TEXT,
       country TEXT,
-      stripe_customer_id TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
@@ -37,7 +36,6 @@ export const DATABASE_SCHEMA = {
       due_date TEXT NOT NULL,
       issue_date TEXT NOT NULL,
       description TEXT,
-      stripe_invoice_id TEXT,
       type TEXT NOT NULL DEFAULT 'one-time',
       client_name TEXT,
       client_email TEXT,
@@ -146,7 +144,6 @@ export const DATABASE_SCHEMA = {
       password_hash TEXT,
       role TEXT DEFAULT 'user',
       email_verified INTEGER DEFAULT 0,
-      google_id TEXT UNIQUE,
       two_factor_enabled INTEGER DEFAULT 0,
       two_factor_secret TEXT,
       backup_codes TEXT, -- JSON string
@@ -198,19 +195,6 @@ export const DATABASE_SCHEMA = {
     )
   `,
 
-  // OAuth credentials table
-  oauth_credentials: `
-    CREATE TABLE IF NOT EXISTS oauth_credentials (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      provider TEXT NOT NULL,
-      client_id TEXT NOT NULL,
-      client_secret TEXT NOT NULL,
-      enabled INTEGER DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `,
-
   // Email templates table
   email_templates: `
     CREATE TABLE IF NOT EXISTS email_templates (
@@ -222,36 +206,6 @@ export const DATABASE_SCHEMA = {
       variables TEXT, -- JSON string
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `,
-
-  // Stripe webhook logs table
-  stripe_webhook_logs: `
-    CREATE TABLE IF NOT EXISTS stripe_webhook_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      webhook_id TEXT NOT NULL,
-      event_type TEXT NOT NULL,
-      status TEXT NOT NULL CHECK (status IN ('processed', 'failed', 'ignored')),
-      error_message TEXT,
-      event_data TEXT, -- JSON string
-      processed_at TEXT NOT NULL DEFAULT (datetime('now')),
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `,
-
-  // Stripe sync status table
-  stripe_sync_status: `
-    CREATE TABLE IF NOT EXISTS stripe_sync_status (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      entity_type TEXT NOT NULL, -- 'customer', 'invoice', 'subscription'
-      local_id INTEGER NOT NULL,
-      stripe_id TEXT NOT NULL,
-      last_synced_at TEXT NOT NULL DEFAULT (datetime('now')),
-      sync_status TEXT NOT NULL DEFAULT 'synced' CHECK (sync_status IN ('synced', 'pending', 'failed')),
-      error_message TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(entity_type, local_id)
     )
   `
 };
@@ -271,19 +225,13 @@ export const DATABASE_INDEXES = [
   'CREATE INDEX IF NOT EXISTS idx_settings_category ON settings (category)',
   'CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)',
   'CREATE INDEX IF NOT EXISTS idx_users_username ON users (username)',
-  'CREATE INDEX IF NOT EXISTS idx_users_google_id ON users (google_id)',
   'CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens (user_id)',
   'CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_token ON email_verification_tokens (token)',
   'CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens (user_id)',
   'CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens (token)',
   'CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions (user_id)',
   'CREATE INDEX IF NOT EXISTS idx_auth_sessions_session_token ON auth_sessions (session_token)',
-  'CREATE INDEX IF NOT EXISTS idx_oauth_credentials_provider ON oauth_credentials (provider)',
-  'CREATE INDEX IF NOT EXISTS idx_email_templates_name ON email_templates (name)',
-  'CREATE INDEX IF NOT EXISTS idx_stripe_webhook_logs_webhook_id ON stripe_webhook_logs (webhook_id)',
-  'CREATE INDEX IF NOT EXISTS idx_stripe_webhook_logs_event_type ON stripe_webhook_logs (event_type)',
-  'CREATE INDEX IF NOT EXISTS idx_stripe_sync_status_entity ON stripe_sync_status (entity_type, local_id)',
-  'CREATE INDEX IF NOT EXISTS idx_stripe_sync_status_stripe_id ON stripe_sync_status (stripe_id)'
+  'CREATE INDEX IF NOT EXISTS idx_email_templates_name ON email_templates (name)'
 ];
 
 // Triggers for updating updated_at timestamps
@@ -336,22 +284,10 @@ export const DATABASE_TRIGGERS = [
      UPDATE users SET updated_at = datetime('now') WHERE id = NEW.id;
    END`,
 
-  `CREATE TRIGGER IF NOT EXISTS update_oauth_credentials_updated_at
-   AFTER UPDATE ON oauth_credentials
-   BEGIN
-     UPDATE oauth_credentials SET updated_at = datetime('now') WHERE id = NEW.id;
-   END`,
-
   `CREATE TRIGGER IF NOT EXISTS update_email_templates_updated_at
    AFTER UPDATE ON email_templates
    BEGIN
      UPDATE email_templates SET updated_at = datetime('now') WHERE id = NEW.id;
-   END`,
-
-  `CREATE TRIGGER IF NOT EXISTS update_stripe_sync_status_updated_at
-   AFTER UPDATE ON stripe_sync_status
-   BEGIN
-     UPDATE stripe_sync_status SET updated_at = datetime('now') WHERE id = NEW.id;
    END`
 ];
 

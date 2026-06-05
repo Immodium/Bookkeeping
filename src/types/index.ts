@@ -22,7 +22,6 @@ export * from './domain/retainer.types';
 export * from './domain/settings.types';
 
 // Export additional domain types if they exist
-export * from './domain/stripe.types';
 export * from './domain/reports.types';
 
 // === Constants and Enums ===

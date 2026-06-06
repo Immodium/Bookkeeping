@@ -236,7 +236,14 @@ export const startServer = async () => {
     // Graceful shutdown handling
     const { gracefulShutdown } = await import('./middleware/index.js');
     const { db } = await import('./database/index.js');
-    gracefulShutdown(server, { close: () => db.disconnect() });
+    const { pdfService } = await import('./services/PdfService.js');
+    gracefulShutdown(server, {
+      close: async () => {
+        // Close the Puppeteer browser first, then the database pool.
+        await pdfService.close();
+        await db.disconnect();
+      }
+    });
 
     return server;
   } catch (error) {

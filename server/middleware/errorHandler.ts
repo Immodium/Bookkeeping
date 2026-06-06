@@ -325,11 +325,22 @@ export const timeoutHandler = (timeout = 30000) => {
 /**
  * Graceful shutdown handler
  */
-export const gracefulShutdown = (server: Server, db?: { close?: () => void }): void => {
+export const gracefulShutdown = (
+  server: Server,
+  cleanup?: { close?: () => void | Promise<void> }
+): void => {
+  let shuttingDown = false;
+
   const shutdown = (signal: string): void => {
+    // Guard against multiple signals triggering overlapping shutdowns.
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+
     logger.info(`${signal} received. Starting graceful shutdown...`);
 
-    server.close((err) => {
+    server.close(async (err) => {
       if (err) {
         logger.error({ err }, 'Error during server shutdown');
         process.exit(1);
@@ -337,13 +348,13 @@ export const gracefulShutdown = (server: Server, db?: { close?: () => void }): v
 
       logger.info('HTTP server closed.');
 
-      // Close database connection
-      if (db && typeof db.close === 'function') {
+      // Run async cleanup (e.g. close the PDF browser and the DB pool).
+      if (cleanup && typeof cleanup.close === 'function') {
         try {
-          db.close();
-          logger.info('Database connection closed.');
-        } catch (dbErr) {
-          logger.error({ err: dbErr }, 'Error closing database');
+          await cleanup.close();
+          logger.info('Resource cleanup completed.');
+        } catch (cleanupErr) {
+          logger.error({ err: cleanupErr }, 'Error during resource cleanup');
         }
       }
 

@@ -160,10 +160,18 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
   const source = origin || referer;
 
   if (!source) {
-    // No Origin/Referer — allow server-to-server calls (API keys, Postman)
-    // but log a warning in production so it's observable
+    // No Origin/Referer header. Browsers always send Origin on state-changing
+    // cross-origin requests, so a missing Origin from a cookie/browser client
+    // is a CSRF red flag. Allow explicit API-key (server-to-server) callers;
+    // in production, reject everything else.
+    const hasApiKey = Boolean(req.headers['x-api-key']);
+    if (hasApiKey) {
+      return next();
+    }
     if (isProd) {
-      logger.warn({ method: req.method, path: req.path }, 'CSRF: state-changing request with no Origin/Referer header');
+      logger.warn({ method: req.method, path: req.path }, 'CSRF: rejected state-changing request with no Origin/Referer and no API key');
+      res.status(403).json({ success: false, error: 'CSRF check failed: missing Origin/Referer header' });
+      return;
     }
     return next();
   }

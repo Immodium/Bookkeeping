@@ -4,7 +4,6 @@ import { authConfig } from '../config/index.js';
 import { databaseService } from '../core/DatabaseService.js';
 import { provisionTenantSchema, dropTenantSchema } from '../database/schemas/tenantSchema.js';
 import { Tenant, UserRole } from '../types/index.js';
-import { subscriptionService } from './SubscriptionService.js';
 
 export interface TenantAdminBootstrapInput {
   name: string;
@@ -235,6 +234,8 @@ export class TenantService {
     await provisionTenantSchema(databaseService, tenantId);
 
     // Seed tenant onto a default subscription lifecycle if billing tables exist.
+    // Lazy import avoids a circular module dependency (SubscriptionService imports TenantService).
+    const { subscriptionService } = await import('./SubscriptionService.js');
     await subscriptionService.bootstrapTenantSubscription(tenantId);
 
     return { tenantId, tenantPublicId, adminUserId, slug };

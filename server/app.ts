@@ -4,7 +4,6 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import multer from 'multer';
 import compression from 'compression';
 import pinoHttp from 'pino-http';
 import { randomUUID } from 'crypto';
@@ -33,8 +32,7 @@ import {
   errorHandler,
   notFoundHandler,
   performanceMonitor,
-  healthLogger,
-  validateFileUpload
+  healthLogger
 } from './middleware/index.js';
 
 // Import routes
@@ -118,50 +116,20 @@ export const createApp = async () => {
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
   app.use(cookieParser());
 
-  // Multer configuration for file uploads
-  const projectRoot = join(__dirname, '..');
-  const upload = multer({
-    dest: resolve(projectRoot, serverConfig.uploadPath),
-    limits: {
-      fileSize: serverConfig.maxFileSize,
-      files: 1,
-      fieldSize: 1024 * 1024 // 1MB field size limit
-    },
-    fileFilter: (req, file, cb) => {
-      const allowedMimes = [
-        'application/octet-stream',
-        'application/x-sqlite3',
-        'application/vnd.sqlite3'
-      ];
-
-      if (allowedMimes.includes(file.mimetype) || file.originalname.endsWith('.db')) {
-        cb(null, true);
-      } else {
-        cb(null, false);
-        throw new Error('Invalid file type. Only database files are allowed.');
-      }
-    }
-  });
-
-  // File upload endpoint (if needed)
-  app.post('/api/upload', upload.single('file'), validateFileUpload(), (req, res) => {
-    res.json({
-      success: true,
-      message: 'File uploaded successfully',
-      file: {
-        filename: req.file?.filename,
-        originalname: req.file?.originalname,
-        size: req.file?.size
-      }
-    });
-  });
-
   // Static file serving (disable when CloudFront/S3 is handling assets in production)
   const distPath = join(__dirname, '..', 'dist');
   if (serverConfig.serveStaticFiles) {
-    // Serve static files from uploads directory
+    // Serve static files from uploads directory.
+    // Harden against any file that slips through upload validation being used
+    // for stored XSS: disable MIME sniffing and sandbox the response so the
+    // browser never executes active content (scripts) served from /uploads.
     const uploadsPath = join(__dirname, '..', 'public', 'uploads');
-    app.use('/uploads', express.static(uploadsPath));
+    app.use('/uploads', express.static(uploadsPath, {
+      setHeaders: (res) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+      }
+    }));
 
     // Serve static files from dist directory (built frontend)
     app.use(express.static(distPath));
@@ -267,7 +235,7 @@ export const startServer = async () => {
 
     // Graceful shutdown handling
     const { gracefulShutdown } = await import('./middleware/index.js');
-    const { db } = await import('./models/index.js');
+    const { db } = await import('./database/index.js');
     const { pdfService } = await import('./services/PdfService.js');
     gracefulShutdown(server, {
       close: async () => {

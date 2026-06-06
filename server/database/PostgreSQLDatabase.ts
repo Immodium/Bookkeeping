@@ -341,7 +341,22 @@ export class PostgreSQLDatabase implements IDatabase {
 
     let finalQuery = query;
     if (sort.length > 0) {
-      const sortClause = sort.map(s => `${s.column} ${s.direction}`).join(', ');
+      // Validate sort columns/directions before interpolating into the query.
+      // Column names cannot be bound as parameters, so they must be whitelisted
+      // against a strict identifier pattern to prevent SQL injection.
+      const columnPattern = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/;
+      const sortClause = sort
+        .map(s => {
+          if (!columnPattern.test(s.column)) {
+            throw new Error(`Invalid sort column: ${s.column}`);
+          }
+          const direction = String(s.direction).toUpperCase();
+          if (direction !== 'ASC' && direction !== 'DESC') {
+            throw new Error(`Invalid sort direction: ${s.direction}`);
+          }
+          return `${s.column} ${direction}`;
+        })
+        .join(', ');
       finalQuery += ` ORDER BY ${sortClause}`;
     }
     finalQuery += ` LIMIT ${limit} OFFSET ${actualOffset}`;

@@ -165,8 +165,9 @@ export class ClientService {
       return id;
     });
 
-    // Fire-and-forget: usage metering
-    usageService.increment(scopedTenantId, 'clients_created').catch(() => {});
+    // Await metering (it never throws) so it completes on the request's tenant
+    // connection rather than racing a query on — or the release of — that connection.
+    await usageService.increment(scopedTenantId, 'clients_created');
 
     return nextId;
   }

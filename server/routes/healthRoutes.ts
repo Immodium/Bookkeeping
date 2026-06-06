@@ -4,6 +4,8 @@
 import { Router, Request, Response } from 'express';
 import { serverConfig } from '../config/index.js';
 import { databaseService } from '../core/DatabaseService.js';
+import { db } from '../database/index.js';
+import { PostgreSQLDatabase } from '../database/PostgreSQLDatabase.js';
 import { migrationsComplete } from '../database/migrations/index.js';
 
 const router: Router = Router();
@@ -178,7 +180,8 @@ router.get('/metrics', async (_req: Request, res: Response) => {
       },
       database: {
         status: dbStatus,
-        response_time_ms: dbResponseTimeMs
+        response_time_ms: dbResponseTimeMs,
+        ...(db instanceof PostgreSQLDatabase ? { pool: db.getPoolStats() } : {})
       },
       tenants: {
         total: tenantTotal,

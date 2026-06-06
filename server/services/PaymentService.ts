@@ -288,8 +288,10 @@ export class PaymentService {
       paymentRecord.created_at, paymentRecord.updated_at
     ]);
 
-    // Fire-and-forget: usage metering + webhook dispatch
-    usageService.increment(scopedTenantId, 'payments_recorded').catch(() => {});
+    // Await metering (it never throws) so it completes on the request's tenant
+    // connection rather than racing a query on — or the release of — that connection.
+    // Webhook dispatch does external HTTP and stays fire-and-forget.
+    await usageService.increment(scopedTenantId, 'payments_recorded');
     outboundWebhookService.dispatch(scopedTenantId, 'payment.recorded', {
       payment_id: nextId,
       invoice_id: paymentRecord.invoice_id,

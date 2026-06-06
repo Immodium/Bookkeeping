@@ -228,6 +228,22 @@ export class PostgreSQLDatabase implements IDatabase {
   }
 
   /**
+   * Snapshot of connection-pool utilisation, for monitoring under load.
+   * - total: connections currently created by the pool
+   * - idle: connections available for checkout
+   * - waiting: callers queued waiting for a connection (saturation signal)
+   * - max: configured pool ceiling (DB_POOL_MAX)
+   */
+  getPoolStats(): { total: number; idle: number; waiting: number; max: number } {
+    return {
+      total: this.pool.totalCount,
+      idle: this.pool.idleCount,
+      waiting: this.pool.waitingCount,
+      max: (this.pool.options as { max?: number }).max ?? 0
+    };
+  }
+
+  /**
    * Acquire a dedicated pool client for a tenant and set search_path.
    * Caller is responsible for releasing via the returned release function.
    */

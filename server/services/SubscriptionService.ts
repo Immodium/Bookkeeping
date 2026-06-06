@@ -1,6 +1,5 @@
 import { databaseService } from '../core/DatabaseService.js';
 import { emailProviderService } from './EmailProviderService.js';
-import { tenantService } from './TenantService.js';
 import { emailTemplateService } from './EmailTemplateService.js';
 import { outboundWebhookService } from './OutboundWebhookService.js';
 
@@ -599,6 +598,8 @@ export class SubscriptionService {
 
     // Day 14+: if final_notice already sent → suspend
     if (daysElapsed >= 14 && sentTypes.has('final_notice')) {
+      // Lazy import avoids a circular module dependency (TenantService imports SubscriptionService).
+      const { tenantService } = await import('./TenantService.js');
       await tenantService.updateTenantStatus(tenantId, 'suspended');
       await databaseService.executeQuery(
         `INSERT INTO dunning_events (tenant_id, event_type, sent_at) VALUES (?, 'suspended', NOW())`,

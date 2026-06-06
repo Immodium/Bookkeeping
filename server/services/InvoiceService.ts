@@ -124,8 +124,10 @@ export class InvoiceService {
     }
 
     try {
-      // Verify the token using JWT with expiration
-      const decoded = jwt.verify(token, authConfig.jwtSecret) as PublicInvoiceTokenPayload;
+      // Verify the token using JWT with expiration. Pin the algorithm to HS256
+      // (the signing algorithm) so a forged token cannot downgrade to "none" or
+      // a different algorithm.
+      const decoded = jwt.verify(token, authConfig.jwtSecret, { algorithms: ['HS256'] }) as PublicInvoiceTokenPayload;
 
       // Validate token payload
       if (!decoded.invoiceId || !decoded.type || decoded.type !== 'public_invoice') {

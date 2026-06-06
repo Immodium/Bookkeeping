@@ -48,7 +48,7 @@ export const getPaginationSettings = async (): Promise<PaginationSettings> => {
 // Async version for components that can handle async operations
 export const getPaginationSettingsAsync = async (): Promise<PaginationSettings> => {
   try {
-    const { sqliteService } = await import('@/services/sqlite.svc');
+    const { sqliteService } = await import('@/services/apiClient.svc');
 
     if (sqliteService.isReady()) {
       const settings = await sqliteService.getSetting('pagination_settings') as Partial<PaginationSettings>;
@@ -77,7 +77,7 @@ export const getPaginationSettingsAsync = async (): Promise<PaginationSettings> 
 export const savePaginationSettings = async (settings: PaginationSettings): Promise<void> => {
   try {
     // Use dynamic import to avoid circular dependencies
-    const { sqliteService } = await import('@/services/sqlite.svc');
+    const { sqliteService } = await import('@/services/apiClient.svc');
 
     if (sqliteService.isReady()) {
       await sqliteService.setSetting('pagination_settings', settings, 'general');

@@ -1,4 +1,4 @@
-import { sqliteService } from '@/services/sqlite.svc';
+import { sqliteService } from '@/services/apiClient.svc';
 import type { InvoiceNumberSettings } from '@/types';
 import { DEFAULT_INVOICE_NUMBER_SETTINGS, SUGGESTED_INVOICE_PREFIXES } from '@/types';
 import { authenticatedFetch } from '../api';
@@ -37,7 +37,7 @@ const DEFAULT_PAYMENT_SETTINGS: NumberingSettings = {
 
 export const getNumberingSettings = async (type: 'invoice' | 'expense' | 'payment'): Promise<NumberingSettings> => {
   try {
-    const { sqliteService } = await import('@/services/sqlite.svc');
+    const { sqliteService } = await import('@/services/apiClient.svc');
 
     if (sqliteService.isReady()) {
       const settings = await sqliteService.getSetting(`${type}_numbering_settings`) as NumberingSettings;
@@ -69,7 +69,7 @@ export const saveNumberingSettings = async (
   settings: NumberingSettings
 ): Promise<void> => {
   try {
-    const { sqliteService } = await import('@/services/sqlite.svc');
+    const { sqliteService } = await import('@/services/apiClient.svc');
 
     if (sqliteService.isReady()) {
       await sqliteService.setSetting(`${type}_numbering_settings`, settings, 'general');

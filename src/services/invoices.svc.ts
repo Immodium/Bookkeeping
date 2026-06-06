@@ -3,7 +3,7 @@
 
 import { EmailService } from './email.svc';
 import { generateInvoiceToken } from '@/utils/invoiceTokens';
-import { sqliteService } from './sqlite.svc';
+import { sqliteService } from './apiClient.svc';
 import { formatClientAddressSingleLine } from '@/utils/formatting';
 import { authenticatedFetch, getToken } from '@/utils/api';
 import {

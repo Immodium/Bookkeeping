@@ -1,6 +1,6 @@
 // Email configuration utilities
 
-import { sqliteService } from '@/services/sqlite.svc';
+import { sqliteService } from '@/services/apiClient.svc';
 import { EmailSettings, EmailConfigStatus } from '@/types';
 import { authenticatedFetch } from '@/utils/api/http.util';
 

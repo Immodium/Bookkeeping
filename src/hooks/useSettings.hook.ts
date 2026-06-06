@@ -135,7 +135,7 @@ export function useSettings<T extends Record<string, unknown>>({
     // Create the loading promise
     const loadPromise = (async () => {
       try {
-        const { sqliteService } = await import('@/services/sqlite.svc');
+        const { sqliteService } = await import('@/services/apiClient.svc');
 
         if (!sqliteService.isReady()) {
           await sqliteService.initialize();
@@ -270,7 +270,7 @@ export function useSettings<T extends Record<string, unknown>>({
         }
       } else {
         // Fallback to service
-        const { sqliteService } = await import('@/services/sqlite.svc');
+        const { sqliteService } = await import('@/services/apiClient.svc');
         await sqliteService.setSetting(settingsKey, dataToSave, category);
       }
 

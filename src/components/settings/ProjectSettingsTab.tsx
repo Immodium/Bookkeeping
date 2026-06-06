@@ -54,7 +54,7 @@ export const ProjectSettingsTab = forwardRef<ProjectSettingsRef>((props, ref) =>
   const loadSettings = async () => {
     try {
       // Use dynamic import to avoid circular dependencies
-      const { sqliteService } = await import('@/services/sqlite.svc');
+      const { sqliteService } = await import('@/services/apiClient.svc');
       
       if (!sqliteService.isReady()) {
         await sqliteService.initialize();
@@ -89,7 +89,7 @@ export const ProjectSettingsTab = forwardRef<ProjectSettingsRef>((props, ref) =>
   const saveSettings = async () => {
     try {
       // Use dynamic import to avoid circular dependencies
-      const { sqliteService } = await import('@/services/sqlite.svc');
+      const { sqliteService } = await import('@/services/apiClient.svc');
       
       if (!sqliteService.isReady()) {
         await sqliteService.initialize();

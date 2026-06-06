@@ -7,6 +7,18 @@ import { User, UserPublic, ServiceOptions, UserRole } from '../types/index.js';
 import { getPrimaryRole, normalizeRoles } from '../auth/roles.js';
 
 /**
+ * Strip sensitive fields from a user record before returning it over the API.
+ * Mirrors the `UserPublic` type (Omit<User, 'password_hash' | 'two_factor_secret' | 'backup_codes'>).
+ */
+export const toPublicUser = (user: User): UserPublic => {
+  const publicUser: User = { ...user };
+  delete publicUser.password_hash;
+  delete publicUser.two_factor_secret;
+  delete publicUser.backup_codes;
+  return publicUser;
+};
+
+/**
  * User Management Service
  * Handles user lifecycle management, profile updates, and administrative operations
  */
@@ -342,7 +354,7 @@ export class UserService {
     );
     
     const existingRoles = normalizeRoles(existingUser.roles);
-    if (existingRoles.includes('admin') && (adminCount?.count || 0) <= 1) {
+    if (existingRoles.includes('admin') && (Number(adminCount?.count) || 0) <= 1) {
       throw new Error('Cannot delete the last administrator');
     }
 

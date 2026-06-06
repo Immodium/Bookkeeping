@@ -33,6 +33,88 @@ export const seedData = async (db: IDatabase, seed: SeedData): Promise<void> => 
 };
 
 /**
+ * Seed baseline platform data: the default tenant, subscription plans, and the
+ * default tenant's subscription.
+ *
+ * This runs AFTER migrations (see initializeAllSeeds), so the tenants table is
+ * guaranteed to have its full current schema (including public_id). That lets us
+ * insert the default tenant cleanly instead of catching-and-ignoring a missing
+ * public_id column during table creation.
+ */
+export const seedBootstrapData = async (db: IDatabase): Promise<void> => {
+  // Ensure a default tenant exists for backwards-compatible single-tenant mode.
+  await db.executeQuery(`
+    INSERT INTO tenants (id, public_id, name, slug, status)
+    VALUES (1, '00000000-0000-7000-8000-000000000001', 'Default Tenant', 'default', 'active')
+    ON CONFLICT (id) DO NOTHING
+  `);
+
+  const trialFeatures = JSON.stringify({
+    'reports.enabled': true,
+    'billing.recurring_invoices': true,
+    'billing.max_users': 3,
+    'billing.max_clients': 25,
+    'billing.max_invoices_per_month': 200
+  });
+  const starterFeatures = JSON.stringify({
+    'reports.enabled': true,
+    'billing.recurring_invoices': true,
+    'billing.max_users': 25,
+    'billing.max_clients': 1000,
+    'billing.max_invoices_per_month': 10000
+  });
+
+  await db.executeQuery(
+    `
+      INSERT INTO subscription_plans (
+        code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
+      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, NOW(), NOW())
+      ON CONFLICT (code) DO NOTHING
+    `,
+    ['trial', 'Trial', 0, 14, trialFeatures]
+  );
+  await db.executeQuery(
+    `
+      INSERT INTO subscription_plans (
+        code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
+      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, NOW(), NOW())
+      ON CONFLICT (code) DO NOTHING
+    `,
+    ['starter', 'Starter', 2900, 0, starterFeatures]
+  );
+
+  await db.executeQuery(`
+    INSERT INTO tenant_subscriptions (
+      tenant_id,
+      plan_id,
+      status,
+      started_at,
+      current_period_start,
+      current_period_end,
+      cancel_at_period_end,
+      provider,
+      created_at,
+      updated_at
+    )
+    SELECT
+      1,
+      sp.id,
+      'active',
+      NOW(),
+      NOW(),
+      NOW() + INTERVAL '1 month',
+      0,
+      'internal',
+      NOW(),
+      NOW()
+    FROM subscription_plans sp
+    WHERE sp.code = 'starter'
+    LIMIT 1
+    ON CONFLICT (tenant_id) DO NOTHING
+  `);
+};
+
+/**
  * Initialize application counters
  */
 export const initializeCounters = async (db: IDatabase): Promise<void> => {
@@ -202,6 +284,10 @@ const syncCountersWithData = async (db: IDatabase): Promise<void> => {
  */
 export const initializeAllSeeds = async (db: IDatabase, includeSampleData = false): Promise<void> => {
   try {
+    // Bootstrap baseline platform data first — the default tenant must exist
+    // before tenant-scoped rows (counters, admin user, settings) are seeded.
+    await seedBootstrapData(db);
+
     // Always initialize these
     await initializeCounters(db);
     await initializeAdminUser(db);

@@ -456,13 +456,20 @@ export class ClientService {
     const { limit = 50, offset = 0 } = options;
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
+    // Validate days as a non-negative integer and bind it as a parameter rather
+    // than interpolating it into the SQL string (prevents SQL injection).
+    const safeDays = typeof days === 'number' && Number.isInteger(days) ? days : parseInt(String(days), 10);
+    if (!Number.isInteger(safeDays) || safeDays < 0) {
+      throw new Error('days must be a non-negative integer');
+    }
+
     const clients = await databaseService.getMany<Client>(`
       SELECT DISTINCT c.* FROM clients c
       INNER JOIN invoices i ON c.id = i.client_id
-      WHERE c.tenant_id = ? AND i.tenant_id = ? AND i.created_at > datetime('now', '-${days} days')
+      WHERE c.tenant_id = ? AND i.tenant_id = ? AND i.created_at > NOW() - (? || ' days')::interval
       ORDER BY c.name ASC
       LIMIT ? OFFSET ?
-    `, [scopedTenantId, scopedTenantId, limit, offset]);
+    `, [scopedTenantId, scopedTenantId, safeDays, limit, offset]);
     return clients.map(client => this.normalizeClientRecord(client));
   }
 

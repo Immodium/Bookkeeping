@@ -11,19 +11,11 @@ interface EnvironmentConfig {
   API_URL: string;
   APP_NAME: string;
   
-  // Security Configuration
-  JWT_SECRET: string;
-  JWT_REFRESH_SECRET: string;
-  SESSION_SECRET: string;
-  
   // Token Expiration
   ACCESS_TOKEN_EXPIRY: number;
   REFRESH_TOKEN_EXPIRY: number;
   EMAIL_TOKEN_EXPIRY: number;
   PASSWORD_RESET_EXPIRY: number;
-  
-  // Database Configuration
-  DATABASE_URL: string;
   
   // CORS Configuration
   CORS_ORIGIN: string;
@@ -70,17 +62,10 @@ const DEFAULT_CONFIG: EnvironmentConfig = {
   API_URL: resolveDefaultApiUrl(),
   APP_NAME: 'Slimbooks',
   
-  // These should be overridden in production!
-  JWT_SECRET: 'default-jwt-secret-change-in-production',
-  JWT_REFRESH_SECRET: 'default-refresh-secret-change-in-production',
-  SESSION_SECRET: 'default-session-secret-change-in-production',
-  
   ACCESS_TOKEN_EXPIRY: 2 * 60 * 60 * 1000, // 2 hours
   REFRESH_TOKEN_EXPIRY: 7 * 24 * 60 * 60 * 1000, // 7 days
   EMAIL_TOKEN_EXPIRY: 24 * 60 * 60 * 1000, // 24 hours
   PASSWORD_RESET_EXPIRY: 60 * 60 * 1000, // 1 hour
-  
-  DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/slimbooks',
   
   CORS_ORIGIN: 'http://localhost:8080',
   CORS_CREDENTIALS: true,
@@ -140,16 +125,10 @@ export const loadEnvironmentConfig = (): EnvironmentConfig => {
     API_URL: parseString(configuredApiUrl, resolvedDefaultApiUrl),
     APP_NAME: parseString(env.VITE_APP_NAME || env.APP_NAME, DEFAULT_CONFIG.APP_NAME),
     
-    JWT_SECRET: parseString(env.JWT_SECRET, DEFAULT_CONFIG.JWT_SECRET),
-    JWT_REFRESH_SECRET: parseString(env.JWT_REFRESH_SECRET, DEFAULT_CONFIG.JWT_REFRESH_SECRET),
-    SESSION_SECRET: parseString(env.SESSION_SECRET, DEFAULT_CONFIG.SESSION_SECRET),
-    
     ACCESS_TOKEN_EXPIRY: parseNumber(env.ACCESS_TOKEN_EXPIRY, DEFAULT_CONFIG.ACCESS_TOKEN_EXPIRY),
     REFRESH_TOKEN_EXPIRY: parseNumber(env.REFRESH_TOKEN_EXPIRY, DEFAULT_CONFIG.REFRESH_TOKEN_EXPIRY),
     EMAIL_TOKEN_EXPIRY: parseNumber(env.EMAIL_TOKEN_EXPIRY, DEFAULT_CONFIG.EMAIL_TOKEN_EXPIRY),
     PASSWORD_RESET_EXPIRY: parseNumber(env.PASSWORD_RESET_EXPIRY, DEFAULT_CONFIG.PASSWORD_RESET_EXPIRY),
-    
-    DATABASE_URL: parseString(env.DATABASE_URL, DEFAULT_CONFIG.DATABASE_URL),
     
     CORS_ORIGIN: parseString(env.CORS_ORIGIN, DEFAULT_CONFIG.CORS_ORIGIN),
     CORS_CREDENTIALS: parseBoolean(env.CORS_CREDENTIALS, DEFAULT_CONFIG.CORS_CREDENTIALS),
@@ -174,40 +153,14 @@ export const loadEnvironmentConfig = (): EnvironmentConfig => {
     LOG_FILE: parseString(env.LOG_FILE, DEFAULT_CONFIG.LOG_FILE)
   };
   
-  // Validate critical security settings
-  validateSecurityConfig(config);
-  
   return config;
 };
 
-// Validate security configuration
-const validateSecurityConfig = (config: EnvironmentConfig): void => {
-  const warnings: string[] = [];
-  
-  // Check for default secrets in production
-  if (config.NODE_ENV === 'production') {
-    if (config.JWT_SECRET.includes('default') || config.JWT_SECRET.includes('change')) {
-      warnings.push('JWT_SECRET is using default value in production!');
-    }
-    
-    if (config.JWT_REFRESH_SECRET.includes('default') || config.JWT_REFRESH_SECRET.includes('change')) {
-      warnings.push('JWT_REFRESH_SECRET is using default value in production!');
-    }
-    
-    if (config.SESSION_SECRET.includes('default') || config.SESSION_SECRET.includes('change')) {
-      warnings.push('SESSION_SECRET is using default value in production!');
-    }
-    
-    // Check secret length
-    if (config.JWT_SECRET.length < 32) {
-      warnings.push('JWT_SECRET should be at least 32 characters long!');
-    }
-    
-    if (config.JWT_REFRESH_SECRET.length < 32) {
-      warnings.push('JWT_REFRESH_SECRET should be at least 32 characters long!');
-    }
-  }
-};
+// NOTE: JWT/session secrets and the database URL are intentionally NOT part of
+// this frontend configuration. They are server-only and must never be shipped
+// in the client bundle. The server validates its own secrets in
+// server/config/index.ts (which fails startup if they are missing/weak in
+// production).
 
 // Export singleton instance
 export const envConfig = loadEnvironmentConfig();
@@ -217,17 +170,6 @@ export const serverConfig = {
   NODE_ENV: envConfig.NODE_ENV,
   PORT: envConfig.PORT,
   HOST: envConfig.HOST
-};
-
-export const securityConfig = {
-  JWT_SECRET: envConfig.JWT_SECRET,
-  JWT_REFRESH_SECRET: envConfig.JWT_REFRESH_SECRET,
-  SESSION_SECRET: envConfig.SESSION_SECRET,
-  ACCESS_TOKEN_EXPIRY: envConfig.ACCESS_TOKEN_EXPIRY,
-  REFRESH_TOKEN_EXPIRY: envConfig.REFRESH_TOKEN_EXPIRY,
-  BCRYPT_ROUNDS: envConfig.BCRYPT_ROUNDS,
-  MAX_FAILED_LOGIN_ATTEMPTS: envConfig.MAX_FAILED_LOGIN_ATTEMPTS,
-  ACCOUNT_LOCKOUT_DURATION: envConfig.ACCOUNT_LOCKOUT_DURATION
 };
 
 export const corsConfig = {

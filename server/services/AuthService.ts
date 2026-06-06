@@ -343,7 +343,7 @@ export class AuthService {
       await databaseService.getOne<UserPublic>('SELECT id, role, roles FROM users WHERE id = ?', [userId])
     );
     
-    if (userToDelete?.role === 'admin' && (adminCount?.count || 0) <= 1) {
+    if (userToDelete?.role === 'admin' && (Number(adminCount?.count) || 0) <= 1) {
       throw new Error('Cannot delete the last administrator');
     }
 

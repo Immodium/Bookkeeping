@@ -4,7 +4,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { userService } from '../services/UserService.js';
+import { userService, toPublicUser } from '../services/UserService.js';
 import { authConfig } from '../config/index.js';
 import { emailProviderService } from '../services/EmailProviderService.js';
 import { emailTemplateService } from '../services/EmailTemplateService.js';
@@ -119,7 +119,7 @@ export const getUserByEmail = asyncHandler(async (req: Request, res: Response): 
     throw new NotFoundError('User');
   }
 
-  res.json({ success: true, data: user });
+  res.json({ success: true, data: toPublicUser(user) });
 });
 
 /**

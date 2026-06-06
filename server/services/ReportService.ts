@@ -64,6 +64,18 @@ export interface ReportSchedule extends Omit<DatabaseReportSchedule, 'config'> {
  */
 export class ReportService {
   private readonly tableColumnCache = new Map<string, Set<string>>();
+
+  // Default and hard cap on rows returned by list queries, so an unbounded
+  // history of saved reports/schedules can't be loaded into memory at once.
+  static readonly MAX_LIST_LIMIT = 500;
+
+  static clampListLimit(limit: number): number {
+    if (!Number.isInteger(limit) || limit <= 0) {
+      return ReportService.MAX_LIST_LIMIT;
+    }
+    return Math.min(limit, ReportService.MAX_LIST_LIMIT);
+  }
+
   private normalizeTenantId(tenantId?: number): number {
     if (!tenantId || !Number.isInteger(tenantId) || tenantId <= 0) {
       throw new Error(`Invalid tenant context: tenantId must be a positive integer, got ${tenantId}`);
@@ -154,14 +166,16 @@ export class ReportService {
   /**
    * Get all reports ordered by creation date
    */
-  async getAllReports(tenantId?: number): Promise<DatabaseReport[]> {
+  async getAllReports(tenantId?: number, limit = ReportService.MAX_LIST_LIMIT): Promise<DatabaseReport[]> {
     const scopedTenantId = this.normalizeTenantId(tenantId);
+    const safeLimit = ReportService.clampListLimit(limit);
     return await databaseService.getMany<DatabaseReport>(`
       SELECT id, name, type, date_range_start, date_range_end, data, created_at
       FROM reports
       WHERE tenant_id = ?
       ORDER BY created_at DESC
-    `, [scopedTenantId]);
+      LIMIT ?
+    `, [scopedTenantId, safeLimit]);
   }
 
   /**
@@ -391,6 +405,7 @@ export class ReportService {
         FROM report_schedules
         ${whereClause}
         ORDER BY created_at DESC
+        LIMIT ${ReportService.MAX_LIST_LIMIT}
       `,
       params
     );

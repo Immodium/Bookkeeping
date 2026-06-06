@@ -359,8 +359,11 @@ export class InvoiceService {
       return { id, amount: invoiceRecord.amount, client_id: invoiceRecord.client_id, status: invoiceRecord.status };
     });
 
-    // Fire-and-forget: usage metering + webhook dispatch
-    usageService.increment(scopedTenantId, 'invoices_created').catch(() => {});
+    // Usage metering runs on the request's per-tenant DB connection, so await it
+    // (it never throws) to avoid issuing a query concurrently with — or after the
+    // release of — that connection. Webhook dispatch does external HTTP and stays
+    // fire-and-forget.
+    await usageService.increment(scopedTenantId, 'invoices_created');
     outboundWebhookService.dispatch(scopedTenantId, 'invoice.created', {
       invoice_id: nextId.id,
       tenant_id: scopedTenantId,

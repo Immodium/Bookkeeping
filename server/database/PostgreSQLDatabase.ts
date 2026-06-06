@@ -19,6 +19,13 @@ const transactionContext = new AsyncLocalStorage<PoolClient>();
 interface TenantContext { client: PoolClient; tenantId: number; }
 export const tenantContextStorage = new AsyncLocalStorage<TenantContext>();
 
+// Query parameters can contain PII or secrets (emails, password hashes, tokens).
+// Avoid logging their raw values in production; log only the count there.
+const formatParamsForLog = (params: unknown[]): string =>
+  process.env.NODE_ENV === 'production'
+    ? `[${params.length} param(s) redacted]`
+    : JSON.stringify(params);
+
 /**
  * Prepare a query for PostgreSQL:
  * - Replace ? params with $1, $2...
@@ -283,7 +290,7 @@ export class PostgreSQLDatabase implements IDatabase {
       }
       console.error('PostgreSQL query error:', error);
       console.error('Query:', query);
-      console.error('Params:', params);
+      console.error('Params:', formatParamsForLog(params));
       throw new Error(`Database operation failed: ${(error as Error).message}`);
     }
   }
@@ -301,7 +308,7 @@ export class PostgreSQLDatabase implements IDatabase {
     } catch (error) {
       console.error('PostgreSQL getOne error:', error);
       console.error('Query:', query);
-      console.error('Params:', params);
+      console.error('Params:', formatParamsForLog(params));
       throw new Error(`Database fetch operation failed: ${(error as Error).message}`);
     }
   }
@@ -319,7 +326,7 @@ export class PostgreSQLDatabase implements IDatabase {
     } catch (error) {
       console.error('PostgreSQL getMany error:', error);
       console.error('Query:', query);
-      console.error('Params:', params);
+      console.error('Params:', formatParamsForLog(params));
       throw new Error(`Database fetch operation failed: ${(error as Error).message}`);
     }
   }

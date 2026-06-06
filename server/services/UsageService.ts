@@ -2,6 +2,7 @@
 // Tracks per-tenant usage metrics by calendar month
 
 import { databaseService } from '../core/DatabaseService.js';
+import { logger } from '../utils/logger.js';
 
 export type UsageMetric = 'invoices_created' | 'clients_created' | 'api_calls' | 'payments_recorded';
 
@@ -28,8 +29,10 @@ class UsageService {
          DO UPDATE SET value = usage_records.value + EXCLUDED.value, updated_at = NOW()`,
         [tenantId, metric, amount, period]
       );
-    } catch {
-      // Never throw from increment — silent on failure
+    } catch (error) {
+      // Never throw from increment — metering is best-effort — but do not fail
+      // silently: log at debug so dropped metrics are observable.
+      logger.debug({ err: error, tenantId, metric, amount }, 'Usage metering increment failed');
     }
   }
 

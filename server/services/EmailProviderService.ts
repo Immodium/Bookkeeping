@@ -2,6 +2,24 @@ import { Resend } from 'resend';
 
 const FROM_DOMAIN = 'slimbooks.io';
 
+// Cap how long we wait on the email provider so a hung/slow request cannot
+// block the caller (and any request awaiting it) indefinitely.
+const EMAIL_SEND_TIMEOUT_MS = 15_000;
+
+const withTimeout = async <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+};
+
 export interface EmailSendResult {
   success: boolean;
   message: string;
@@ -43,13 +61,17 @@ export class EmailProviderService {
       const fromAddress = `mail-${tenantId}@${FROM_DOMAIN}`;
       const from = input.fromName ? `${input.fromName} <${fromAddress}>` : fromAddress;
 
-      const { error } = await resend.emails.send({
-        from,
-        to: input.to,
-        subject: input.subject,
-        text: input.text || '',
-        html: input.html || input.text || ''
-      });
+      const { error } = await withTimeout(
+        resend.emails.send({
+          from,
+          to: input.to,
+          subject: input.subject,
+          text: input.text || '',
+          html: input.html || input.text || ''
+        }),
+        EMAIL_SEND_TIMEOUT_MS,
+        'Resend email send'
+      );
 
       if (error) {
         return { success: false, message: `Resend send failed: ${error.message}` };

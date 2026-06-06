@@ -28,7 +28,7 @@ export class EmailService {
    */
   private async getStoredEmailSettings(): Promise<EmailSettings | null> {
     try {
-      const { sqliteService } = await import('./sqlite.svc');
+      const { sqliteService } = await import('./apiClient.svc');
       if (sqliteService.isReady()) {
         const settings = await sqliteService.getSetting('email_settings');
         // Convert snake_case to camelCase and validate required fields

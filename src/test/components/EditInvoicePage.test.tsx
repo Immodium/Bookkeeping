@@ -47,7 +47,7 @@ vi.mock('@/utils/emailConfig.util', () => ({
   getEmailConfigurationStatus: vi.fn().mockResolvedValue({ canSendEmails: false })
 }));
 
-vi.mock('@/services/sqlite.svc', () => ({
+vi.mock('@/services/apiClient.svc', () => ({
   sqliteService: {
     isReady: () => true,
     getSetting: mockGetSetting

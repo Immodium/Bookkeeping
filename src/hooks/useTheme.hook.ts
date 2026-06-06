@@ -214,7 +214,7 @@ export const useTheme = () => {
           }
           
           log('useTheme: Auth token found, loading from database');
-          const { sqliteService } = await import('@/services/sqlite.svc');
+          const { sqliteService } = await import('@/services/apiClient.svc');
           await sqliteService.initialize();
           
           const settings = await sqliteService.getAllSettings('appearance');
@@ -299,7 +299,7 @@ export const useTheme = () => {
     
     if (saveToDb) {
       try {
-        const { sqliteService } = await import('@/services/sqlite.svc');
+        const { sqliteService } = await import('@/services/apiClient.svc');
         log('useTheme: Saving theme to database:', newTheme);
         log('useTheme: Checking authentication token...');
         const token = getToken();
@@ -332,7 +332,7 @@ export const useTheme = () => {
     if (!saveToDb) return;
 
     try {
-      const { sqliteService } = await import('@/services/sqlite.svc');
+      const { sqliteService } = await import('@/services/apiClient.svc');
       await sqliteService.setMultipleSettings({
         accent_mode: { value: mode, category: 'appearance' },
         accent_color: { value: normalized, category: 'appearance' }

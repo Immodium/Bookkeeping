@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { sqliteService } from '@/services/sqlite.svc';
+import { sqliteService } from '@/services/apiClient.svc';
 import { ProjectSettings } from '@/types';
 
 const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {

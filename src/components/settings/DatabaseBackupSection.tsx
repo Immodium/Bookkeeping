@@ -34,7 +34,7 @@ export const DatabaseBackupSection = () => {
   const loadDatabaseStats = async () => {
     try {
       // Use dynamic import to avoid circular dependencies
-      const { sqliteService } = await import('@/services/sqlite.svc');
+      const { sqliteService } = await import('@/services/apiClient.svc');
       
       if (!sqliteService.isReady()) {
         await sqliteService.initialize();
@@ -101,7 +101,7 @@ export const DatabaseBackupSection = () => {
     setIsExporting(true);
     try {
       // Use dynamic import to avoid circular dependencies
-      const { sqliteService } = await import('@/services/sqlite.svc');
+      const { sqliteService } = await import('@/services/apiClient.svc');
       const blob = await sqliteService.exportToFile();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -136,7 +136,7 @@ export const DatabaseBackupSection = () => {
     setIsImporting(true);
     try {
       // Use dynamic import to avoid circular dependencies
-      const { sqliteService } = await import('@/services/sqlite.svc');
+      const { sqliteService } = await import('@/services/apiClient.svc');
       await sqliteService.importFromFile(file);
 
       // Reload database stats

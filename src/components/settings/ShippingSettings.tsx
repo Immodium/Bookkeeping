@@ -22,7 +22,7 @@ export const ShippingSettings = forwardRef<SettingsTabRef>((props, ref) => {
     const loadShippingRates = async () => {
       try {
         // Use dynamic import to avoid circular dependencies
-        const { sqliteService } = await import('@/services/sqlite.svc');
+        const { sqliteService } = await import('@/services/apiClient.svc');
         
         if (!sqliteService.isReady()) {
           await sqliteService.initialize();
@@ -64,7 +64,7 @@ export const ShippingSettings = forwardRef<SettingsTabRef>((props, ref) => {
     setShippingRates(rates);
     try {
       // Use dynamic import to avoid circular dependencies
-      const { sqliteService } = await import('@/services/sqlite.svc');
+      const { sqliteService } = await import('@/services/apiClient.svc');
       await sqliteService.setSetting('shipping_rates', rates, 'shipping');
     } catch (error) {
       console.error('Error saving shipping rates:', error);

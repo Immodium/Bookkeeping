@@ -18,16 +18,13 @@ export const initializeDatabase = async (includeSampleData = false): Promise<voi
       await db.connect({ path: databaseConfig.databaseUrl });
     }
 
-    // createTables uses CREATE TABLE IF NOT EXISTS but PostgreSQL still has a
-    // TOCTOU race when two sessions check-then-create the same table
-    // simultaneously (e.g. two vitest workers starting at the same time).
-    // Treat the pg_class / pg_type catalog uniqueness violation as "another
-    // session already created the table" and continue — the table now exists.
     // createTables uses CREATE TABLE IF NOT EXISTS, but PostgreSQL still has a
     // TOCTOU race when two sessions check-then-create the same table at the
-    // same time (e.g. two vitest workers). If the race fires, wait briefly
-    // and re-run createTables — by then the winning session has finished and
-    // every CREATE TABLE IF NOT EXISTS becomes a no-op.
+    // same time (e.g. two vitest workers starting together). The losing session
+    // hits a pg_class / pg_type catalog uniqueness violation; treat that as
+    // "another session already created the table", wait briefly, and re-run
+    // createTables — by then the winning session has finished and every
+    // CREATE TABLE IF NOT EXISTS becomes a no-op.
     const MAX_CREATE_RETRIES = 5;
     for (let attempt = 1; attempt <= MAX_CREATE_RETRIES; attempt++) {
       try {

@@ -31,8 +31,9 @@ describe('EmailProviderService resend sender address', () => {
     });
 
     expect(result.success).toBe(true);
+    // From address format is mail<tenantId>@slimbooks.io (no hyphen).
     expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
-      from: 'mail-42@slimbooks.io',
+      from: 'mail42@slimbooks.io',
       to: 'client@example.com',
       subject: 'Invoice #1001'
     }));

@@ -405,36 +405,40 @@ export const validationSets = {
   ] as ValidationChain[],
   
   // Expense validation sets
+  // NOTE: expense vendor/category/description are intentionally NOT HTML-escaped
+  // on input. validator's .escape() turns legitimate characters into entities
+  // (e.g. a receipt date "05/14/2026" became "05&#x2F;14&#x2F;2026", and "Meals &
+  // Entertainment" -> "Meals &amp; Entertainment"), corrupting stored data.
+  // These fields are only ever rendered in React (UI) and React-rendered PDFs,
+  // both of which escape on output, and are never interpolated into email HTML —
+  // so storing them raw is safe and avoids the corruption.
   createExpense: [
     body('expenseData.date').isISO8601().withMessage('Date must be in ISO 8601 format'),
     body('expenseData.vendor')
       .optional()
       .trim()
       .isLength({ min: 1, max: 100 })
-      .withMessage('Vendor must be between 1 and 100 characters')
-      .escape(),
+      .withMessage('Vendor must be between 1 and 100 characters'),
     body('expenseData.category')
       .trim()
       .isLength({ min: 1, max: 50 })
-      .withMessage('Category must be between 1 and 50 characters')
-      .escape(),
+      .withMessage('Category must be between 1 and 50 characters'),
     body('expenseData.amount').isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
     body('expenseData.description')
       .optional()
       .trim()
       .isLength({ max: validationConfig.maxFieldLengths.description })
-      .withMessage(`Description must be less than ${validationConfig.maxFieldLengths.description} characters`)
-      .escape(),
+      .withMessage(`Description must be less than ${validationConfig.maxFieldLengths.description} characters`),
     body('expenseData.status').optional().isIn(['pending', 'approved', 'rejected'])
   ] as ValidationChain[],
   
   updateExpense: [
     validationRules.id,
     body('expenseData.date').optional().isISO8601(),
-    body('expenseData.vendor').optional().trim().isLength({ min: 1, max: 100 }).escape(),
-    body('expenseData.category').optional().trim().isLength({ min: 1, max: 50 }).escape(),
+    body('expenseData.vendor').optional().trim().isLength({ min: 1, max: 100 }),
+    body('expenseData.category').optional().trim().isLength({ min: 1, max: 50 }),
     body('expenseData.amount').optional().isFloat({ min: 0 }),
-    body('expenseData.description').optional().trim().isLength({ max: validationConfig.maxFieldLengths.description }).escape(),
+    body('expenseData.description').optional().trim().isLength({ max: validationConfig.maxFieldLengths.description }),
     body('expenseData.status').optional().isIn(['pending', 'approved', 'rejected'])
   ] as ValidationChain[],
   

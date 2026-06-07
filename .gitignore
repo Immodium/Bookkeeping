@@ -35,7 +35,6 @@ dist-ssr
 *.sln
 *.sw?
 
-package-lock.json
 .claude/*
 CLAUDE.md
 certs/*

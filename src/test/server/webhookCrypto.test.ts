@@ -94,17 +94,14 @@ describe('webhookCrypto — encryption configured (valid key)', () => {
     expect(decryptWebhookSecret(encryptWebhookSecret(value))).toBe(value);
   });
 
-  // FLAGGED LIMITATION (documented, not a test failure): encrypting an empty
-  // string yields an empty ciphertext segment ("enc:<iv>:<tag>:"), which the
-  // decrypt guard rejects as "Malformed" — so an empty secret cannot be
-  // round-tripped. Webhook secrets are always non-empty random strings, so this
-  // edge case is not reachable in practice. Captured here to make the behavior
-  // explicit; see the audit report's "flagged" section.
-  it('cannot round-trip an empty string (documents an edge-case limitation)', async () => {
+  // Regression: encrypting an empty string yields an empty ciphertext segment
+  // ("enc:<iv>:<tag>:"). The decrypt guard must validate by segment count (4),
+  // not by ciphertext truthiness, so an empty secret still round-trips.
+  it('round-trips an empty string (empty ciphertext segment is valid)', async () => {
     const { encryptWebhookSecret, decryptWebhookSecret } = await importFresh();
     const encryptedEmpty = encryptWebhookSecret('');
     expect(encryptedEmpty.startsWith('enc:')).toBe(true);
-    expect(() => decryptWebhookSecret(encryptedEmpty)).toThrow(/Malformed encrypted webhook secret/);
+    expect(decryptWebhookSecret(encryptedEmpty)).toBe('');
   });
 
   // Regression: GCM must reject tampered ciphertext via the auth tag. If this

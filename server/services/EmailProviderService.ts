@@ -58,7 +58,7 @@ export class EmailProviderService {
       const resend = new Resend(apiKey);
       const rawTenantId = Number(input.tenantId);
       const tenantId = Number.isInteger(rawTenantId) && rawTenantId > 0 ? rawTenantId : 1;
-      const fromAddress = `mail-${tenantId}@${FROM_DOMAIN}`;
+      const fromAddress = `mail${tenantId}@${FROM_DOMAIN}`;
       const from = input.fromName ? `${input.fromName} <${fromAddress}>` : fromAddress;
 
       const { error } = await withTimeout(

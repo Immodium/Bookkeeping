@@ -76,17 +76,95 @@ if [ ! -f ".env" ]; then
     fi
 fi
 
-# Validate critical environment variables
-printf "%s🔍 Validating environment configuration...%s\n" "$BLUE" "$NC"
-. .env
+# Validate critical environment variables in .env
+printf "%s🔍 Validating environment configuration (.env)...%s\n" "$BLUE" "$NC"
 
-if echo "$JWT_SECRET" | grep -q "CHANGE_THIS" || echo "$JWT_SECRET" | grep -q "default"; then
-    print_error "JWT_SECRET is not properly configured in .env file!"
+if [ ! -f ".env" ]; then
+    print_error ".env file not found — cannot validate environment."
     exit 1
 fi
 
-if echo "$JWT_REFRESH_SECRET" | grep -q "CHANGE_THIS" || echo "$JWT_REFRESH_SECRET" | grep -q "default"; then
-    print_error "JWT_REFRESH_SECRET is not properly configured in .env file!"
+# Read a value straight from the .env FILE (first matching KEY=...), ignoring any
+# value that may already be exported in the surrounding shell environment, so the
+# checks below reflect what is actually written in .env. Strips an optional
+# `export ` prefix and surrounding single/double quotes.
+env_file_value() {
+    line=$(grep -E "^[[:space:]]*(export[[:space:]]+)?$1=" .env | head -n1)
+    if [ -z "$line" ]; then
+        printf '%s' ""
+        return 0
+    fi
+    value=${line#*=}
+    case "$value" in
+        \"*\") value=${value#\"}; value=${value%\"} ;;
+        \'*\') value=${value#\'}; value=${value%\'} ;;
+    esac
+    printf '%s' "$value"
+}
+
+ENV_ERRORS=0
+
+JWT_SECRET=$(env_file_value "JWT_SECRET")
+JWT_REFRESH_SECRET=$(env_file_value "JWT_REFRESH_SECRET")
+SESSION_SECRET=$(env_file_value "SESSION_SECRET")
+DATABASE_URL=$(env_file_value "DATABASE_URL")
+WEBHOOK_ENCRYPTION_KEY=$(env_file_value "WEBHOOK_ENCRYPTION_KEY")
+
+# Require a variable to be present and non-empty.
+require_var() {
+    # $1 = name, $2 = value
+    if [ -z "$2" ]; then
+        print_error "$1 is missing or empty in .env"
+        ENV_ERRORS=$((ENV_ERRORS + 1))
+    fi
+}
+
+# Require a secret: present, not a leftover placeholder, and long enough.
+# $1 = name, $2 = value, $3 = minimum length (matches server config validation).
+require_secret() {
+    if [ -z "$2" ]; then
+        print_error "$1 is missing or empty in .env"
+        ENV_ERRORS=$((ENV_ERRORS + 1))
+        return 0
+    fi
+    case "$2" in
+        *CHANGE_THIS*|*change-in-production*|*your-secret*|*your-refresh*|*your-session*|*replace-with*|*default-*)
+            print_error "$1 still contains a placeholder value in .env — generate a real secret (see scripts/generate-secrets.sh)"
+            ENV_ERRORS=$((ENV_ERRORS + 1))
+            return 0
+            ;;
+    esac
+    if [ "${#2}" -lt "$3" ]; then
+        print_error "$1 must be at least $3 characters (currently ${#2})"
+        ENV_ERRORS=$((ENV_ERRORS + 1))
+    fi
+}
+
+# Always-required configuration.
+require_var "DATABASE_URL" "$DATABASE_URL"
+
+# Secrets required by the server in production (server/config/index.ts).
+require_secret "JWT_SECRET" "$JWT_SECRET" 32
+require_secret "JWT_REFRESH_SECRET" "$JWT_REFRESH_SECRET" 32
+require_secret "SESSION_SECRET" "$SESSION_SECRET" 32
+
+# Optional, but if set the webhook encryption key must be exactly 64 hex chars.
+if [ -n "$WEBHOOK_ENCRYPTION_KEY" ]; then
+    if [ "${#WEBHOOK_ENCRYPTION_KEY}" -ne 64 ]; then
+        print_error "WEBHOOK_ENCRYPTION_KEY must be exactly 64 hex characters when set (currently ${#WEBHOOK_ENCRYPTION_KEY})"
+        ENV_ERRORS=$((ENV_ERRORS + 1))
+    else
+        case "$WEBHOOK_ENCRYPTION_KEY" in
+            *[!0-9a-fA-F]*)
+                print_error "WEBHOOK_ENCRYPTION_KEY must contain only hex characters (0-9, a-f)"
+                ENV_ERRORS=$((ENV_ERRORS + 1))
+                ;;
+        esac
+    fi
+fi
+
+if [ "$ENV_ERRORS" -gt 0 ]; then
+    print_error "Environment validation failed with $ENV_ERRORS error(s). Update .env and re-run the deploy."
     exit 1
 fi
 

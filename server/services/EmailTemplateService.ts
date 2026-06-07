@@ -345,10 +345,13 @@ class EmailTemplateService {
       throw new Error(`Unknown email template: ${templateName}`);
     }
 
-    // Build company header HTML
-    const companyHeaderHtml = branding.company_logo_url
-      ? `<img src="${branding.company_logo_url}" alt="${branding.company_name}" style="max-height:60px;max-width:200px;object-fit:contain;" />`
-      : `<h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:700;">${branding.company_name}</h1>`;
+    // Build the header logo. Use the tenant's uploaded branding logo when set,
+    // otherwise the Slimbooks logo. The header no longer falls back to plain
+    // text — it always shows a logo image.
+    const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const headerLogoUrl = branding.company_logo_url || `${appUrl}/slimbooks-email-logo.png`;
+    const companyHeaderHtml =
+      `<img src="${headerLogoUrl}" alt="${branding.company_name}" style="max-height:48px;max-width:220px;width:auto;object-fit:contain;border:0;display:inline-block;" />`;
 
     // Merge branding into variables (user-supplied vars take precedence for company_name override)
     const allVars: TemplateVariables = {

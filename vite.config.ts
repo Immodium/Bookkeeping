@@ -8,6 +8,7 @@ export default defineConfig({
   preview: {
     port: 8080,
     strictPort: true,
+    allowedHosts: ['app.slimbooks.io', 'localhost'],
     proxy: {
       '/api': {
         target: 'http://localhost:3002',

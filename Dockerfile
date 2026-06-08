@@ -47,9 +47,11 @@ RUN npm ci --no-audit && npm cache clean --force
 # Clean up build dependencies to reduce image size
 RUN apk del python3 make gcc g++ freetype-dev
 
-# Copy the rest of app (frontend assets + server + env)
+# Copy the rest of app (frontend assets + compiled server + env)
 COPY --from=frontend-builder /app/dist ./dist
-COPY server ./server
+COPY --from=frontend-builder /app/server/dist ./server/dist
+COPY server/database ./server/database
+COPY server/tsconfig.json ./server/tsconfig.json
 COPY certs ./certs
 COPY .env.production ./.env
 COPY vite.config.ts ./vite.config.ts

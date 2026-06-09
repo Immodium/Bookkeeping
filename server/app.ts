@@ -117,13 +117,13 @@ export const createApp = async () => {
   app.use(cookieParser());
 
   // Static file serving (disable when CloudFront/S3 is handling assets in production)
-  const distPath = join(__dirname, '..', 'dist');
+  const distPath = join(__dirname, '..', '..', 'dist');
   if (serverConfig.serveStaticFiles) {
     // Serve static files from uploads directory.
     // Harden against any file that slips through upload validation being used
     // for stored XSS: disable MIME sniffing and sandbox the response so the
     // browser never executes active content (scripts) served from /uploads.
-    const uploadsPath = join(__dirname, '..', 'public', 'uploads');
+    const uploadsPath = join(__dirname, '..', '..', 'uploads');
     app.use('/uploads', express.static(uploadsPath, {
       setHeaders: (res) => {
         res.setHeader('X-Content-Type-Options', 'nosniff');

@@ -4,7 +4,7 @@ import multer from 'multer';
 
 // Configure multer for file uploads (kept for route compatibility, but import is not accepted)
 const upload = multer({
-  dest: 'temp/',
+  dest: '/tmp/',
   limits: {
     fileSize: 100 * 1024 * 1024, // 100MB limit
   },

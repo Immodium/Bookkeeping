@@ -59,8 +59,23 @@ fi
 
 # Create necessary directories
 printf "%s📁 Creating necessary directories...%s\n" "$BLUE" "$NC"
-mkdir -p "$DATA_DIR" "$UPLOADS_DIR" "$LOGS_DIR"
+mkdir -p "$DATA_DIR" "$UPLOADS_DIR" "$LOGS_DIR" ./certs
 print_status "Directories created"
+
+# Generate self-signed SSL certificates if not present
+if [ ! -f "./certs/server.key" ] || [ ! -f "./certs/server.crt" ]; then
+    printf "%s🔐 Generating self-signed SSL certificates...%s\n" "$BLUE" "$NC"
+    if command -v openssl >/dev/null 2>&1; then
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+            -keyout ./certs/server.key \
+            -out ./certs/server.crt \
+            -config ./scripts/cert.conf 2>/dev/null
+        chmod 644 ./certs/server.key ./certs/server.crt
+        print_status "Self-signed SSL certificates generated (valid 10 years)"
+    else
+        print_warning "openssl not found — skipping cert generation. Set ENABLE_HTTPS=false in .env or provide certs manually."
+    fi
+fi
 
 # Check for environment file
 if [ ! -f ".env" ]; then
@@ -177,19 +192,14 @@ print_status "Existing containers stopped"
 
 # Build the application
 printf "%s🔨 Building application...%s\n" "$BLUE" "$NC"
-npm ci --only=production
+npm ci
 npm run build
 print_status "Application built successfully"
 
-# Build Docker image
-printf "%s🐳 Building Docker image...%s\n" "$BLUE" "$NC"
-docker build -t "$IMAGE_NAME" .
-print_status "Docker image built successfully"
-
-# Start the application
-printf "%s🚀 Starting application...%s\n" "$BLUE" "$NC"
-$DOCKER_COMPOSE up -d
-print_status "Application started successfully"
+# Build Docker image and start the application
+printf "%s🐳 Building Docker image and starting application...%s\n" "$BLUE" "$NC"
+$DOCKER_COMPOSE up --build -d
+print_status "Docker image built and application started successfully"
 
 # Wait for application to be ready
 printf "%s⏳ Waiting for application to be ready...%s\n" "$BLUE" "$NC"
@@ -199,7 +209,8 @@ sleep 10
 printf "%s🏥 Performing health check...%s\n" "$BLUE" "$NC"
 i=1
 while [ "$i" -le 30 ]; do
-    if curl -f "http://localhost:$PORT/api/health" >/dev/null 2>&1; then
+    if curl -f -k "https://localhost:$PORT/api/health" >/dev/null 2>&1 || \
+       curl -f "http://localhost:$PORT/api/health" >/dev/null 2>&1; then
         print_status "Application is healthy and ready!"
         break
     fi
@@ -217,7 +228,7 @@ done
 # Deployment info
 printf "\n%s🎉 Deployment completed successfully!%s\n" "$GREEN" "$NC"
 printf "%s📊 Deployment Information:%s\n" "$BLUE" "$NC"
-printf "  🌐 Application URL: http://localhost:%s\n" "$PORT"
+printf "  🌐 Application URL: https://localhost:%s\n" "$PORT"
 printf "  🐳 Container Name: %s\n" "$CONTAINER_NAME"
 printf "  📁 Data Directory: %s\n" "$DATA_DIR"
 printf "  📤 Uploads Directory: %s\n" "$UPLOADS_DIR"

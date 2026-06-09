@@ -24,7 +24,7 @@ const __dirname = dirname(__filename);
 // Configure multer for image uploads
 const imageStorage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const uploadDir = resolve(__dirname, '../../public/uploads/logos');
+    const uploadDir = resolve(__dirname, '../../../uploads/logos');
     try {
       await fs.mkdir(uploadDir, { recursive: true });
       cb(null, uploadDir);
@@ -170,7 +170,7 @@ router.post('/company/logo', requireAuth, uploadImage.single('logo'), async (req
     if (existingSettings.brandingImage && existingSettings.brandingImage.startsWith('/uploads/logos/')) {
       const oldFilename = existingSettings.brandingImage.split('/').pop();
       if (oldFilename && oldFilename.startsWith('logo-')) {
-        const oldFilePath = resolve(__dirname, '../../public/uploads/logos', oldFilename);
+        const oldFilePath = resolve(__dirname, '../../../uploads/logos', oldFilename);
         try {
           await fs.unlink(oldFilePath);
         } catch (deleteError) {
@@ -222,7 +222,7 @@ router.delete('/company/logo', requireAuth, async (req: Request, res: Response):
     if (existingSettings.brandingImage && existingSettings.brandingImage.startsWith('/uploads/logos/')) {
       const filename = existingSettings.brandingImage.split('/').pop();
       if (filename && filename.startsWith('logo-')) {
-        const filePath = resolve(__dirname, '../../public/uploads/logos', filename);
+        const filePath = resolve(__dirname, '../../../uploads/logos', filename);
         try {
           await fs.unlink(filePath);
         } catch (deleteError) {

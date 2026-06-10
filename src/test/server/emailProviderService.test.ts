@@ -31,10 +31,48 @@ describe('EmailProviderService resend sender address', () => {
     });
 
     expect(result.success).toBe(true);
+    // From address format is mail<tenantId>@slimbooks.io (no hyphen).
     expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
-      from: 'mail-42@slimbooks.io',
+      from: 'mail42@slimbooks.io',
       to: 'client@example.com',
       subject: 'Invoice #1001'
     }));
+  });
+
+  // Regression: the header logo must be embedded inline (CID) so it renders in
+  // email clients without a publicly reachable APP_URL.
+  it('attaches the Slimbooks logo inline when the HTML references cid:slimbooks-logo', async () => {
+    const service = new EmailProviderService();
+    const result = await service.sendEmail({
+      tenantId: 1,
+      to: 'client@example.com',
+      subject: 'Invoice',
+      html: '<img src="cid:slimbooks-logo" alt="Slimbooks" /><p>Body</p>'
+    });
+
+    expect(result.success).toBe(true);
+    const payload = sendMock.mock.calls[0][0];
+    expect(Array.isArray(payload.attachments)).toBe(true);
+    expect(payload.attachments).toHaveLength(1);
+    expect(payload.attachments[0]).toMatchObject({
+      filename: 'slimbooks-logo.png',
+      contentId: 'slimbooks-logo',
+      contentType: 'image/png'
+    });
+    expect(typeof payload.attachments[0].content).toBe('string');
+    expect(payload.attachments[0].content.length).toBeGreaterThan(0);
+  });
+
+  it('does not attach the logo when the HTML does not reference it', async () => {
+    const service = new EmailProviderService();
+    await service.sendEmail({
+      tenantId: 1,
+      to: 'client@example.com',
+      subject: 'No logo',
+      html: '<p>plain</p>'
+    });
+
+    const payload = sendMock.mock.calls[0][0];
+    expect(payload.attachments).toBeUndefined();
   });
 });

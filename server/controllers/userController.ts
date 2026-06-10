@@ -4,7 +4,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { userService } from '../services/UserService.js';
+import { userService, toPublicUser } from '../services/UserService.js';
 import { authConfig } from '../config/index.js';
 import { emailProviderService } from '../services/EmailProviderService.js';
 import { emailTemplateService } from '../services/EmailTemplateService.js';
@@ -119,27 +119,7 @@ export const getUserByEmail = asyncHandler(async (req: Request, res: Response): 
     throw new NotFoundError('User');
   }
 
-  res.json({ success: true, data: user });
-});
-
-/**
- * Get user by Google ID
- */
-export const getUserByGoogleId = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const { googleId } = req.params;
-  
-  if (!googleId) {
-    throw new ValidationError('Valid Google ID is required');
-  }
-
-  const tenantId = req.tenantId || req.user?.tenant_id || 1;
-  const user = await userService.getUserByGoogleId(googleId, tenantId);
-
-  if (!user) {
-    throw new NotFoundError('User');
-  }
-
-  res.json({ success: true, data: user });
+  res.json({ success: true, data: toPublicUser(user) });
 });
 
 /**
@@ -158,7 +138,6 @@ export const createUser = asyncHandler(async (req: Request<object, object, Creat
     const username = typeof bodyUserData.username === 'string' ? bodyUserData.username : undefined;
     const role = typeof bodyUserData.role === 'string' ? (bodyUserData.role as UserRole) : undefined;
     const email_verified = Boolean(bodyUserData.email_verified);
-    const google_id = typeof bodyUserData.google_id === 'string' ? bodyUserData.google_id : undefined;
     const last_login = typeof bodyUserData.last_login === 'string' ? bodyUserData.last_login : undefined;
     const failed_login_attempts = typeof bodyUserData.failed_login_attempts === 'number' ? bodyUserData.failed_login_attempts : undefined;
     const account_locked_until = typeof bodyUserData.account_locked_until === 'string' ? bodyUserData.account_locked_until : undefined;
@@ -175,7 +154,6 @@ export const createUser = asyncHandler(async (req: Request<object, object, Creat
       role?: UserRole;
       roles?: UserRole[];
       email_verified?: boolean;
-      google_id?: string;
       last_login?: string;
       failed_login_attempts?: number;
       account_locked_until?: string;
@@ -188,7 +166,6 @@ export const createUser = asyncHandler(async (req: Request<object, object, Creat
     if (role) createPayload.role = role;
     if (roles) createPayload.roles = roles;
     if (email_verified !== undefined) createPayload.email_verified = email_verified;
-    if (google_id) createPayload.google_id = google_id;
     if (last_login) createPayload.last_login = last_login;
     if (failed_login_attempts !== undefined) createPayload.failed_login_attempts = failed_login_attempts;
     if (account_locked_until) createPayload.account_locked_until = account_locked_until;
@@ -201,7 +178,6 @@ export const createUser = asyncHandler(async (req: Request<object, object, Creat
       role?: UserRole;
       roles?: UserRole[];
       email_verified?: boolean;
-      google_id?: string;
       last_login?: string;
       failed_login_attempts?: number;
       account_locked_until?: string;
@@ -214,7 +190,6 @@ export const createUser = asyncHandler(async (req: Request<object, object, Creat
     if (createPayload.role) sanitizedCreatePayload.role = createPayload.role;
     if (createPayload.roles) sanitizedCreatePayload.roles = createPayload.roles;
     if (createPayload.email_verified !== undefined) sanitizedCreatePayload.email_verified = createPayload.email_verified;
-    if (createPayload.google_id) sanitizedCreatePayload.google_id = createPayload.google_id;
     if (createPayload.last_login) sanitizedCreatePayload.last_login = createPayload.last_login;
     if (createPayload.failed_login_attempts !== undefined) {
       sanitizedCreatePayload.failed_login_attempts = createPayload.failed_login_attempts;
@@ -285,7 +260,7 @@ export const updateUser = asyncHandler(async (req: Request<{id: string}, UpdateU
 
     // Strip privileged fields for non-admin callers
     if (!callerIsAdmin) {
-      const privilegedFields = ['role', 'roles', 'email_verified', 'google_id', 'password_hash', 'tenant_id'];
+      const privilegedFields = ['role', 'roles', 'email_verified', 'password_hash', 'tenant_id'];
       for (const field of privilegedFields) {
         delete (userData as Record<string, unknown>)[field];
       }
@@ -299,7 +274,6 @@ export const updateUser = asyncHandler(async (req: Request<{id: string}, UpdateU
       role: UserRole;
       roles: UserRole[];
       email_verified: boolean;
-      google_id: string;
       password_hash: string;
     }> = {};
 

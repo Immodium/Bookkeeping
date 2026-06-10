@@ -32,8 +32,6 @@ export interface Invoice {
   items?: string; // JSON string of InvoiceItem[]
   notes?: string;
   payment_terms?: string;
-  stripe_invoice_id?: string;
-  stripe_payment_intent_id?: string;
   type: InvoiceType;
   client_name?: string;
   client_email?: string;

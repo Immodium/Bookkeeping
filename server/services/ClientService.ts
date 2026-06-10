@@ -153,21 +153,21 @@ export class ClientService {
       await databaseService.executeQuery(`
         INSERT INTO clients (
           id, tenant_id, name, first_name, last_name, email, phone, company, address, city, state,
-          zip, country, tax_id, notes, is_active, stripe_customer_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          zip, country, tax_id, notes, is_active, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         clientRecord.id, clientRecord.tenant_id, clientRecord.name, clientRecord.first_name, clientRecord.last_name,
         clientRecord.email, clientRecord.phone, clientRecord.company, clientRecord.address,
         clientRecord.city, clientRecord.state, clientRecord.zip, clientRecord.country,
-        clientRecord.tax_id, clientRecord.notes, clientRecord.is_active,
-        null, clientRecord.created_at, clientRecord.updated_at
+        clientRecord.tax_id, clientRecord.notes, clientRecord.is_active, clientRecord.created_at, clientRecord.updated_at
       ]);
 
       return id;
     });
 
-    // Fire-and-forget: usage metering
-    usageService.increment(scopedTenantId, 'clients_created').catch(() => {});
+    // Await metering (it never throws) so it completes on the request's tenant
+    // connection rather than racing a query on — or the release of — that connection.
+    await usageService.increment(scopedTenantId, 'clients_created');
 
     return nextId;
   }
@@ -228,7 +228,7 @@ export class ClientService {
     // Filter allowed fields
     const allowedFields = [
       'name', 'first_name', 'last_name', 'email', 'phone', 'company', 'address', 'city', 'state',
-      'zip', 'country', 'tax_id', 'notes', 'is_active', 'stripe_customer_id'
+      'zip', 'country', 'tax_id', 'notes', 'is_active'
     ];
     
     const updateData: Record<string, any> = {};
@@ -457,13 +457,20 @@ export class ClientService {
     const { limit = 50, offset = 0 } = options;
     const scopedTenantId = this.normalizeTenantId(tenantId);
 
+    // Validate days as a non-negative integer and bind it as a parameter rather
+    // than interpolating it into the SQL string (prevents SQL injection).
+    const safeDays = typeof days === 'number' && Number.isInteger(days) ? days : parseInt(String(days), 10);
+    if (!Number.isInteger(safeDays) || safeDays < 0) {
+      throw new Error('days must be a non-negative integer');
+    }
+
     const clients = await databaseService.getMany<Client>(`
       SELECT DISTINCT c.* FROM clients c
       INNER JOIN invoices i ON c.id = i.client_id
-      WHERE c.tenant_id = ? AND i.tenant_id = ? AND i.created_at > datetime('now', '-${days} days')
+      WHERE c.tenant_id = ? AND i.tenant_id = ? AND i.created_at > NOW() - (? || ' days')::interval
       ORDER BY c.name ASC
       LIMIT ? OFFSET ?
-    `, [scopedTenantId, scopedTenantId, limit, offset]);
+    `, [scopedTenantId, scopedTenantId, safeDays, limit, offset]);
     return clients.map(client => this.normalizeClientRecord(client));
   }
 

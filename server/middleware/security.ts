@@ -136,12 +136,11 @@ export const createCorsOptions = (
  * the caller uses cookies or Authorization headers.
  *
  * Exempted paths (receive legitimate cross-origin calls):
- *   - /api/billing/webhook  — Stripe / external billing providers
  *   - /api/auth/register-tenant — public self-service signup
  */
 export const csrfProtection = (req: Request, res: Response, next: NextFunction): void => {
   const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-  const EXEMPT_PATHS = ['/api/billing/webhook', '/api/auth/register-tenant'];
+  const EXEMPT_PATHS = ['/api/auth/register-tenant'];
 
   if (SAFE_METHODS.has(req.method)) {
     return next();
@@ -161,10 +160,18 @@ export const csrfProtection = (req: Request, res: Response, next: NextFunction):
   const source = origin || referer;
 
   if (!source) {
-    // No Origin/Referer — allow server-to-server calls (API keys, Postman)
-    // but log a warning in production so it's observable
+    // No Origin/Referer header. Browsers always send Origin on state-changing
+    // cross-origin requests, so a missing Origin from a cookie/browser client
+    // is a CSRF red flag. Allow explicit API-key (server-to-server) callers;
+    // in production, reject everything else.
+    const hasApiKey = Boolean(req.headers['x-api-key']);
+    if (hasApiKey) {
+      return next();
+    }
     if (isProd) {
-      logger.warn({ method: req.method, path: req.path }, 'CSRF: state-changing request with no Origin/Referer header');
+      logger.warn({ method: req.method, path: req.path }, 'CSRF: rejected state-changing request with no Origin/Referer and no API key');
+      res.status(403).json({ success: false, error: 'CSRF check failed: missing Origin/Referer header' });
+      return;
     }
     return next();
   }

@@ -80,7 +80,7 @@ export const CreateInvoicePage: React.FC<CreateInvoicePageProps> = ({ onBack, ed
         setClients(allClients);
 
         // Load tax and shipping rates from persisted settings store.
-        const { sqliteService } = await import('@/services/sqlite.svc');
+        const { sqliteService } = await import('@/services/apiClient.svc');
         if (!sqliteService.isReady()) {
           await sqliteService.initialize();
         }

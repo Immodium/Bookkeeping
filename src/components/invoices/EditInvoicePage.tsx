@@ -136,7 +136,7 @@ export const EditInvoicePage = () => {
     const loadSettings = async (invoiceRecord?: Invoice) => {
       try {
         // Load tax rates from SQLite settings
-        const { sqliteService } = await import('@/services/sqlite.svc');
+        const { sqliteService } = await import('@/services/apiClient.svc');
         if (sqliteService.isReady()) {
           const savedTaxRates = await sqliteService.getSetting('tax_rates');
           if (savedTaxRates) {
@@ -239,7 +239,6 @@ export const EditInvoicePage = () => {
         status: updatedInvoiceData.status,
         due_date: updatedInvoiceData.due_date,
         description: lineItems.map(item => item.description).join(', '),
-        stripe_invoice_id: invoice.stripe_invoice_id,
         type: invoice.type,
         client_name: selectedClient.name,
         client_email: selectedClient.email,
@@ -304,7 +303,6 @@ export const EditInvoicePage = () => {
         status: 'sent' as InvoiceStatus,
         due_date: updatedInvoiceData.due_date,
         description: lineItems.map(item => item.description).join(', '),
-        stripe_invoice_id: invoice.stripe_invoice_id,
         type: invoice.type,
         client_name: selectedClient.name,
         client_email: selectedClient.email,

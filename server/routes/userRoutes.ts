@@ -6,7 +6,6 @@ import {
   getAllUsers,
   getUserById,
   getUserByEmail,
-  getUserByGoogleId,
   createUser,
   inviteUser,
   updateUser,
@@ -83,7 +82,7 @@ router.get('/email/:email', async (req: Request, res: Response, next: NextFuncti
   // Allow public access for admin user check during initialization
   if (!serverConfig.saasMode && email === 'admin@slimbooks.app') {
     try {
-      const { userService } = await import('../services/UserService.js');
+      const { userService, toPublicUser } = await import('../services/UserService.js');
       const user = await userService.getUserByEmail(email, 1);
 
       if (!user) {
@@ -96,7 +95,7 @@ router.get('/email/:email', async (req: Request, res: Response, next: NextFuncti
 
       return res.json({
         success: true,
-        data: user,
+        data: toPublicUser(user),
         exists: true
       });
     } catch (error) {
@@ -117,13 +116,6 @@ router.get('/email/:email', async (req: Request, res: Response, next: NextFuncti
     });
   }
 });
-
-// Get user by Google ID (admin only)
-router.get('/google/:googleId', 
-  requireAuth, 
-  requireUsersRead, 
-  getUserByGoogleId
-);
 
 // Create new user (admin only)
 router.post('/', 

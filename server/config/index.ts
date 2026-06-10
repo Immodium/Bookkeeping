@@ -77,9 +77,7 @@ export interface AuthConfig {
  * Email configuration interface
  */
 export interface EmailConfig {
-  provider: 'smtp' | 'sendgrid' | 'resend';
-  sendgridApiKey: string | undefined;
-  sendgridFrom: string;
+  provider: 'smtp' | 'resend';
   resendApiKey: string | undefined;
   smtp: {
     host: string | undefined;
@@ -101,27 +99,6 @@ export interface EmailConfig {
       from: string;
     };
   };
-  isConfigured: boolean;
-}
-
-/**
- * Stripe configuration interface
- */
-export interface StripeConfig {
-  secretKey: string | undefined;
-  publishableKey: string | undefined;
-  webhookSecret: string | undefined;
-  currency: string;
-  isConfigured: boolean;
-}
-
-/**
- * Google OAuth configuration interface
- */
-export interface GoogleConfig {
-  clientId: string | undefined;
-  clientSecret: string | undefined;
-  redirectUri: string | undefined;
   isConfigured: boolean;
 }
 
@@ -181,8 +158,6 @@ export interface AppConfigComplete {
   database: DatabaseConfig;
   auth: AuthConfig;
   email: EmailConfig;
-  stripe: StripeConfig;
-  google: GoogleConfig;
   app: AppConfig;
   logging: LoggingConfig;
   validation: ValidationConfig;
@@ -218,7 +193,7 @@ export const serverConfig: ServerConfig = {
     process.env.ALLOW_DATABASE_IMPORT_EXPORT === 'true' ||
     (process.env.NODE_ENV !== 'production' && process.env.SAAS_MODE !== 'true'),
   cronJobSecret: process.env.CRON_JOB_SECRET,
-  billingWebhookSecret: process.env.BILLING_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET,
+  billingWebhookSecret: process.env.BILLING_WEBHOOK_SECRET,
   webhookEncryptionKey: process.env.WEBHOOK_ENCRYPTION_KEY,
   serveStaticFiles: process.env.SERVE_STATIC_FILES !== 'false',
 
@@ -273,9 +248,7 @@ export const authConfig: AuthConfig = {
  * Email configuration
  */
 export const emailConfig: EmailConfig = {
-  provider: process.env.EMAIL_PROVIDER === 'sendgrid' ? 'sendgrid' : process.env.EMAIL_PROVIDER === 'resend' ? 'resend' : 'smtp',
-  sendgridApiKey: process.env.SENDGRID_API_KEY,
-  sendgridFrom: process.env.SENDGRID_FROM || process.env.EMAIL_FROM || 'noreply@slimbooks.app',
+  provider: process.env.EMAIL_PROVIDER === 'resend' ? 'resend' : 'smtp',
   resendApiKey: process.env.RESEND_API_KEY,
   smtp: {
     host: process.env.SMTP_HOST,
@@ -304,39 +277,10 @@ export const emailConfig: EmailConfig = {
 
   // Check if email is configured
   isConfigured: (
-    process.env.EMAIL_PROVIDER === 'sendgrid'
-      ? !!(process.env.SENDGRID_API_KEY && (process.env.SENDGRID_FROM || process.env.EMAIL_FROM))
-      : process.env.EMAIL_PROVIDER === 'resend'
-        ? !!process.env.RESEND_API_KEY
-        : !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+    process.env.EMAIL_PROVIDER === 'resend'
+      ? !!process.env.RESEND_API_KEY
+      : !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
   )
-};
-
-/**
- * Stripe configuration (for payment processing)
- */
-export const stripeConfig: StripeConfig = {
-  secretKey: process.env.STRIPE_SECRET_KEY,
-  publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
-  webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-
-  // Default currency
-  currency: process.env.DEFAULT_CURRENCY || 'usd',
-
-  // Check if Stripe is configured
-  isConfigured: !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PUBLISHABLE_KEY)
-};
-
-/**
- * Google OAuth configuration
- */
-export const googleConfig: GoogleConfig = {
-  clientId: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  redirectUri: process.env.GOOGLE_REDIRECT_URI,
-
-  // Check if Google OAuth is configured
-  isConfigured: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 };
 
 /**
@@ -409,8 +353,6 @@ export const getAllConfig = (): AppConfigComplete => ({
   database: databaseConfig,
   auth: authConfig,
   email: emailConfig,
-  stripe: stripeConfig,
-  google: googleConfig,
   app: appConfig,
   logging: loggingConfig,
   validation: validationConfig
@@ -438,11 +380,6 @@ export const validateConfig = (): void => {
     // SESSION_SECRET must be set and >= 32 chars in production
     if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
       requiredVars.push('SESSION_SECRET (must be set and at least 32 characters)');
-    }
-
-    // STRIPE_WEBHOOK_SECRET required when STRIPE_SECRET_KEY is set
-    if (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_WEBHOOK_SECRET) {
-      requiredVars.push('STRIPE_WEBHOOK_SECRET (required when STRIPE_SECRET_KEY is set)');
     }
 
     // HTTPS warning (not a hard requirement — ALB can terminate TLS)
@@ -479,8 +416,6 @@ export const validateConfig = (): void => {
   // Log configuration status in a concise format
   const services: string[] = [];
   if (emailConfig.isConfigured) services.push('Email');
-  if (stripeConfig.isConfigured) services.push('Stripe');
-  if (googleConfig.isConfigured) services.push('OAuth');
 
   console.log(`✅ Config validated | Services: ${services.length > 0 ? services.join(', ') : 'None'} | Email verification: ${authConfig.requireEmailVerification ? 'On' : 'Off'}`);
 };
@@ -491,8 +426,6 @@ const config: AppConfigComplete = {
   database: databaseConfig,
   auth: authConfig,
   email: emailConfig,
-  stripe: stripeConfig,
-  google: googleConfig,
   app: appConfig,
   logging: loggingConfig,
   validation: validationConfig

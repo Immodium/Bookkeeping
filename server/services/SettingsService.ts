@@ -181,8 +181,8 @@ export class SettingsService {
       const scopedTenantId = this.normalizeTenantId(tenantId);
       // Get all project settings from database using settings table
       const dbSettings = await databaseService.getMany<{key: string, value: string}>(
-        'SELECT key, value FROM settings WHERE tenant_id = ? AND (key LIKE ? OR key LIKE ? OR key LIKE ? OR key LIKE ?)',
-        [scopedTenantId, 'google_oauth.%', 'stripe.%', 'email.%', 'security.%']
+        'SELECT key, value FROM settings WHERE tenant_id = ? AND (key LIKE ? OR key LIKE ?)',
+        [scopedTenantId, 'email.%', 'security.%']
       );
 
       // Convert database settings to a map for easy lookup
@@ -202,19 +202,11 @@ export class SettingsService {
         }
       };
 
-      const hasGoogleSecret = !!(
-        settingsMap['google_oauth.client_secret'] || process.env.GOOGLE_CLIENT_SECRET
-      );
-      const hasStripeSecret = !!(
-        settingsMap['stripe.secret_key'] || process.env.STRIPE_SECRET_KEY
-      );
       const hasSmtpPass = !!(settingsMap['email.smtp_pass'] || process.env.SMTP_PASS);
       const rawEmailProvider = (
         normalizeStringValue(settingsMap['email.provider']) || process.env.EMAIL_PROVIDER || 'smtp'
       ).toLowerCase();
-      const emailProvider: 'smtp' | 'sendgrid' | 'resend' = rawEmailProvider === 'sendgrid'
-        ? 'sendgrid'
-        : rawEmailProvider === 'resend'
+      const emailProvider: 'smtp' | 'resend' = rawEmailProvider === 'resend'
           ? 'resend'
           : 'smtp';
       const emailFrom = normalizeStringValue(settingsMap['email.email_from']) || process.env.EMAIL_FROM || '';
@@ -226,31 +218,12 @@ export class SettingsService {
         hasSmtpPass
       );
       const hasResendApiKey = !!process.env.RESEND_API_KEY;
-      const hasSendgridApiKey = !!process.env.SENDGRID_API_KEY;
       const isProviderConfigured = emailProvider === 'resend'
         ? hasResendApiKey
-        : emailProvider === 'sendgrid'
-          ? !!(hasSendgridApiKey && emailFrom)
-          : isSmtpConfigured;
+        : isSmtpConfigured;
 
       // Never return secrets to clients — only non-sensitive fields and configured flags
       const projectSettings: ProjectSettings = {
-        google_oauth: {
-          enabled: settingsMap['google_oauth.enabled'] === 'true' || false,
-          client_id: normalizeStringValue(settingsMap['google_oauth.client_id']) || process.env.GOOGLE_CLIENT_ID || '',
-          configured: !!(
-            (settingsMap['google_oauth.client_id'] || process.env.GOOGLE_CLIENT_ID) &&
-            hasGoogleSecret
-          )
-        },
-        stripe: {
-          enabled: settingsMap['stripe.enabled'] === 'true' || false,
-          publishable_key: normalizeStringValue(settingsMap['stripe.publishable_key']) || process.env.STRIPE_PUBLISHABLE_KEY || '',
-          configured: !!(
-            (settingsMap['stripe.publishable_key'] || process.env.STRIPE_PUBLISHABLE_KEY) &&
-            hasStripeSecret
-          )
-        },
         email: {
           enabled: isEmailEnabled,
           provider: emailProvider,
@@ -259,7 +232,6 @@ export class SettingsService {
           smtp_user: normalizeStringValue(settingsMap['email.smtp_user']) || process.env.SMTP_USER || '',
           email_from: emailFrom,
           resend_configured: hasResendApiKey,
-          sendgrid_configured: hasSendgridApiKey,
           configured: isProviderConfigured
         },
         security: {

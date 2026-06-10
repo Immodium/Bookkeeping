@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT CHECK (password_hash IS NULL OR length(password_hash) = 60),
     role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user', 'viewer')),
     email_verified INTEGER NOT NULL DEFAULT 0 CHECK (email_verified IN (0, 1)),
-    google_id TEXT UNIQUE CHECK (google_id IS NULL OR length(google_id) <= 50),
     last_login TEXT,
     failed_login_attempts INTEGER NOT NULL DEFAULT 0 CHECK (failed_login_attempts >= 0),
     account_locked_until TEXT,
@@ -36,7 +35,6 @@ CREATE TABLE IF NOT EXISTS clients (
     state TEXT CHECK (state IS NULL OR length(state) <= 50),
     zipCode TEXT CHECK (zipCode IS NULL OR (length(trim(zipCode)) >= 3 AND length(zipCode) <= 10)),
     country TEXT DEFAULT 'US' CHECK (length(country) = 2),
-    stripe_customer_id TEXT CHECK (stripe_customer_id IS NULL OR length(stripe_customer_id) <= 50),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -60,8 +58,6 @@ CREATE TABLE IF NOT EXISTS invoices (
     items TEXT,
     notes TEXT,
     payment_terms TEXT CHECK (payment_terms IS NULL OR length(payment_terms) <= 100),
-    stripe_invoice_id TEXT CHECK (stripe_invoice_id IS NULL OR length(stripe_invoice_id) <= 50),
-    stripe_payment_intent_id TEXT CHECK (stripe_payment_intent_id IS NULL OR length(stripe_payment_intent_id) <= 50),
     type TEXT NOT NULL DEFAULT 'one-time' CHECK (type IN ('one-time', 'recurring', 'subscription')),
     client_name TEXT CHECK (client_name IS NULL OR length(client_name) <= 100),
     client_email TEXT CHECK (client_email IS NULL OR length(client_email) <= 255),
@@ -210,7 +206,6 @@ CREATE TABLE IF NOT EXISTS project_settings (
 -- Users table indexes
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
 CREATE INDEX IF NOT EXISTS idx_users_last_login ON users(last_login);
 
 -- Clients table indexes
@@ -218,7 +213,6 @@ CREATE INDEX IF NOT EXISTS idx_clients_email ON clients(email);
 CREATE INDEX IF NOT EXISTS idx_clients_name ON clients(name);
 CREATE INDEX IF NOT EXISTS idx_clients_first_last ON clients(first_name, last_name);
 CREATE INDEX IF NOT EXISTS idx_clients_company ON clients(company);
-CREATE INDEX IF NOT EXISTS idx_clients_stripe_id ON clients(stripe_customer_id);
 CREATE INDEX IF NOT EXISTS idx_clients_created_at ON clients(created_at);
 
 -- Invoices table indexes
@@ -227,7 +221,6 @@ CREATE INDEX IF NOT EXISTS idx_invoices_client_id ON invoices(client_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
 CREATE INDEX IF NOT EXISTS idx_invoices_due_date ON invoices(due_date);
 CREATE INDEX IF NOT EXISTS idx_invoices_issue_date ON invoices(issue_date);
-CREATE INDEX IF NOT EXISTS idx_invoices_stripe_id ON invoices(stripe_invoice_id);
 CREATE INDEX IF NOT EXISTS idx_invoices_client_status ON invoices(client_id, status);
 CREATE INDEX IF NOT EXISTS idx_invoices_date_range ON invoices(issue_date, due_date);
 

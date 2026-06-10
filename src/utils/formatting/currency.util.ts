@@ -36,7 +36,7 @@ export const getCurrencySettings = async (): Promise<CurrencySettings> => {
 
   currencySettingsPromise = (async () => {
     try {
-      const { sqliteService } = await import('@/services/sqlite.svc');
+      const { sqliteService } = await import('@/services/apiClient.svc');
 
       if (sqliteService.isReady()) {
         const settings = await sqliteService.getSetting('currency_format_settings') as CurrencySettings;
@@ -67,7 +67,7 @@ export const getCurrencySettings = async (): Promise<CurrencySettings> => {
 
 export const saveCurrencySettings = async (settings: CurrencySettings): Promise<void> => {
   try {
-    const { sqliteService } = await import('@/services/sqlite.svc');
+    const { sqliteService } = await import('@/services/apiClient.svc');
 
     if (sqliteService.isReady()) {
       await sqliteService.setSetting('currency_format_settings', settings, 'general');

@@ -104,7 +104,6 @@ const usersSchema: TableSchema = {
     { name: 'password_hash', type: 'TEXT' },
     { name: 'role', type: 'TEXT', constraints: ["DEFAULT 'user'"] },
     { name: 'email_verified', type: 'INTEGER', constraints: ['DEFAULT 0'] },
-    { name: 'google_id', type: 'TEXT', constraints: ['UNIQUE'] },
     { name: 'roles', type: 'TEXT' },
     { name: 'two_factor_secret', type: 'TEXT' },
     { name: 'backup_codes', type: 'TEXT' },
@@ -143,7 +142,6 @@ const clientsSchema: TableSchema = {
     { name: 'country', type: 'TEXT' },
     { name: 'tax_id', type: 'TEXT' },
     { name: 'notes', type: 'TEXT' },
-    { name: 'stripe_customer_id', type: 'TEXT' },
     { name: 'is_active', type: 'INTEGER', constraints: ['DEFAULT 1'] },
     { name: 'deleted_at', type: 'TEXT' },
     { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
@@ -189,8 +187,6 @@ const invoicesSchema: TableSchema = {
     { name: 'tax_rate_id', type: 'TEXT' },
     { name: 'shipping_amount', type: 'REAL', constraints: ['DEFAULT 0'] },
     { name: 'shipping_rate_id', type: 'TEXT' },
-    { name: 'stripe_invoice_id', type: 'TEXT' },
-    { name: 'stripe_payment_intent_id', type: 'TEXT' },
     { name: 'email_status', type: 'TEXT', constraints: ['DEFAULT \'not_sent\''] },
     { name: 'email_sent_at', type: 'TEXT' },
     { name: 'email_error', type: 'TEXT' },
@@ -248,7 +244,6 @@ const paymentsSchema: TableSchema = {
     { name: 'method', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'status', type: 'TEXT', constraints: ['DEFAULT \'pending\''] },
     { name: 'transaction_id', type: 'TEXT' },
-    { name: 'stripe_payment_id', type: 'TEXT' },
     { name: 'notes', type: 'TEXT' },
     { name: 'date', type: 'TEXT', constraints: ['NOT NULL'] },
     { name: 'created_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] },
@@ -579,7 +574,7 @@ const processedWebhookEventsSchema: TableSchema = {
   columns: [
     { name: 'id', type: 'INTEGER', constraints: ['PRIMARY KEY GENERATED ALWAYS AS IDENTITY'] },
     { name: 'event_id', type: 'TEXT', constraints: ['NOT NULL UNIQUE'] },
-    { name: 'provider', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'stripe'"] },
+    { name: 'provider', type: 'TEXT', constraints: ["NOT NULL DEFAULT 'external'"] },
     { name: 'processed_at', type: 'TIMESTAMPTZ', constraints: ['NOT NULL DEFAULT NOW()'] }
   ]
 };
@@ -650,95 +645,9 @@ export const createTables = async (db: IDatabase): Promise<void> => {
     await db.executeQuery(createTableSQL);
   }
 
-  // Ensure a default tenant exists for backwards-compatible single-tenant mode.
-  // Legacy databases may not have tenants.public_id yet until migrations run.
-  try {
-    await db.executeQuery(`
-      INSERT INTO tenants (id, public_id, name, slug, status)
-      VALUES (1, '00000000-0000-7000-8000-000000000001', 'Default Tenant', 'default', 'active')
-      ON CONFLICT (id) DO NOTHING
-    `);
-  } catch (error) {
-    const message = (error as Error).message.toLowerCase();
-    const missingPublicIdColumn =
-      message.includes('public_id') &&
-      message.includes('does not exist');
-    if (!missingPublicIdColumn) {
-      throw error;
-    }
-
-    await db.executeQuery(`
-      INSERT INTO tenants (id, name, slug, status)
-      VALUES (1, 'Default Tenant', 'default', 'active')
-      ON CONFLICT (id) DO NOTHING
-    `);
-  }
-
-  const trialFeatures = JSON.stringify({
-    'reports.enabled': true,
-    'billing.recurring_invoices': true,
-    'billing.max_users': 3,
-    'billing.max_clients': 25,
-    'billing.max_invoices_per_month': 200
-  });
-  const starterFeatures = JSON.stringify({
-    'reports.enabled': true,
-    'billing.recurring_invoices': true,
-    'billing.max_users': 25,
-    'billing.max_clients': 1000,
-    'billing.max_invoices_per_month': 10000
-  });
-
-  await db.executeQuery(
-    `
-      INSERT INTO subscription_plans (
-        code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
-      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, NOW(), NOW())
-      ON CONFLICT (code) DO NOTHING
-    `,
-    ['trial', 'Trial', 0, 14, trialFeatures]
-  );
-  await db.executeQuery(
-    `
-      INSERT INTO subscription_plans (
-        code, name, status, price_cents, currency, billing_interval, trial_days, features_json, created_at, updated_at
-      ) VALUES (?, ?, 'active', ?, 'usd', 'monthly', ?, ?, NOW(), NOW())
-      ON CONFLICT (code) DO NOTHING
-    `,
-    ['starter', 'Starter', 2900, 0, starterFeatures]
-  );
-
-  await db.executeQuery(`
-    INSERT INTO tenant_subscriptions (
-      tenant_id,
-      plan_id,
-      status,
-      started_at,
-      current_period_start,
-      current_period_end,
-      cancel_at_period_end,
-      provider,
-      created_at,
-      updated_at
-    )
-    SELECT
-      1,
-      sp.id,
-      'active',
-      NOW(),
-      NOW(),
-      NOW() + INTERVAL '1 month',
-      0,
-      'internal',
-      NOW(),
-      NOW()
-    FROM subscription_plans sp
-    WHERE sp.code = 'starter'
-    LIMIT 1
-    ON CONFLICT (tenant_id) DO NOTHING
-  `);
-
-  // Create token tables for password reset and email verification
+  // Create token tables for password reset and email verification.
+  // Baseline platform data (default tenant, subscription plans, default
+  // subscription) is seeded separately via seedBootstrapData() after migrations.
   await createTokenTables(db);
 };
 

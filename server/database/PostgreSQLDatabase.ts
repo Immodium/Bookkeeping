@@ -19,6 +19,13 @@ const transactionContext = new AsyncLocalStorage<PoolClient>();
 interface TenantContext { client: PoolClient; tenantId: number; }
 export const tenantContextStorage = new AsyncLocalStorage<TenantContext>();
 
+// Query parameters can contain PII or secrets (emails, password hashes, tokens).
+// Avoid logging their raw values in production; log only the count there.
+const formatParamsForLog = (params: unknown[]): string =>
+  process.env.NODE_ENV === 'production'
+    ? `[${params.length} param(s) redacted]`
+    : JSON.stringify(params);
+
 /**
  * Prepare a query for PostgreSQL:
  * - Replace ? params with $1, $2...
@@ -183,7 +190,7 @@ export class PostgreSQLDatabase implements IDatabase {
       min: parseInt(process.env.DB_POOL_MIN || '2', 10),
       idleTimeoutMillis: parseInt(process.env.DB_POOL_IDLE_TIMEOUT || '30000', 10),
       connectionTimeoutMillis: parseInt(process.env.DB_POOL_CONNECTION_TIMEOUT || '5000', 10),
-      ssl: connStr.includes('sslmode=require') || (process.env.NODE_ENV === 'production' && !connStr.includes('localhost'))
+      ssl: !connStr.includes('sslmode=disable') && (connStr.includes('sslmode=require') || (process.env.NODE_ENV === 'production' && !connStr.includes('localhost')))
         ? { rejectUnauthorized: false }
         : undefined
     });
@@ -218,6 +225,22 @@ export class PostgreSQLDatabase implements IDatabase {
 
   isConnected(): boolean {
     return this._connected;
+  }
+
+  /**
+   * Snapshot of connection-pool utilisation, for monitoring under load.
+   * - total: connections currently created by the pool
+   * - idle: connections available for checkout
+   * - waiting: callers queued waiting for a connection (saturation signal)
+   * - max: configured pool ceiling (DB_POOL_MAX)
+   */
+  getPoolStats(): { total: number; idle: number; waiting: number; max: number } {
+    return {
+      total: this.pool.totalCount,
+      idle: this.pool.idleCount,
+      waiting: this.pool.waitingCount,
+      max: (this.pool.options as { max?: number }).max ?? 0
+    };
   }
 
   /**
@@ -283,7 +306,7 @@ export class PostgreSQLDatabase implements IDatabase {
       }
       console.error('PostgreSQL query error:', error);
       console.error('Query:', query);
-      console.error('Params:', params);
+      console.error('Params:', formatParamsForLog(params));
       throw new Error(`Database operation failed: ${(error as Error).message}`);
     }
   }
@@ -301,7 +324,7 @@ export class PostgreSQLDatabase implements IDatabase {
     } catch (error) {
       console.error('PostgreSQL getOne error:', error);
       console.error('Query:', query);
-      console.error('Params:', params);
+      console.error('Params:', formatParamsForLog(params));
       throw new Error(`Database fetch operation failed: ${(error as Error).message}`);
     }
   }
@@ -319,7 +342,7 @@ export class PostgreSQLDatabase implements IDatabase {
     } catch (error) {
       console.error('PostgreSQL getMany error:', error);
       console.error('Query:', query);
-      console.error('Params:', params);
+      console.error('Params:', formatParamsForLog(params));
       throw new Error(`Database fetch operation failed: ${(error as Error).message}`);
     }
   }
@@ -334,7 +357,22 @@ export class PostgreSQLDatabase implements IDatabase {
 
     let finalQuery = query;
     if (sort.length > 0) {
-      const sortClause = sort.map(s => `${s.column} ${s.direction}`).join(', ');
+      // Validate sort columns/directions before interpolating into the query.
+      // Column names cannot be bound as parameters, so they must be whitelisted
+      // against a strict identifier pattern to prevent SQL injection.
+      const columnPattern = /^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/;
+      const sortClause = sort
+        .map(s => {
+          if (!columnPattern.test(s.column)) {
+            throw new Error(`Invalid sort column: ${s.column}`);
+          }
+          const direction = String(s.direction).toUpperCase();
+          if (direction !== 'ASC' && direction !== 'DESC') {
+            throw new Error(`Invalid sort direction: ${s.direction}`);
+          }
+          return `${s.column} ${direction}`;
+        })
+        .join(', ');
       finalQuery += ` ORDER BY ${sortClause}`;
     }
     finalQuery += ` LIMIT ${limit} OFFSET ${actualOffset}`;

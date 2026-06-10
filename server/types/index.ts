@@ -6,7 +6,7 @@ export * from './api.types.js';
 
 // Re-export commonly needed types for server use
 export type PaymentStatus = 'received' | 'pending' | 'failed' | 'refunded';
-export type PaymentMethod = 'cash' | 'check' | 'bank_transfer' | 'credit_card' | 'paypal' | 'stripe' | 'other';
+export type PaymentMethod = 'cash' | 'check' | 'bank_transfer' | 'credit_card' | 'paypal' | 'other';
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
 export type RetainerStatus = 'active' | 'paused' | 'ended';
 export type RetainerBillingCycle = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
@@ -44,7 +44,6 @@ export interface User extends BaseEntity {
   role: UserRole;
   roles?: UserRole[];
   email_verified: number;
-  google_id?: string;
   two_factor_enabled?: number;
   two_factor_secret?: string;
   backup_codes?: string;
@@ -69,7 +68,6 @@ export interface Client extends BaseEntity {
   state?: string;
   zipCode?: string;
   country?: string;
-  stripe_customer_id?: string;
 }
 
 export interface Invoice extends BaseEntity {
@@ -87,8 +85,6 @@ export interface Invoice extends BaseEntity {
   items?: string;
   notes?: string;
   payment_terms?: string;
-  stripe_invoice_id?: string;
-  stripe_payment_intent_id?: string;
   type: string;
   client_name?: string;
   client_email?: string;
@@ -201,21 +197,9 @@ export interface Setting extends BaseEntity {
 
 // Complete project configuration structure (copied from shared types)
 export interface ProjectSettings {
-  google_oauth: {
-    enabled: boolean;
-    client_id: string;
-    client_secret?: string;
-    configured: boolean;
-  };
-  stripe: {
-    enabled: boolean;
-    publishable_key: string;
-    secret_key?: string;
-    configured: boolean;
-  };
   email: {
     enabled: boolean;
-    provider?: 'smtp' | 'sendgrid' | 'resend';
+    provider?: 'smtp' | 'resend';
     host?: string;
     port?: number;
     user?: string;
@@ -226,7 +210,6 @@ export interface ProjectSettings {
     smtp_user?: string;
     smtp_pass?: string;
     resend_configured?: boolean;
-    sendgrid_configured?: boolean;
     configured: boolean;
   };
   security: {
@@ -253,16 +236,6 @@ export interface ProjectSetting {
   created_at: string;
   updated_at: string;
   email?: any;
-  google_oauth?: {
-    enabled?: boolean;
-    client_id?: string;
-    configured?: boolean;
-  };
-  stripe?: {
-    enabled?: boolean;
-    publishable_key?: string;
-    configured?: boolean;
-  };
   security?: {
     require_email_verification?: boolean;
     max_failed_login_attempts?: number;

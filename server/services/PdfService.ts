@@ -518,15 +518,8 @@ export class PdfService {
 // Export singleton instance
 export const pdfService = new PdfService();
 
-// Graceful shutdown handling
-process.on('SIGINT', async () => {
-  console.log('Shutting down PDF Generator Service...');
-  await pdfService.close();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('Shutting down PDF Generator Service...');
-  await pdfService.close();
-  process.exit(0);
-});
+// NOTE: Process signal (SIGINT/SIGTERM) handling is centralized in
+// gracefulShutdown() (server/middleware/errorHandler.ts), which is registered
+// once in app.ts and calls pdfService.close() as part of cleanup. Registering
+// duplicate SIGINT/SIGTERM handlers here would race with — and prematurely
+// process.exit() ahead of — that orderly shutdown, so it is intentionally omitted.

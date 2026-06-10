@@ -13,7 +13,8 @@ import {
   saveSetting,
   saveMultipleSettings
 } from '../controllers/settingsController.js';
-import { requireAuth, requireAdmin } from '../middleware/index.js';
+import { requireAuth, requireAdmin, optionalAuth } from '../middleware/index.js';
+import { serverConfig } from '../config/index.js';
 
 const router: Router = Router();
 
@@ -23,7 +24,7 @@ const __dirname = dirname(__filename);
 // Configure multer for image uploads
 const imageStorage = multer.diskStorage({
   destination: async (req, file, cb) => {
-    const uploadDir = resolve(__dirname, '../../public/uploads/logos');
+    const uploadDir = resolve(__dirname, '../../../uploads/logos');
     try {
       await fs.mkdir(uploadDir, { recursive: true });
       cb(null, uploadDir);
@@ -44,76 +45,97 @@ const uploadImage = multer({
     files: 1
   },
   fileFilter: (req, file, cb) => {
+    // SVG is intentionally excluded: it can carry inline <script>, and the
+    // uploads directory is served from the app origin, so an SVG logo would be
+    // a stored-XSS vector. Only raster image formats are allowed.
     const allowedMimes = [
       'image/jpeg',
       'image/jpg',
       'image/png',
       'image/gif',
-      'image/webp',
-      'image/svg+xml'
+      'image/webp'
     ];
-    if (allowedMimes.includes(file.mimetype)) {
+    const ext = extname(file.originalname).toLowerCase();
+    const isSvg = ext === '.svg' || file.mimetype === 'image/svg+xml';
+    if (!isSvg && allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only images are allowed.'));
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'));
     }
   }
 });
 
-// Public settings (no auth required)
+const DEFAULT_CURRENCY_FORMAT = {
+  currency: 'USD',
+  symbol: '$',
+  position: 'before',
+  decimal_places: 2,
+  thousands_separator: ',',
+  decimal_separator: '.'
+};
+
+const DEFAULT_COMPANY_SETTINGS = {
+  companyName: '',
+  ownerName: '',
+  address: '',
+  city: '',
+  state: '',
+  zipCode: '',
+  email: '',
+  phone: '',
+  brandingImage: ''
+};
+
+/**
+ * Resolve the tenant whose settings should be returned for the "public" UI
+ * settings endpoints.
+ *
+ * - Authenticated request: use the caller's tenant.
+ * - Unauthenticated + single-tenant (non-SaaS): tenant 1 is the only tenant,
+ *   so returning its settings is safe and preserves the pre-login UX.
+ * - Unauthenticated + SaaS mode: return null so we serve generic defaults
+ *   instead of leaking tenant 1's branding/company details to anonymous callers.
+ */
+const resolvePublicSettingsTenantId = (req: Request): number | null => {
+  if (req.user) {
+    return req.tenantId || req.user.tenant_id || 1;
+  }
+  return serverConfig.saasMode ? null : 1;
+};
+
+// Public settings (optional auth — scoped to the caller's tenant when present)
 
 // Get currency format settings (public for UI formatting)
-router.get('/currency', async (_req: Request, res: Response): Promise<void> => {
+router.get('/currency', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { settingsService } = await import('../services/SettingsService.js');
-    const result = await settingsService.getSettingByKey('general.currency_format_settings', 1);
-
-    if (result) {
-      res.json({ success: true, value: result });
-    } else {
-      // Return default currency format settings
-      res.json({
-        success: true,
-        value: {
-          currency: 'USD',
-          symbol: '$',
-          position: 'before',
-          decimal_places: 2,
-          thousands_separator: ',',
-          decimal_separator: '.'
-        }
-      });
+    const tenantId = resolvePublicSettingsTenantId(req);
+    if (tenantId === null) {
+      res.json({ success: true, value: DEFAULT_CURRENCY_FORMAT });
+      return;
     }
+
+    const { settingsService } = await import('../services/SettingsService.js');
+    const result = await settingsService.getSettingByKey('general.currency_format_settings', tenantId);
+
+    res.json({ success: true, value: result || DEFAULT_CURRENCY_FORMAT });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 
 // Get company settings (public for UI display and invoice generation)
-router.get('/company', async (_req: Request, res: Response): Promise<void> => {
+router.get('/company', optionalAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { settingsService } = await import('../services/SettingsService.js');
-    const result = await settingsService.getSettingByKey('company.company_settings', 1);
-
-    if (result) {
-      res.json({ success: true, value: result });
-    } else {
-      // Return default company settings
-      res.json({
-        success: true,
-        value: {
-          companyName: '',
-          ownerName: '',
-          address: '',
-          city: '',
-          state: '',
-          zipCode: '',
-          email: '',
-          phone: '',
-          brandingImage: ''
-        }
-      });
+    const tenantId = resolvePublicSettingsTenantId(req);
+    if (tenantId === null) {
+      res.json({ success: true, value: DEFAULT_COMPANY_SETTINGS });
+      return;
     }
+
+    const { settingsService } = await import('../services/SettingsService.js');
+    const result = await settingsService.getSettingByKey('company.company_settings', tenantId);
+
+    res.json({ success: true, value: result || DEFAULT_COMPANY_SETTINGS });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
@@ -148,7 +170,7 @@ router.post('/company/logo', requireAuth, uploadImage.single('logo'), async (req
     if (existingSettings.brandingImage && existingSettings.brandingImage.startsWith('/uploads/logos/')) {
       const oldFilename = existingSettings.brandingImage.split('/').pop();
       if (oldFilename && oldFilename.startsWith('logo-')) {
-        const oldFilePath = resolve(__dirname, '../../public/uploads/logos', oldFilename);
+        const oldFilePath = resolve(__dirname, '../../../uploads/logos', oldFilename);
         try {
           await fs.unlink(oldFilePath);
         } catch (deleteError) {
@@ -200,7 +222,7 @@ router.delete('/company/logo', requireAuth, async (req: Request, res: Response):
     if (existingSettings.brandingImage && existingSettings.brandingImage.startsWith('/uploads/logos/')) {
       const filename = existingSettings.brandingImage.split('/').pop();
       if (filename && filename.startsWith('logo-')) {
-        const filePath = resolve(__dirname, '../../public/uploads/logos', filename);
+        const filePath = resolve(__dirname, '../../../uploads/logos', filename);
         try {
           await fs.unlink(filePath);
         } catch (deleteError) {

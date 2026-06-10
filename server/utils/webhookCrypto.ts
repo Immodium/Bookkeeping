@@ -45,8 +45,12 @@ export function decryptWebhookSecret(stored: string): string {
     throw new Error('WEBHOOK_ENCRYPTION_KEY is required to decrypt stored webhook secrets');
   }
 
-  const [, ivHex, tagHex, ciphertextHex] = stored.split(':');
-  if (!ivHex || !tagHex || !ciphertextHex) {
+  // Split into exactly 4 segments: 'enc', iv, tag, ciphertext. The ciphertext
+  // segment is allowed to be empty (an empty-string plaintext encrypts to empty
+  // ciphertext under GCM), so validate by segment count rather than truthiness.
+  const segments = stored.split(':');
+  const [, ivHex, tagHex, ciphertextHex] = segments;
+  if (segments.length !== 4 || !ivHex || !tagHex || ciphertextHex === undefined) {
     throw new Error('Malformed encrypted webhook secret');
   }
 

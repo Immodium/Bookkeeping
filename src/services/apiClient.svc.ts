@@ -1,4 +1,6 @@
-// Database service that communicates with backend API
+// API client service: communicates with the backend REST API over HTTP.
+// (Despite the legacy `sqliteService` export name, this is not a SQLite layer —
+// the backend is PostgreSQL-only. Prefer importing `apiClient`.)
 import {
   User,
   Client,
@@ -16,7 +18,7 @@ import {
 import type { ApiResponse } from '@/types/shared/api.types';
 import { parseProjectSettingsWithDefaults, validateProjectSettings } from '@/utils/settingsValidation';
 import { getToken } from '@/utils/api/auth.util';
-class SQLiteService {
+class ApiClientService {
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
   private baseUrl = this.getApiBaseUrl();
@@ -196,18 +198,6 @@ class SQLiteService {
   async createUser(userData: Omit<User, 'id' | 'created_at' | 'updated_at'>): Promise<{ lastInsertRowid: number }> {
     const result = await this.apiCall<unknown, { lastInsertRowid: number }>('/users', 'POST', { userData });
     return result.result || { lastInsertRowid: 0 };
-  }
-
-  async getUserByGoogleId(googleId: string): Promise<User | null> {
-    try {
-      const result = await this.apiCall<User>(`/users/google/${encodeURIComponent(googleId)}`);
-      return result.data || null;
-    } catch (error) {
-      if (error.message.includes('User not found')) {
-        return null;
-      }
-      throw error;
-    }
   }
 
   async updateUser(id: number, userData: Partial<User>): Promise<{ changes: number }> {
@@ -781,9 +771,15 @@ class SQLiteService {
 }
 
 // Create singleton instance
-export const sqliteService = new SQLiteService();
+export const apiClient = new ApiClientService();
+
+/**
+ * @deprecated Use `apiClient` instead. This alias is retained for backward
+ * compatibility — the class is an API client, not a SQLite service.
+ */
+export const sqliteService = apiClient;
 
 // Initialize on module load (in browser environment)
 if (typeof window !== 'undefined') {
-  sqliteService.initialize().catch(console.error);
+  apiClient.initialize().catch(console.error);
 }

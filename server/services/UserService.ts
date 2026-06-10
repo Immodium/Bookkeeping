@@ -7,6 +7,18 @@ import { User, UserPublic, ServiceOptions, UserRole } from '../types/index.js';
 import { getPrimaryRole, normalizeRoles } from '../auth/roles.js';
 
 /**
+ * Strip sensitive fields from a user record before returning it over the API.
+ * Mirrors the `UserPublic` type (Omit<User, 'password_hash' | 'two_factor_secret' | 'backup_codes'>).
+ */
+export const toPublicUser = (user: User): UserPublic => {
+  const publicUser: User = { ...user };
+  delete publicUser.password_hash;
+  delete publicUser.two_factor_secret;
+  delete publicUser.backup_codes;
+  return publicUser;
+};
+
+/**
  * User Management Service
  * Handles user lifecycle management, profile updates, and administrative operations
  */
@@ -114,22 +126,6 @@ export class UserService {
   }
 
   /**
-   * Get user by Google ID
-   */
-  async getUserByGoogleId(googleId: string, tenantId?: number): Promise<User | null> {
-    if (!googleId || typeof googleId !== 'string') {
-      throw new Error('Valid Google ID is required');
-    }
-
-    const scopedTenantId = this.normalizeTenantId(tenantId);
-    const user = await databaseService.getOne<User>(
-      'SELECT * FROM users WHERE google_id = ? AND tenant_id = ?', 
-      [decodeURIComponent(googleId), scopedTenantId]
-    );
-    return this.mapUserWithRoles(user);
-  }
-
-  /**
    * Create new user
    */
   async createUser(userData: {
@@ -141,7 +137,6 @@ export class UserService {
     role?: UserRole;
     roles?: UserRole[];
     email_verified?: boolean;
-    google_id?: string;
     last_login?: string;
     failed_login_attempts?: number;
     account_locked_until?: string;
@@ -155,7 +150,6 @@ export class UserService {
       role = 'user',
       roles,
       email_verified = false, 
-      google_id, 
       last_login, 
       failed_login_attempts = 0, 
       account_locked_until 
@@ -199,8 +193,8 @@ export class UserService {
         await databaseService.executeQuery(`
           INSERT INTO users (
             id, tenant_id, name, email, username, password_hash, role, roles, email_verified,
-            google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           id,
           scopedTenantId,
@@ -211,7 +205,6 @@ export class UserService {
           primaryRole,
           JSON.stringify(normalizedRoles),
           email_verified ? 1 : 0,
-          google_id || null,
           last_login || null,
           failed_login_attempts,
           account_locked_until || null,
@@ -228,8 +221,8 @@ export class UserService {
         await databaseService.executeQuery(`
           INSERT INTO users (
             id, tenant_id, name, email, username, password_hash, role, roles, email_verified,
-            google_id, last_login, failed_login_attempts, account_locked_until, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            last_login, failed_login_attempts, account_locked_until, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           fallbackId,
           scopedTenantId,
@@ -240,7 +233,6 @@ export class UserService {
           primaryRole,
           JSON.stringify(normalizedRoles),
           email_verified ? 1 : 0,
-          google_id || null,
           last_login || null,
           failed_login_attempts,
           account_locked_until || null,
@@ -266,7 +258,6 @@ export class UserService {
     role: UserRole;
     roles: UserRole[];
     email_verified: boolean;
-    google_id: string;
     password_hash: string;
   }>, tenantId?: number): Promise<number> {
     if (!id || typeof id !== 'number') {
@@ -285,7 +276,7 @@ export class UserService {
     }
 
     // Filter allowed fields and build update data
-    const allowedFields = ['name', 'email', 'username', 'role', 'roles', 'email_verified', 'google_id', 'password_hash'];
+    const allowedFields = ['name', 'email', 'username', 'role', 'roles', 'email_verified', 'password_hash'];
     const updateData: Record<string, any> = {};
     
     allowedFields.forEach(field => {
@@ -363,7 +354,7 @@ export class UserService {
     );
     
     const existingRoles = normalizeRoles(existingUser.roles);
-    if (existingRoles.includes('admin') && (adminCount?.count || 0) <= 1) {
+    if (existingRoles.includes('admin') && (Number(adminCount?.count) || 0) <= 1) {
       throw new Error('Cannot delete the last administrator');
     }
 

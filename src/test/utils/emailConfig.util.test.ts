@@ -13,7 +13,7 @@ vi.mock('@/utils/api/http.util', () => ({
   authenticatedFetch: authenticatedFetchMock
 }));
 
-vi.mock('@/services/sqlite.svc', () => ({
+vi.mock('@/services/apiClient.svc', () => ({
   sqliteService: sqliteServiceMock
 }));
 

@@ -4,8 +4,6 @@
 import { z } from 'zod';
 import type {
   ProjectSettings,
-  GoogleOAuthSettings,
-  StripeSettings,
   EmailServiceSettings,
   SecurityConfig,
   CurrencySettings,
@@ -15,30 +13,18 @@ import type {
 } from '@/types';
 
 // ========================================
-// PROJECT SETTINGS SCHEMAS (OAuth, Stripe, Email, Security)
+// PROJECT SETTINGS SCHEMAS (Email, Security)
 // ========================================
-
-export const GoogleOAuthSchema = z.object({
-  enabled: z.boolean(),
-  client_id: z.string(),
-  client_secret: z.string().optional(),
-  configured: z.boolean()
-});
-
-export const StripeSchema = z.object({
-  enabled: z.boolean(),
-  publishable_key: z.string(),
-  secret_key: z.string().optional(),
-  configured: z.boolean()
-});
 
 export const EmailServiceSchema = z.object({
   enabled: z.boolean(),
+  provider: z.enum(['smtp', 'resend']).optional(),
   smtp_host: z.string(),
   smtp_port: z.number().int().min(1).max(65535),
   smtp_user: z.string(),
   smtp_pass: z.string().optional(),
   email_from: z.string().email().optional().or(z.literal('')),
+  resend_configured: z.boolean().optional(),
   configured: z.boolean()
 });
 
@@ -49,8 +35,6 @@ export const SecurityConfigSchema = z.object({
 });
 
 export const ProjectSettingsSchema = z.object({
-  google_oauth: GoogleOAuthSchema.optional(),
-  stripe: StripeSchema.optional(),
   email: EmailServiceSchema.optional(),
   security: SecurityConfigSchema.optional()
 });
@@ -108,22 +92,6 @@ export const NotificationSettingsSchema = z.object({
 });
 
 // ========================================
-// STRIPE SETTINGS SCHEMA (Enhanced)
-// ========================================
-
-export const StripeSettingsSchema = z.object({
-  webhookSecret: z.string(),
-  webhookEndpoint: z.string().url().optional().or(z.literal('')),
-  testMode: z.boolean(),
-  publishableKey: z.string().regex(/^pk_(test_|live_)/, 'Invalid publishable key format'),
-  secretKey: z.string().regex(/^sk_(test_|live_)/, 'Invalid secret key format'),
-  isEnabled: z.boolean(),
-  accountId: z.string().optional(),
-  accountName: z.string().optional(),
-  connectedAt: z.string().optional()
-});
-
-// ========================================
 // EMAIL SETTINGS SCHEMA (Enhanced)
 // ========================================
 
@@ -153,7 +121,6 @@ export const AllSettingsSchema = z.object({
   }).optional(),
   appearance: ThemeSettingsSchema.optional(),
   notifications: NotificationSettingsSchema.optional(),
-  stripe: StripeSettingsSchema.optional(),
   email: EmailSettingsSchema.optional()
 });
 
@@ -206,15 +173,6 @@ export function validatePaginationSettings(data: unknown): PaginationSettings {
   }
 }
 
-export function validateStripeSettings(data: unknown): z.infer<typeof StripeSettingsSchema> {
-  try {
-    return StripeSettingsSchema.parse(data);
-  } catch (error) {
-    console.error('StripeSettings validation failed:', error);
-    throw new Error(`Invalid Stripe settings: ${error instanceof z.ZodError ? error.message : 'Unknown error'}`);
-  }
-}
-
 export function validateEmailSettings(data: unknown): z.infer<typeof EmailSettingsSchema> {
   try {
     return EmailSettingsSchema.parse(data);
@@ -248,25 +206,15 @@ export function validateNotificationSettings(data: unknown): z.infer<typeof Noti
 
 export function parseProjectSettingsWithDefaults(data: unknown): ProjectSettings {
   const defaultSettings: ProjectSettings = {
-    google_oauth: {
-      enabled: false,
-      client_id: '',
-      client_secret: '',
-      configured: false
-    },
-    stripe: {
-      enabled: false,
-      publishable_key: '',
-      secret_key: '',
-      configured: false
-    },
     email: {
       enabled: false,
+      provider: 'smtp',
       smtp_host: '',
       smtp_port: 587,
       smtp_user: '',
       smtp_pass: '',
       email_from: '',
+      resend_configured: false,
       configured: false
     },
     security: {
@@ -279,8 +227,6 @@ export function parseProjectSettingsWithDefaults(data: unknown): ProjectSettings
   try {
     const parsed = ProjectSettingsSchema.parse(data);
     return {
-      google_oauth: { ...defaultSettings.google_oauth, ...parsed.google_oauth },
-      stripe: { ...defaultSettings.stripe, ...parsed.stripe },
       email: { ...defaultSettings.email, ...parsed.email },
       security: { ...defaultSettings.security, ...parsed.security }
     };
@@ -399,7 +345,6 @@ export function validatePassword(password: string, requirements = {
 // TYPE EXPORTS
 // ========================================
 
-export type StripeSettingsType = z.infer<typeof StripeSettingsSchema>;
 export type EmailSettingsType = z.infer<typeof EmailSettingsSchema>;
 export type ThemeSettingsType = z.infer<typeof ThemeSettingsSchema>;
 export type NotificationSettingsType = z.infer<typeof NotificationSettingsSchema>;

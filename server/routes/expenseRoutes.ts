@@ -30,7 +30,7 @@ import { mkdirSync } from 'fs';
 const router: Router = Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const uploadsDir = resolve(__dirname, '../../public/uploads/receipts');
+const uploadsDir = resolve(__dirname, '../../../uploads/receipts');
 mkdirSync(uploadsDir, { recursive: true });
 const uploadReceipt = multer({
   dest: uploadsDir,

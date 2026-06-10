@@ -59,8 +59,23 @@ fi
 
 # Create necessary directories
 printf "%s📁 Creating necessary directories...%s\n" "$BLUE" "$NC"
-mkdir -p "$DATA_DIR" "$UPLOADS_DIR" "$LOGS_DIR"
+mkdir -p "$DATA_DIR" "$UPLOADS_DIR" "$LOGS_DIR" ./certs
 print_status "Directories created"
+
+# Generate self-signed SSL certificates if not present
+if [ ! -f "./certs/server.key" ] || [ ! -f "./certs/server.crt" ]; then
+    printf "%s🔐 Generating self-signed SSL certificates...%s\n" "$BLUE" "$NC"
+    if command -v openssl >/dev/null 2>&1; then
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+            -keyout ./certs/server.key \
+            -out ./certs/server.crt \
+            -config ./scripts/cert.conf 2>/dev/null
+        chmod 644 ./certs/server.key ./certs/server.crt
+        print_status "Self-signed SSL certificates generated (valid 10 years)"
+    else
+        print_warning "openssl not found — skipping cert generation. Set ENABLE_HTTPS=false in .env or provide certs manually."
+    fi
+fi
 
 # Check for environment file
 if [ ! -f ".env" ]; then
@@ -76,17 +91,95 @@ if [ ! -f ".env" ]; then
     fi
 fi
 
-# Validate critical environment variables
-printf "%s🔍 Validating environment configuration...%s\n" "$BLUE" "$NC"
-. .env
+# Validate critical environment variables in .env
+printf "%s🔍 Validating environment configuration (.env)...%s\n" "$BLUE" "$NC"
 
-if echo "$JWT_SECRET" | grep -q "CHANGE_THIS" || echo "$JWT_SECRET" | grep -q "default"; then
-    print_error "JWT_SECRET is not properly configured in .env file!"
+if [ ! -f ".env" ]; then
+    print_error ".env file not found — cannot validate environment."
     exit 1
 fi
 
-if echo "$JWT_REFRESH_SECRET" | grep -q "CHANGE_THIS" || echo "$JWT_REFRESH_SECRET" | grep -q "default"; then
-    print_error "JWT_REFRESH_SECRET is not properly configured in .env file!"
+# Read a value straight from the .env FILE (first matching KEY=...), ignoring any
+# value that may already be exported in the surrounding shell environment, so the
+# checks below reflect what is actually written in .env. Strips an optional
+# `export ` prefix and surrounding single/double quotes.
+env_file_value() {
+    line=$(grep -E "^[[:space:]]*(export[[:space:]]+)?$1=" .env | head -n1)
+    if [ -z "$line" ]; then
+        printf '%s' ""
+        return 0
+    fi
+    value=${line#*=}
+    case "$value" in
+        \"*\") value=${value#\"}; value=${value%\"} ;;
+        \'*\') value=${value#\'}; value=${value%\'} ;;
+    esac
+    printf '%s' "$value"
+}
+
+ENV_ERRORS=0
+
+JWT_SECRET=$(env_file_value "JWT_SECRET")
+JWT_REFRESH_SECRET=$(env_file_value "JWT_REFRESH_SECRET")
+SESSION_SECRET=$(env_file_value "SESSION_SECRET")
+DATABASE_URL=$(env_file_value "DATABASE_URL")
+WEBHOOK_ENCRYPTION_KEY=$(env_file_value "WEBHOOK_ENCRYPTION_KEY")
+
+# Require a variable to be present and non-empty.
+require_var() {
+    # $1 = name, $2 = value
+    if [ -z "$2" ]; then
+        print_error "$1 is missing or empty in .env"
+        ENV_ERRORS=$((ENV_ERRORS + 1))
+    fi
+}
+
+# Require a secret: present, not a leftover placeholder, and long enough.
+# $1 = name, $2 = value, $3 = minimum length (matches server config validation).
+require_secret() {
+    if [ -z "$2" ]; then
+        print_error "$1 is missing or empty in .env"
+        ENV_ERRORS=$((ENV_ERRORS + 1))
+        return 0
+    fi
+    case "$2" in
+        *CHANGE_THIS*|*change-in-production*|*your-secret*|*your-refresh*|*your-session*|*replace-with*|*default-*)
+            print_error "$1 still contains a placeholder value in .env — generate a real secret (see scripts/generate-secrets.sh)"
+            ENV_ERRORS=$((ENV_ERRORS + 1))
+            return 0
+            ;;
+    esac
+    if [ "${#2}" -lt "$3" ]; then
+        print_error "$1 must be at least $3 characters (currently ${#2})"
+        ENV_ERRORS=$((ENV_ERRORS + 1))
+    fi
+}
+
+# Always-required configuration.
+require_var "DATABASE_URL" "$DATABASE_URL"
+
+# Secrets required by the server in production (server/config/index.ts).
+require_secret "JWT_SECRET" "$JWT_SECRET" 32
+require_secret "JWT_REFRESH_SECRET" "$JWT_REFRESH_SECRET" 32
+require_secret "SESSION_SECRET" "$SESSION_SECRET" 32
+
+# Optional, but if set the webhook encryption key must be exactly 64 hex chars.
+if [ -n "$WEBHOOK_ENCRYPTION_KEY" ]; then
+    if [ "${#WEBHOOK_ENCRYPTION_KEY}" -ne 64 ]; then
+        print_error "WEBHOOK_ENCRYPTION_KEY must be exactly 64 hex characters when set (currently ${#WEBHOOK_ENCRYPTION_KEY})"
+        ENV_ERRORS=$((ENV_ERRORS + 1))
+    else
+        case "$WEBHOOK_ENCRYPTION_KEY" in
+            *[!0-9a-fA-F]*)
+                print_error "WEBHOOK_ENCRYPTION_KEY must contain only hex characters (0-9, a-f)"
+                ENV_ERRORS=$((ENV_ERRORS + 1))
+                ;;
+        esac
+    fi
+fi
+
+if [ "$ENV_ERRORS" -gt 0 ]; then
+    print_error "Environment validation failed with $ENV_ERRORS error(s). Update .env and re-run the deploy."
     exit 1
 fi
 
@@ -99,19 +192,14 @@ print_status "Existing containers stopped"
 
 # Build the application
 printf "%s🔨 Building application...%s\n" "$BLUE" "$NC"
-npm ci --only=production
+npm ci
 npm run build
 print_status "Application built successfully"
 
-# Build Docker image
-printf "%s🐳 Building Docker image...%s\n" "$BLUE" "$NC"
-docker build -t "$IMAGE_NAME" .
-print_status "Docker image built successfully"
-
-# Start the application
-printf "%s🚀 Starting application...%s\n" "$BLUE" "$NC"
-$DOCKER_COMPOSE up -d
-print_status "Application started successfully"
+# Build Docker image and start the application
+printf "%s🐳 Building Docker image and starting application...%s\n" "$BLUE" "$NC"
+$DOCKER_COMPOSE up --build -d
+print_status "Docker image built and application started successfully"
 
 # Wait for application to be ready
 printf "%s⏳ Waiting for application to be ready...%s\n" "$BLUE" "$NC"
@@ -121,7 +209,8 @@ sleep 10
 printf "%s🏥 Performing health check...%s\n" "$BLUE" "$NC"
 i=1
 while [ "$i" -le 30 ]; do
-    if curl -f "http://localhost:$PORT/api/health" >/dev/null 2>&1; then
+    if curl -f -k "https://localhost:$PORT/api/health" >/dev/null 2>&1 || \
+       curl -f "http://localhost:$PORT/api/health" >/dev/null 2>&1; then
         print_status "Application is healthy and ready!"
         break
     fi
@@ -139,7 +228,7 @@ done
 # Deployment info
 printf "\n%s🎉 Deployment completed successfully!%s\n" "$GREEN" "$NC"
 printf "%s📊 Deployment Information:%s\n" "$BLUE" "$NC"
-printf "  🌐 Application URL: http://localhost:%s\n" "$PORT"
+printf "  🌐 Application URL: https://localhost:%s\n" "$PORT"
 printf "  🐳 Container Name: %s\n" "$CONTAINER_NAME"
 printf "  📁 Data Directory: %s\n" "$DATA_DIR"
 printf "  📤 Uploads Directory: %s\n" "$UPLOADS_DIR"

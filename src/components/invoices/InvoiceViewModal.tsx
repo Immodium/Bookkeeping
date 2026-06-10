@@ -219,53 +219,11 @@ export const InvoiceViewModal: React.FC<InvoiceViewModalProps> = ({ invoice, isO
     } catch (error) {
       console.error('Error downloading PDF:', error);
 
-      // Show user-friendly error dialog
+      // Show user-friendly error. Use the toast system instead of building
+      // markup with innerHTML — interpolating the error message into an HTML
+      // string risks DOM XSS if the message contains attacker-controlled markup.
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate PDF. Please try again.';
-
-      // Create and show error dialog
-      const dialog = document.createElement('div');
-      dialog.innerHTML = `
-        <div style="
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          background: rgba(0, 0, 0, 0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 10000;
-        ">
-          <div style="
-            background: white;
-            padding: 24px;
-            border-radius: 8px;
-            max-width: 400px;
-            margin: 20px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-          ">
-            <h3 style="margin: 0 0 16px 0; color: #dc2626;">PDF Generation Failed</h3>
-            <p style="margin: 0 0 20px 0; color: #374151;">${errorMessage}</p>
-            <button onclick="this.closest('div').remove()" style="
-              background: #dc2626;
-              color: white;
-              border: none;
-              padding: 8px 16px;
-              border-radius: 4px;
-              cursor: pointer;
-            ">Close</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(dialog);
-
-      // Auto-remove after 10 seconds
-      setTimeout(() => {
-        if (dialog.parentNode) {
-          dialog.remove();
-        }
-      }, 10000);
+      toast.error('PDF Generation Failed', { description: errorMessage });
     } finally {
       setIsGeneratingPDF(false);
     }

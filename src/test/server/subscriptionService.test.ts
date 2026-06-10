@@ -114,7 +114,7 @@ describe('SubscriptionService entitlement lifecycle', () => {
     executeQueryMock.mockReturnValue({ changes: 1, lastInsertRowid: 0 });
 
     const result = await subscriptionService.syncSubscriptionFromWebhook({
-      provider: 'stripe',
+      provider: 'external',
       eventType: 'customer.subscription.updated',
       data: {
         tenantId: 9,

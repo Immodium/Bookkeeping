@@ -40,7 +40,11 @@ export const CompanyHeader: React.FC<CompanyHeaderProps> = ({ companyLogo, onLog
       <div>
         <h1 className="text-2xl font-bold text-card-foreground">{companySettings.companyName}</h1>
         <p className="text-muted-foreground">{companySettings.address}</p>
-        <p className="text-muted-foreground">{companySettings.city}, {companySettings.state} {companySettings.zipCode}</p>
+        {(companySettings.city || companySettings.state || companySettings.zipCode) && (
+          <p className="text-muted-foreground">
+            {[companySettings.city, companySettings.state].filter(Boolean).join(', ')}{companySettings.zipCode ? ` ${companySettings.zipCode}` : ''}
+          </p>
+        )}
       </div>
     </div>
   );

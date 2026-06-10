@@ -202,7 +202,7 @@ export const PublicInvoiceView: React.FC = () => {
         <div className="bg-card rounded-lg shadow-lg p-8 border">
           {/* Company Header */}
           <div className="flex justify-between items-start mb-8">
-            <CompanyHeader companyLogo={companyLogo} onLogoUpload={() => null} />
+            <CompanyHeader companyLogo={companyLogo} />
             <div className="text-right">
               <h2 className="text-3xl font-bold text-card-foreground mb-2">INVOICE</h2>
               <div className="space-y-1">

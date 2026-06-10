@@ -527,7 +527,7 @@ export const sendInvoiceEmail = asyncHandler(async (req: Request, res: Response)
   }
 
   const currency = invoice.currency || 'USD';
-  const invoiceUrl = `${process.env.APP_URL || process.env.CLIENT_URL || 'http://localhost:5173'}/invoices`;
+  const { publicUrl: invoiceUrl } = await invoiceService.generatePublicInvoiceToken(invoiceId, tenantId);
 
   const emailContent = await emailTemplateService.render('invoice', {
     client_name: invoice.client_name || 'Valued Client',

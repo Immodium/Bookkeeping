@@ -141,15 +141,15 @@ export const initializeCounters = async (db: IDatabase): Promise<void> => {
  * Initialize admin user if none exists
  */
 export const initializeAdminUser = async (db: IDatabase): Promise<void> => {
+  if (!process.env.ADMIN_PASSWORD) {
+    throw new Error('ADMIN_PASSWORD environment variable must be set before seeding the database');
+  }
+
+  const defaultPassword = process.env.ADMIN_PASSWORD;
+  const hashedPassword = await bcrypt.hash(defaultPassword, 12);
   const userCheck = await db.getOne<{ count: number | string }>('SELECT COUNT(*) as count FROM users');
 
   if (parseCount(userCheck?.count) === 0) {
-    if (!process.env.ADMIN_PASSWORD) {
-      throw new Error('ADMIN_PASSWORD environment variable must be set before seeding the database');
-    }
-    const defaultPassword = process.env.ADMIN_PASSWORD;
-    const hashedPassword = await bcrypt.hash(defaultPassword, 12);
-
     const adminUser: SeedData = {
       table: 'users',
       data: [{
@@ -166,6 +166,13 @@ export const initializeAdminUser = async (db: IDatabase): Promise<void> => {
 
     await seedData(db, adminUser);
     console.log('✓ Admin user created with email: admin@slimbooks.app');
+  } else {
+    // Update password on every startup so ADMIN_PASSWORD secret changes take effect
+    await db.executeQuery(
+      `UPDATE users SET password_hash = $1, updated_at = $2 WHERE username = 'admin'`,
+      [hashedPassword, new Date().toISOString()]
+    );
+    console.log('✓ Admin user password updated from ADMIN_PASSWORD secret');
   }
 };
 

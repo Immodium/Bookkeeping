@@ -117,6 +117,7 @@ set_env_value "JWT_REFRESH_SECRET" "$JWT_REFRESH_SECRET" "$ENV_FILE"
 set_env_value "SESSION_SECRET" "$SESSION_SECRET" "$ENV_FILE"
 set_env_value "NODE_ENV" "production" "$ENV_FILE"
 set_env_value "HOST" "0.0.0.0" "$ENV_FILE"
+set_env_value "ADMIN_PASSWORD" "SlimBooks123" "$ENV_FILE"
 
 chmod 600 "$ENV_FILE"
 print_status ".env file created with secure secrets"

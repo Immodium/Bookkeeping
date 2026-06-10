@@ -183,7 +183,7 @@ const recreateInvoicesTable = async (db: IDatabase): Promise<void> => {
       amount, tax_amount, total_amount, currency, status, due_date, issue_date, paid_date,
       description, items, notes, terms, payment_terms, footer, type, client_name, client_email,
       client_phone, client_address, line_items, tax_rate_id, shipping_amount, shipping_rate_id,
-      stripe_invoice_id, stripe_payment_intent_id, email_status, email_sent_at, email_error,
+      NULL, NULL, email_status, email_sent_at, email_error,
       last_email_attempt, is_recurring, recurring_frequency, next_due_date, created_at, updated_at
     FROM invoices_legacy_010
   `);
